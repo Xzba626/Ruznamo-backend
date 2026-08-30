@@ -3,7 +3,6 @@ import { envValidationSchema } from './env.validation';
 describe('envValidationSchema', () => {
   const validEnv = {
     NODE_ENV: 'test',
-    PORT: 3000,
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/ruznamo?sslmode=require',
     DIRECT_URL: 'postgresql://user:pass@localhost:5432/ruznamo?sslmode=require',
     JWT_SECRET: 'test-jwt-secret-minimum-32-characters-long',
@@ -11,83 +10,86 @@ describe('envValidationSchema', () => {
     LICENSE_KEY_PEPPER: 'test-license-pepper-minimum-32-chars',
   };
 
+  const nestValidationOptions = {
+    abortEarly: false,
+    convert: true,
+    allowUnknown: true,
+  };
+
   it('accepts valid environment', () => {
-    const { error } = envValidationSchema.validate(validEnv);
+    const { error } = envValidationSchema.validate(validEnv, nestValidationOptions);
+    expect(error).toBeUndefined();
+  });
+
+  it('ignores PORT and THROTTLE_* (parsed separately in configuration.ts)', () => {
+    const { error } = envValidationSchema.validate(
+      {
+        ...validEnv,
+        PORT: '',
+        THROTTLE_TTL: 'not-a-number',
+        THROTTLE_LIMIT: '',
+      },
+      nestValidationOptions,
+    );
     expect(error).toBeUndefined();
   });
 
   it('rejects missing DATABASE_URL', () => {
-    const { error } = envValidationSchema.validate({
-      ...validEnv,
-      DATABASE_URL: undefined,
-    });
+    const { error } = envValidationSchema.validate(
+      {
+        ...validEnv,
+        DATABASE_URL: undefined,
+      },
+      nestValidationOptions,
+    );
     expect(error).toBeDefined();
   });
 
   it('rejects missing DIRECT_URL', () => {
-    const { error } = envValidationSchema.validate({
-      ...validEnv,
-      DIRECT_URL: undefined,
-    });
+    const { error } = envValidationSchema.validate(
+      {
+        ...validEnv,
+        DIRECT_URL: undefined,
+      },
+      nestValidationOptions,
+    );
     expect(error).toBeDefined();
   });
 
   it('rejects short JWT_SECRET', () => {
-    const { error } = envValidationSchema.validate({
-      ...validEnv,
-      JWT_SECRET: 'short',
-    });
+    const { error } = envValidationSchema.validate(
+      {
+        ...validEnv,
+        JWT_SECRET: 'short',
+      },
+      nestValidationOptions,
+    );
     expect(error).toBeDefined();
   });
 
   it('rejects empty DATABASE_URL (Vercel placeholder mistake)', () => {
-    const { error } = envValidationSchema.validate({
-      ...validEnv,
-      DATABASE_URL: '',
-    });
+    const { error } = envValidationSchema.validate(
+      {
+        ...validEnv,
+        DATABASE_URL: '',
+      },
+      nestValidationOptions,
+    );
     expect(error).toBeDefined();
     expect(error?.message).toContain('DATABASE_URL');
   });
 
-  it('defaults PORT when empty string (Vercel serverless)', () => {
-    const { error, value } = envValidationSchema.validate({
-      ...validEnv,
-      PORT: '',
-    });
-    expect(error).toBeUndefined();
-    expect(value.PORT).toBe(3000);
-  });
-
-  it('coerces numeric env vars from strings (process.env)', () => {
-    const { error, value } = envValidationSchema.validate({
-      ...validEnv,
-      PORT: '3000',
-      THROTTLE_TTL: '60000',
-      THROTTLE_LIMIT: '100',
-    });
-    expect(error).toBeUndefined();
-    expect(value.PORT).toBe(3000);
-    expect(value.THROTTLE_TTL).toBe(60000);
-    expect(value.THROTTLE_LIMIT).toBe(100);
-  });
-
   it('coerces API_BASE_URL without https scheme', () => {
-    const { error, value } = envValidationSchema.validate({
-      ...validEnv,
-      API_BASE_URL: 'ruznamo-backend-o4xk.vercel.app',
-      APP_BASE_URL: 'ruznamo-backend-o4xk.vercel.app',
-    });
+    const { error, value } = envValidationSchema.validate(
+      {
+        ...validEnv,
+        API_BASE_URL: 'ruznamo-backend-o4xk.vercel.app',
+        APP_BASE_URL: 'ruznamo-backend-o4xk.vercel.app',
+      },
+      nestValidationOptions,
+    );
     expect(error).toBeUndefined();
     expect(value.API_BASE_URL).toBe('https://ruznamo-backend-o4xk.vercel.app');
     expect(value.APP_BASE_URL).toBe('https://ruznamo-backend-o4xk.vercel.app');
-  });
-
-  it('rejects invalid THROTTLE_TTL with a clear message', () => {
-    const { error } = envValidationSchema.validate({
-      ...validEnv,
-      THROTTLE_TTL: 'not-a-number',
-    });
-    expect(error).toBeDefined();
-    expect(error?.message).toContain('THROTTLE_TTL must be a number');
   });
 });

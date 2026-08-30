@@ -58,7 +58,7 @@ Add each variable with a **real value**. Enable for **Production** (and Preview 
 | `APP_BASE_URL` | `https://ruznamo-backend-o4xk.vercel.app` | yes |
 | `CORS_ORIGINS` | `*` or your Android/admin origins | yes |
 
-**Do NOT add** `PORT`, `LOG_LEVEL`, `THROTTLE_*` unless you need custom values — defaults work on Vercel.
+**Do NOT add** `PORT`, `LOG_LEVEL`, or `THROTTLE_*` on Vercel — defaults apply automatically. If they already exist with empty/invalid values, **delete them**.
 
 ---
 

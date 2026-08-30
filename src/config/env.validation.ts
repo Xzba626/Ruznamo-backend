@@ -22,19 +22,6 @@ const requiredDatabaseUrl = (name: string): Joi.StringSchema =>
       'string.uri': `${name} must be a valid postgresql:// connection string.`,
     });
 
-/** process.env values are always strings — coerce safely with defaults. */
-const envNumber = (name: string, defaultValue: number): Joi.Schema =>
-  Joi.custom((value, helpers) => {
-    if (value === undefined || value === null || value === '') {
-      return defaultValue;
-    }
-    const parsed = typeof value === 'number' ? value : Number(String(value).trim());
-    if (!Number.isFinite(parsed)) {
-      return helpers.message({ custom: `${name} must be a number` });
-    }
-    return parsed;
-  }, `${name} env number`).default(defaultValue);
-
 const envUrl = (name: string, defaultValue: string): Joi.StringSchema =>
   Joi.string()
     .trim()
@@ -75,12 +62,11 @@ const optionalUrl = (): Joi.StringSchema =>
     .optional();
 
 /**
- * Vercel may inject empty strings for unset optional vars.
- * `.empty('')` converts them to undefined so `.default()` applies.
+ * PORT / THROTTLE_* are optional — parsed with safe defaults in configuration.ts.
+ * Do not validate them here; Vercel often has empty or invalid placeholders.
  */
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').empty('').default('production'),
-  PORT: envNumber('PORT', 3000),
   DATABASE_URL: requiredDatabaseUrl('DATABASE_URL'),
   DIRECT_URL: requiredDatabaseUrl('DIRECT_URL'),
   JWT_SECRET: requiredSecret('JWT_SECRET'),
@@ -100,6 +86,4 @@ export const envValidationSchema = Joi.object({
     .empty('')
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')
     .default('info'),
-  THROTTLE_TTL: envNumber('THROTTLE_TTL', 60000),
-  THROTTLE_LIMIT: envNumber('THROTTLE_LIMIT', 100),
 });

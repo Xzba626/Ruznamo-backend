@@ -1,8 +1,17 @@
 import { registerAs } from '@nestjs/config';
 
+const parseEnvInt = (value: string | undefined, fallback: number): number => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export const appConfig = registerAs('app', () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  port: parseInt(process.env.PORT ?? '3000', 10),
+  port: parseEnvInt(process.env.PORT, 3000),
   apiBaseUrl: process.env.API_BASE_URL ?? 'http://localhost:3000',
   appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:3000',
   corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:3000')
@@ -23,8 +32,8 @@ export const jwtConfig = registerAs('jwt', () => ({
 
 export const securityConfig = registerAs('security', () => ({
   licenseKeyPepper: process.env.LICENSE_KEY_PEPPER,
-  throttleTtl: parseInt(process.env.THROTTLE_TTL ?? '60000', 10),
-  throttleLimit: parseInt(process.env.THROTTLE_LIMIT ?? '100', 10),
+  throttleTtl: parseEnvInt(process.env.THROTTLE_TTL, 60000),
+  throttleLimit: parseEnvInt(process.env.THROTTLE_LIMIT, 100),
 }));
 
 export const telegramConfig = registerAs('telegram', () => ({
