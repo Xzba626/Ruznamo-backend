@@ -1,0 +1,20 @@
+# .gitignore — Ruznamo Backend (preview for PHASE 2)
+
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+!.env.example
+*.log
+coverage/
+.nyc_output/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.tsbuildinfo
+prisma/*.db
+prisma/*.db-journal
+docker-data/

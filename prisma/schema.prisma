@@ -1,0 +1,501 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserCategory {
+  TEACHER
+  LECTURER
+  TUTOR
+  TRAINER
+  EMPLOYEE
+  STUDENT
+  PERSONAL
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum Platform {
+  ANDROID
+}
+
+enum LicenseStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  REVOKED
+  SUSPENDED
+}
+
+enum PlanCode {
+  STANDARD
+  PRO
+  PRO_PLUS
+}
+
+enum BillingPeriod {
+  MONTHLY
+  YEARLY
+}
+
+enum OrderStatus {
+  PENDING
+  RECEIPT_SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum ReceiptStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum FeatureValueType {
+  INT
+  BOOL
+  STRING
+}
+
+enum AuditActorType {
+  USER
+  ADMIN
+  SYSTEM
+  TELEGRAM_BOT
+}
+
+enum AdminRoleCode {
+  SUPER_ADMIN
+  ADMIN
+  SUPPORT
+}
+
+enum TrialGrantStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Users & identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id          String       @id @default(cuid())
+  displayName String?
+  category    UserCategory @default(PERSONAL)
+  status      UserStatus   @default(ACTIVE)
+  email       String?      @unique
+  phone       String?
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  telegramAccount    TelegramAccount?
+  telegramLinkTokens TelegramLinkToken[]
+  devices            DeviceInstallation[]
+  licenses           License[]
+  orders             Order[]
+  trialGrant         TrialGrant?
+  refreshTokens      RefreshToken[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model TelegramAccount {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  telegramId BigInt   @unique
+  username   String?
+  firstName  String?
+  lastName   String?
+  linkedAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([telegramId])
+}
+
+model TelegramLinkToken {
+  id        String    @id @default(cuid())
+  userId    String
+  code      String    @unique
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model DeviceInstallation {
+  id             String    @id @default(cuid())
+  userId         String
+  installationId String    @unique
+  deviceName     String?
+  platform       Platform  @default(ANDROID)
+  appVersion     String?
+  lastSeenAt     DateTime  @default(now()) @db.Timestamptz(3)
+  revokedAt      DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activations LicenseActivation[]
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+}
+
+model TrialGrant {
+  id             String           @id @default(cuid())
+  userId         String           @unique
+  installationId String           @unique
+  status         TrialGrantStatus @default(ACTIVE)
+  startedAt      DateTime         @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime         @db.Timestamptz(3)
+  endedAt        DateTime?        @db.Timestamptz(3)
+  metadata       Json?
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([expiresAt])
+  @@index([installationId])
+}
+
+// ---------------------------------------------------------------------------
+// Plans & entitlements
+// ---------------------------------------------------------------------------
+
+model Plan {
+  id        String   @id @default(cuid())
+  code      PlanCode @unique
+  name      String
+  nameTj    String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  prices   PlanPrice[]
+  features PlanFeature[]
+  licenses License[]
+  orders   Order[]
+}
+
+model PlanPrice {
+  id            String        @id @default(cuid())
+  planId        String
+  billingPeriod BillingPeriod
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("TJS")
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@unique([planId, billingPeriod])
+}
+
+model PlanFeature {
+  id        String           @id @default(cuid())
+  planId    String
+  key       String
+  value     String
+  valueType FeatureValueType
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, key])
+}
+
+// ---------------------------------------------------------------------------
+// Licenses
+// ---------------------------------------------------------------------------
+
+model License {
+  id          String        @id @default(cuid())
+  planId      String
+  userId      String?
+  orderId     String?       @unique
+  keyHash     String        @unique
+  keyPrefix   String
+  status      LicenseStatus @default(PENDING)
+  startsAt    DateTime?     @db.Timestamptz(3)
+  expiresAt   DateTime?     @db.Timestamptz(3)
+  activatedAt DateTime?     @db.Timestamptz(3)
+  revokedAt   DateTime?     @db.Timestamptz(3)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+
+  plan        Plan                @relation(fields: [planId], references: [id], onDelete: Restrict)
+  user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  order       Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  activations LicenseActivation[]
+  events      LicenseEvent[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([keyPrefix])
+}
+
+model LicenseActivation {
+  id        String   @id @default(cuid())
+  licenseId String
+  deviceId  String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  license License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  device  DeviceInstallation @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, deviceId])
+}
+
+model LicenseEvent {
+  id         String         @id @default(cuid())
+  licenseId  String
+  fromStatus LicenseStatus?
+  toStatus   LicenseStatus
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Orders & receipts
+// ---------------------------------------------------------------------------
+
+model Order {
+  id              String        @id @default(cuid())
+  userId          String
+  planId          String
+  billingPeriod   BillingPeriod
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("TJS")
+  status          OrderStatus   @default(PENDING)
+  paidAt          DateTime?     @db.Timestamptz(3)
+  approvedAt      DateTime?     @db.Timestamptz(3)
+  approvedById    String?
+  rejectedAt      DateTime?     @db.Timestamptz(3)
+  rejectionReason String?
+  expiresAt       DateTime?     @db.Timestamptz(3)
+  idempotencyKey  String?       @unique
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan       Plan       @relation(fields: [planId], references: [id], onDelete: Restrict)
+  approvedBy AdminUser? @relation("OrderApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  receipts   Receipt[]
+  license    License?
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Receipt {
+  id              String        @id @default(cuid())
+  orderId         String
+  telegramFileId  String
+  fileType        String
+  status          ReceiptStatus @default(PENDING)
+  submittedAt     DateTime      @default(now()) @db.Timestamptz(3)
+  reviewedAt      DateTime?     @db.Timestamptz(3)
+  reviewedById    String?
+  rejectionReason String?
+  metadata        Json?
+
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reviewedBy AdminUser? @relation("ReceiptReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Auth sessions
+// ---------------------------------------------------------------------------
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime  @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+  replacedBy String?
+  userAgent  String?
+  ipAddress  String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Admin RBAC
+// ---------------------------------------------------------------------------
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  displayName  String?
+  telegramId   BigInt?   @unique
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+
+  roles            AdminUserRole[]
+  approvedOrders   Order[]         @relation("OrderApprovedBy")
+  reviewedReceipts Receipt[]       @relation("ReceiptReviewedBy")
+  auditLogs        AuditLog[]
+
+  @@index([isActive])
+}
+
+model Role {
+  id          String          @id @default(cuid())
+  code        AdminRoleCode   @unique
+  name        String
+  permissions RolePermission[]
+  admins      AdminUserRole[]
+}
+
+model Permission {
+  id    String @id @default(cuid())
+  code  String @unique
+  name  String
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model AdminUserRole {
+  adminUserId String
+  roleId      String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([adminUserId, roleId])
+}
+
+// ---------------------------------------------------------------------------
+// Audit, config, outbox
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String         @id @default(cuid())
+  actorType  AuditActorType
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+
+  adminUser AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model AppVersion {
+  id                      String   @id @default(cuid())
+  platform                Platform @default(ANDROID)
+  latestVersion           String
+  minimumSupportedVersion String
+  updateUrl               String?
+  forceUpdate             Boolean  @default(false)
+  releaseNotes            String?
+  releaseNotesTj          String?
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([platform, isActive])
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  valueJson Json?
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(cuid())
+  key            String   @unique
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  expiresAt      DateTime @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([expiresAt])
+}
+
+model NotificationOutbox {
+  id          String       @id @default(cuid())
+  type        String
+  payload     Json
+  status      OutboxStatus @default(PENDING)
+  attempts    Int          @default(0)
+  lastError   String?
+  scheduledAt DateTime     @default(now()) @db.Timestamptz(3)
+  processedAt DateTime?    @db.Timestamptz(3)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([status, scheduledAt])
+}

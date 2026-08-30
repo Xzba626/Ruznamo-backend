@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ruznamo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ruznamo
+      POSTGRES_PASSWORD: ruznamo
+      POSTGRES_DB: ruznamo
+    ports:
+      - '5432:5432'
+    volumes:
+      - ruznamo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ruznamo -d ruznamo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ruznamo-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - '3000:3000'
+
+volumes:
+  ruznamo_postgres_data:
