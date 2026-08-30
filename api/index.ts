@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { Express } from 'express';
+import type { Express, Request, Response } from 'express';
 
 let cachedExpressApp: Express | undefined;
 let bootstrapError: Error | undefined;
@@ -39,11 +39,15 @@ function runExpress(expressApp: Express, req: VercelRequest, res: VercelResponse
     res.once('close', resolve);
     res.once('error', reject);
 
-    expressApp(req, res, (err: unknown) => {
-      if (err) {
-        reject(err);
-      }
-    });
+    expressApp(
+      req as unknown as Request,
+      res as unknown as Response,
+      (err: unknown) => {
+        if (err) {
+          reject(err);
+        }
+      },
+    );
   });
 }
 
