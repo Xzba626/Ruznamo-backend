@@ -22,13 +22,69 @@ const requiredDatabaseUrl = (name: string): Joi.StringSchema =>
       'string.uri': `${name} must be a valid postgresql:// connection string.`,
     });
 
+/** process.env values are always strings — coerce safely with defaults. */
+const envNumber = (defaultValue: number): Joi.Schema =>
+  Joi.alternatives()
+    .try(Joi.number(), Joi.string().allow(''))
+    .default(defaultValue)
+    .custom((value, helpers) => {
+      if (value === undefined || value === null || value === '') {
+        return defaultValue;
+      }
+      const parsed = typeof value === 'number' ? value : Number(String(value).trim());
+      if (!Number.isFinite(parsed)) {
+        return helpers.error('number.base');
+      }
+      return parsed;
+    }, 'env number coercion');
+
+const envUrl = (name: string, defaultValue: string): Joi.StringSchema =>
+  Joi.string()
+    .trim()
+    .empty('')
+    .custom((value, helpers) => {
+      if (value === undefined || value === null || value === '') {
+        return defaultValue;
+      }
+      const raw = String(value).trim();
+      const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      const { error } = Joi.string().uri().validate(withScheme);
+      if (error) {
+        return helpers.error('string.uri', { label: name });
+      }
+      return withScheme;
+    }, 'env url coercion')
+    .default(defaultValue)
+    .messages({
+      'string.uri': `${name} must be a valid URL (include https:// or use host like example.vercel.app).`,
+    });
+
+const optionalUrl = (): Joi.StringSchema =>
+  Joi.string()
+    .trim()
+    .allow('')
+    .empty('')
+    .custom((value, helpers) => {
+      if (value === undefined || value === null || value === '') {
+        return undefined;
+      }
+      const raw = String(value).trim();
+      const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      const { error } = Joi.string().uri().validate(withScheme);
+      if (error) {
+        return helpers.error('string.uri');
+      }
+      return withScheme;
+    }, 'optional url coercion')
+    .optional();
+
 /**
  * Vercel may inject empty strings for unset optional vars.
  * `.empty('')` converts them to undefined so `.default()` applies.
  */
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').empty('').default('production'),
-  PORT: Joi.number().empty('').default(3000),
+  PORT: envNumber(3000),
   DATABASE_URL: requiredDatabaseUrl('DATABASE_URL'),
   DIRECT_URL: requiredDatabaseUrl('DIRECT_URL'),
   JWT_SECRET: requiredSecret('JWT_SECRET'),
@@ -37,17 +93,17 @@ export const envValidationSchema = Joi.object({
   JWT_REFRESH_EXPIRES_IN: Joi.string().empty('').default('30d'),
   LICENSE_KEY_PEPPER: requiredSecret('LICENSE_KEY_PEPPER'),
   CORS_ORIGINS: Joi.string().empty('').default('*'),
-  API_BASE_URL: Joi.string().uri().empty('').default('http://localhost:3000'),
-  APP_BASE_URL: Joi.string().uri().empty('').default('http://localhost:3000'),
+  API_BASE_URL: envUrl('API_BASE_URL', 'http://localhost:3000'),
+  APP_BASE_URL: envUrl('APP_BASE_URL', 'http://localhost:3000'),
   TELEGRAM_USER_BOT_TOKEN: Joi.string().allow('').optional(),
   TELEGRAM_ADMIN_BOT_TOKEN: Joi.string().allow('').optional(),
   TELEGRAM_WEBHOOK_SECRET: Joi.string().allow('').optional(),
   ADMIN_TELEGRAM_CHAT_ID: Joi.string().allow('').optional(),
-  ANDROID_UPDATE_URL: Joi.string().uri().allow('').optional(),
+  ANDROID_UPDATE_URL: optionalUrl(),
   LOG_LEVEL: Joi.string()
     .empty('')
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')
     .default('info'),
-  THROTTLE_TTL: Joi.number().empty('').default(60000),
-  THROTTLE_LIMIT: Joi.number().empty('').default(100),
+  THROTTLE_TTL: envNumber(60000),
+  THROTTLE_LIMIT: envNumber(100),
 });

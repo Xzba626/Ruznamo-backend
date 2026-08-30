@@ -74,6 +74,14 @@ Or push a new commit.
 
 If `NODE_ENV=production` is set in Vercel, `npm install` skips **devDependencies** (`@nestjs/cli`, `typescript`). The repo uses `installCommand: npm install --include=dev` in `vercel.json` to fix this. Runtime still uses `NODE_ENV=production`.
 
+### Why generic `FUNCTION_INVOCATION_FAILED` after env vars are set?
+
+Common causes (fixed in latest `api/index.ts`):
+
+1. **Express 4 + NestJS 11 conflict** — serverless entry must use Nest's built-in Express 5 instance, not a separate `express()` app.
+2. **`API_BASE_URL` without `https://`** — use full URL or host only (auto-prefixed).
+3. **Prisma eager connect on cold start** — on Vercel, DB connects on first query; `/health` should return 200 even before DB is ready.
+
 ---
 
 ## Step 5 — Run migrations (local machine, once)

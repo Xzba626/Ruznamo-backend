@@ -11,6 +11,8 @@ import { envValidationSchema } from './env.validation';
       validationSchema: envValidationSchema,
       validationOptions: {
         abortEarly: false,
+        convert: true,
+        allowUnknown: true,
       },
     }),
   ],

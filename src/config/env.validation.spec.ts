@@ -57,4 +57,28 @@ describe('envValidationSchema', () => {
     expect(error).toBeUndefined();
     expect(value.PORT).toBe(3000);
   });
+
+  it('coerces numeric env vars from strings (process.env)', () => {
+    const { error, value } = envValidationSchema.validate({
+      ...validEnv,
+      PORT: '3000',
+      THROTTLE_TTL: '60000',
+      THROTTLE_LIMIT: '100',
+    });
+    expect(error).toBeUndefined();
+    expect(value.PORT).toBe(3000);
+    expect(value.THROTTLE_TTL).toBe(60000);
+    expect(value.THROTTLE_LIMIT).toBe(100);
+  });
+
+  it('coerces API_BASE_URL without https scheme', () => {
+    const { error, value } = envValidationSchema.validate({
+      ...validEnv,
+      API_BASE_URL: 'ruznamo-backend-o4xk.vercel.app',
+      APP_BASE_URL: 'ruznamo-backend-o4xk.vercel.app',
+    });
+    expect(error).toBeUndefined();
+    expect(value.API_BASE_URL).toBe('https://ruznamo-backend-o4xk.vercel.app');
+    expect(value.APP_BASE_URL).toBe('https://ruznamo-backend-o4xk.vercel.app');
+  });
 });
