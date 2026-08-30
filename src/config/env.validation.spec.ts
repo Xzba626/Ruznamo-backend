@@ -4,7 +4,8 @@ describe('envValidationSchema', () => {
   const validEnv = {
     NODE_ENV: 'test',
     PORT: 3000,
-    DATABASE_URL: 'postgresql://ruznamo:ruznamo@localhost:5432/ruznamo?schema=public',
+    DATABASE_URL: 'postgresql://user:pass@localhost:5432/ruznamo?sslmode=require',
+    DIRECT_URL: 'postgresql://user:pass@localhost:5432/ruznamo?sslmode=require',
     JWT_SECRET: 'test-jwt-secret-minimum-32-characters-long',
     JWT_REFRESH_SECRET: 'test-refresh-secret-minimum-32-chars',
     LICENSE_KEY_PEPPER: 'test-license-pepper-minimum-32-chars',
@@ -19,6 +20,14 @@ describe('envValidationSchema', () => {
     const { error } = envValidationSchema.validate({
       ...validEnv,
       DATABASE_URL: undefined,
+    });
+    expect(error).toBeDefined();
+  });
+
+  it('rejects missing DIRECT_URL', () => {
+    const { error } = envValidationSchema.validate({
+      ...validEnv,
+      DIRECT_URL: undefined,
     });
     expect(error).toBeDefined();
   });

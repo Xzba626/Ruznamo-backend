@@ -3,14 +3,15 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
-import { AppConfigModule } from './config/config.module';
+import { EnvConfigModule } from './config/config.module';
 import { CommonModule } from './common/common.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
+import { AppConfigModule } from './app-config/app-config.module';
 
 @Module({
   imports: [
-    AppConfigModule,
+    EnvConfigModule,
     LoggerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -55,6 +56,7 @@ import { HealthModule } from './health/health.module';
     CommonModule,
     PrismaModule,
     HealthModule,
+    AppConfigModule,
   ],
   providers: [
     {

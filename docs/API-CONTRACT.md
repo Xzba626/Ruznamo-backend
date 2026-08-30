@@ -1,9 +1,20 @@
 # API Contract — Ruznamo Backend v1
 
-> Base URL: `{API_BASE_URL}/api/v1`  
+> Base URL: `{API_BASE_URL}`  
+> Versioned API prefix: `/api/v1`  
 > Date format: **ISO 8601 UTC** — `2026-08-30T10:00:00.000Z`  
 > All authenticated requests: `Authorization: Bearer <accessToken>`  
 > Optional idempotency: `Idempotency-Key: <uuid-v4>`
+
+## URL routing rules
+
+| Scope | Prefix | Examples |
+|-------|--------|----------|
+| Health probes (no version) | `/` | `GET /health`, `GET /health/ready` |
+| Android + public API | `/api/v1` | `GET /api/v1/app/config`, `POST /api/v1/auth/device/register` |
+| Admin API (BLOCK 7) | `/api/v1/admin` | `POST /api/v1/admin/auth/login` |
+
+**Android clients must use `/api/v1/...` for all business endpoints.**
 
 ---
 
@@ -77,7 +88,7 @@
 
 ## App configuration
 
-### `GET /app/config`
+### `GET /api/v1/app/config`
 
 - **Auth:** none
 - **Query:** `platform=android`, `appVersion=1.0.0` (optional)
@@ -86,12 +97,15 @@
 {
   "success": true,
   "data": {
+    "configVersion": "1",
     "maintenance": { "enabled": false, "message": null },
     "android": {
       "latestVersion": "1.2.0",
       "minimumSupportedVersion": "1.0.0",
       "updateUrl": "https://...",
       "forceUpdate": false,
+      "updateRequired": false,
+      "updateRecommended": true,
       "releaseNotes": "..."
     },
     "serverTime": "2026-08-30T10:00:00.000Z"
@@ -103,7 +117,7 @@
 
 ## Authentication
 
-### `POST /auth/device/register`
+### `POST /api/v1/auth/device/register`
 
 First launch or returning installation.
 
@@ -152,20 +166,20 @@ First launch or returning installation.
 }
 ```
 
-### `POST /auth/refresh`
+### `POST /api/v1/auth/refresh`
 
 **Body:** `{ "refreshToken": "rt_..." }`
 
 **Response 200:** new token pair (old refresh invalidated)
 
-### `POST /auth/logout`
+### `POST /api/v1/auth/logout`
 
 **Auth:** access token  
 **Body:** `{ "refreshToken": "rt_..." }` (optional — revoke specific session)
 
 **Response 204**
 
-### `POST /auth/logout-all`
+### `POST /api/v1/auth/logout-all`
 
 **Auth:** access token — revokes all refresh tokens for user
 
@@ -173,7 +187,7 @@ First launch or returning installation.
 
 ## Account
 
-### `GET /account`
+### `GET /api/v1/account`
 
 ```json
 {
@@ -194,7 +208,7 @@ First launch or returning installation.
 }
 ```
 
-### `PATCH /account`
+### `PATCH /api/v1/account`
 
 **Body:** `{ "displayName": "...", "category": "LECTURER" }`
 
@@ -202,7 +216,7 @@ First launch or returning installation.
 
 ## Entitlements (primary Android endpoint)
 
-### `GET /me/entitlements`
+### `GET /api/v1/me/entitlements`
 
 **Auth:** required
 
@@ -250,7 +264,7 @@ First launch or returning installation.
 
 ## Licenses
 
-### `POST /licenses/activate`
+### `POST /api/v1/licenses/activate`
 
 **Headers:** `Idempotency-Key` recommended
 
@@ -285,7 +299,7 @@ First launch or returning installation.
 
 **Errors:** `LICENSE_NOT_FOUND`, `LICENSE_ALREADY_USED`, `LICENSE_EXPIRED`, `LICENSE_REVOKED`, `DEVICE_LIMIT_EXCEEDED`
 
-### `GET /licenses/me`
+### `GET /api/v1/licenses/me`
 
 Summary of current user's license (or `null`).
 
@@ -293,15 +307,15 @@ Summary of current user's license (or `null`).
 
 ## Devices
 
-### `GET /devices`
+### `GET /api/v1/devices`
 
 List user's device installations.
 
-### `POST /devices/register`
+### `POST /api/v1/devices/register`
 
 Update `lastSeenAt`, `appVersion`, `deviceName` for current installation.
 
-### `POST /devices/revoke`
+### `POST /api/v1/devices/revoke`
 
 **Body:** `{ "deviceId": "dev_..." }` or `{ "installationId": "..." }`
 
@@ -309,7 +323,7 @@ Update `lastSeenAt`, `appVersion`, `deviceName` for current installation.
 
 ## Telegram linking
 
-### `POST /telegram/link/start`
+### `POST /api/v1/telegram/link/start`
 
 **Response 200:**
 
@@ -325,7 +339,7 @@ Update `lastSeenAt`, `appVersion`, `deviceName` for current installation.
 }
 ```
 
-### `GET /telegram/link/status`
+### `GET /api/v1/telegram/link/status`
 
 ```json
 {

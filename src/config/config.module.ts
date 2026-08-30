@@ -15,4 +15,4 @@ import { envValidationSchema } from './env.validation';
     }),
   ],
 })
-export class AppConfigModule {}
+export class EnvConfigModule {}

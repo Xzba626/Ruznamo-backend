@@ -30,7 +30,7 @@ export const securityConfig = registerAs('security', () => ({
 export const telegramConfig = registerAs('telegram', () => ({
   userBotToken: process.env.TELEGRAM_USER_BOT_TOKEN ?? '',
   adminBotToken: process.env.TELEGRAM_ADMIN_BOT_TOKEN ?? '',
-  adminTelegramIds: (process.env.ADMIN_TELEGRAM_IDS ?? '')
+  adminTelegramIds: (process.env.ADMIN_TELEGRAM_CHAT_ID ?? process.env.ADMIN_TELEGRAM_IDS ?? '')
     .split(',')
     .map((id) => id.trim())
     .filter(Boolean),

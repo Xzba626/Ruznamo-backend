@@ -61,6 +61,7 @@ const ROLE_PERMISSIONS: Record<AdminRoleCode, string[]> = {
 };
 
 const SYSTEM_CONFIG = [
+  { key: 'CONFIG_VERSION', value: '1' },
   { key: 'TRIAL_DURATION_HOURS', value: '24' },
   {
     key: 'PAYMENT_INSTRUCTIONS_TJ',

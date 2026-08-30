@@ -2,7 +2,14 @@
 
 Production-oriented REST API for the **Ruznamo** Android application, Telegram bots, and Admin Panel.
 
-**Current status:** BLOCK 1 complete — foundation (NestJS, PostgreSQL, Prisma, health, security middleware, OpenAPI, tests).
+**Current status:** BLOCK 1 + **BLOCK 1.1** complete. Health + `GET /api/v1/app/config` live. Neon `DIRECT_URL` configured. Auth/licenses/admin — BLOCK 2+.
+
+## Neon + Vercel
+
+| Doc | Purpose |
+|-----|---------|
+| [docs/NEON-SETUP.md](docs/NEON-SETUP.md) | Pooled `DATABASE_URL` + direct `DIRECT_URL` |
+| [docs/DEPLOYMENT-VERCEL.md](docs/DEPLOYMENT-VERCEL.md) | Vercel deploy + env vars |
 
 ## Architecture
 
