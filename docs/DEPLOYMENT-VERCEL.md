@@ -28,7 +28,7 @@ Configured in `vercel.json`:
 | Setting | Value |
 |---------|-------|
 | Install Command | `npm install` |
-| Build Command | `prisma generate && npm run build` |
+| Build Command | `npx prisma generate && npm run build` |
 | Output Directory | *(empty — serverless API)* |
 | Node.js | 20.x |
 

@@ -25,7 +25,7 @@ The initial deployment failed because:
 | Framework Preset | Other |
 | Root Directory | `.` |
 | Install Command | `npm install` |
-| Build Command | `prisma generate && npm run build` |
+| Build Command | `npx prisma generate && npm run build` |
 | Output Directory | *(leave empty for serverless API)* |
 | Node.js Version | 20.x |
 
