@@ -81,4 +81,13 @@ describe('envValidationSchema', () => {
     expect(value.API_BASE_URL).toBe('https://ruznamo-backend-o4xk.vercel.app');
     expect(value.APP_BASE_URL).toBe('https://ruznamo-backend-o4xk.vercel.app');
   });
+
+  it('rejects invalid THROTTLE_TTL with a clear message', () => {
+    const { error } = envValidationSchema.validate({
+      ...validEnv,
+      THROTTLE_TTL: 'not-a-number',
+    });
+    expect(error).toBeDefined();
+    expect(error?.message).toContain('THROTTLE_TTL must be a number');
+  });
 });

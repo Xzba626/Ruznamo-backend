@@ -23,20 +23,17 @@ const requiredDatabaseUrl = (name: string): Joi.StringSchema =>
     });
 
 /** process.env values are always strings — coerce safely with defaults. */
-const envNumber = (defaultValue: number): Joi.Schema =>
-  Joi.alternatives()
-    .try(Joi.number(), Joi.string().allow(''))
-    .default(defaultValue)
-    .custom((value, helpers) => {
-      if (value === undefined || value === null || value === '') {
-        return defaultValue;
-      }
-      const parsed = typeof value === 'number' ? value : Number(String(value).trim());
-      if (!Number.isFinite(parsed)) {
-        return helpers.error('number.base');
-      }
-      return parsed;
-    }, 'env number coercion');
+const envNumber = (name: string, defaultValue: number): Joi.Schema =>
+  Joi.custom((value, helpers) => {
+    if (value === undefined || value === null || value === '') {
+      return defaultValue;
+    }
+    const parsed = typeof value === 'number' ? value : Number(String(value).trim());
+    if (!Number.isFinite(parsed)) {
+      return helpers.message({ custom: `${name} must be a number` });
+    }
+    return parsed;
+  }, `${name} env number`).default(defaultValue);
 
 const envUrl = (name: string, defaultValue: string): Joi.StringSchema =>
   Joi.string()
@@ -50,14 +47,13 @@ const envUrl = (name: string, defaultValue: string): Joi.StringSchema =>
       const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
       const { error } = Joi.string().uri().validate(withScheme);
       if (error) {
-        return helpers.error('string.uri', { label: name });
+        return helpers.message({
+          custom: `${name} must be a valid URL (include https:// or use host like example.vercel.app).`,
+        });
       }
       return withScheme;
-    }, 'env url coercion')
-    .default(defaultValue)
-    .messages({
-      'string.uri': `${name} must be a valid URL (include https:// or use host like example.vercel.app).`,
-    });
+    }, `${name} env url`)
+    .default(defaultValue);
 
 const optionalUrl = (): Joi.StringSchema =>
   Joi.string()
@@ -72,10 +68,10 @@ const optionalUrl = (): Joi.StringSchema =>
       const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
       const { error } = Joi.string().uri().validate(withScheme);
       if (error) {
-        return helpers.error('string.uri');
+        return helpers.message({ custom: 'ANDROID_UPDATE_URL must be a valid URL' });
       }
       return withScheme;
-    }, 'optional url coercion')
+    }, 'optional env url')
     .optional();
 
 /**
@@ -84,7 +80,7 @@ const optionalUrl = (): Joi.StringSchema =>
  */
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').empty('').default('production'),
-  PORT: envNumber(3000),
+  PORT: envNumber('PORT', 3000),
   DATABASE_URL: requiredDatabaseUrl('DATABASE_URL'),
   DIRECT_URL: requiredDatabaseUrl('DIRECT_URL'),
   JWT_SECRET: requiredSecret('JWT_SECRET'),
@@ -104,6 +100,6 @@ export const envValidationSchema = Joi.object({
     .empty('')
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')
     .default('info'),
-  THROTTLE_TTL: envNumber(60000),
-  THROTTLE_LIMIT: envNumber(100),
+  THROTTLE_TTL: envNumber('THROTTLE_TTL', 60000),
+  THROTTLE_LIMIT: envNumber('THROTTLE_LIMIT', 100),
 });
