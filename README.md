@@ -10,6 +10,7 @@ Production-oriented REST API for the **Ruznamo** Android application, Telegram b
 |-----|---------|
 | [docs/NEON-SETUP.md](docs/NEON-SETUP.md) | Pooled `DATABASE_URL` + direct `DIRECT_URL` |
 | [docs/DEPLOYMENT-VERCEL.md](docs/DEPLOYMENT-VERCEL.md) | Vercel deploy + env vars |
+| [docs/VERCEL-ENV-CHECKLIST.md](docs/VERCEL-ENV-CHECKLIST.md) | **Fix 500 config errors** |
 
 ## Architecture
 

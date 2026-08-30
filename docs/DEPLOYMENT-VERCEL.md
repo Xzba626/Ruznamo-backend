@@ -27,8 +27,8 @@ Configured in `vercel.json`:
 
 | Setting | Value |
 |---------|-------|
-| Install Command | `npm install` |
-| Build Command | `npx prisma generate && npm run build` |
+| Install Command | `npm install --include=dev` |
+| Build Command | `npm run vercel-build` |
 | Output Directory | *(empty — serverless API)* |
 | Node.js | 20.x |
 
@@ -37,6 +37,10 @@ Configured in `vercel.json`:
 ## 3. Environment variables
 
 **Project → Settings → Environment Variables**
+
+> ⚠️ **Do NOT copy empty placeholders from `.env.example`.**  
+> Each variable must have a **real value**. Empty strings cause `Config validation error` and HTTP 500.  
+> See **[VERCEL-ENV-CHECKLIST.md](./VERCEL-ENV-CHECKLIST.md)** for step-by-step setup.
 
 Never commit these to Git.
 

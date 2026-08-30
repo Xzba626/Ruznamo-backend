@@ -39,4 +39,22 @@ describe('envValidationSchema', () => {
     });
     expect(error).toBeDefined();
   });
+
+  it('rejects empty DATABASE_URL (Vercel placeholder mistake)', () => {
+    const { error } = envValidationSchema.validate({
+      ...validEnv,
+      DATABASE_URL: '',
+    });
+    expect(error).toBeDefined();
+    expect(error?.message).toContain('DATABASE_URL');
+  });
+
+  it('defaults PORT when empty string (Vercel serverless)', () => {
+    const { error, value } = envValidationSchema.validate({
+      ...validEnv,
+      PORT: '',
+    });
+    expect(error).toBeUndefined();
+    expect(value.PORT).toBe(3000);
+  });
 });
