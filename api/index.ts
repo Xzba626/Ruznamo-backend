@@ -1,17 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import serverlessExpress from '@vendia/serverless-express';
+import type { Express } from 'express';
 
-type ServerlessHandler = ReturnType<typeof serverlessExpress>;
-
-let cachedServer: ServerlessHandler | undefined;
+let cachedExpressApp: Express | undefined;
 let bootstrapError: Error | undefined;
 
-async function createServerlessHandler(): Promise<ServerlessHandler> {
+async function getExpressApp(): Promise<Express> {
   const { NestFactory } = await import('@nestjs/core');
   const { AppModule } = await import('../dist/src/app.module');
   const { configureNestApplication } = await import('../dist/src/bootstrap');
 
-  // NestJS 11 uses Express 5 — do NOT pass a separate Express 4 instance (breaks on Vercel).
+  // NestJS 11 uses Express 5 — let Nest create the HTTP server (no separate Express 4 app).
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
@@ -19,8 +17,7 @@ async function createServerlessHandler(): Promise<ServerlessHandler> {
   await configureNestApplication(app);
   await app.init();
 
-  const expressApp = app.getHttpAdapter().getInstance();
-  return serverlessExpress({ app: expressApp });
+  return app.getHttpAdapter().getInstance() as Express;
 }
 
 function sendBootstrapError(res: VercelResponse, message: string, requestId: string): void {
@@ -36,31 +33,44 @@ function sendBootstrapError(res: VercelResponse, message: string, requestId: str
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<unknown> {
+function runExpress(expressApp: Express, req: VercelRequest, res: VercelResponse): Promise<void> {
+  return new Promise((resolve, reject) => {
+    res.once('finish', resolve);
+    res.once('close', resolve);
+    res.once('error', reject);
+
+    expressApp(req, res, (err: unknown) => {
+      if (err) {
+        reject(err);
+      }
+    });
+  });
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const requestId = String(req.headers['x-request-id'] ?? 'unknown');
 
   try {
-    if (!cachedServer) {
+    if (!cachedExpressApp) {
       if (bootstrapError) {
         sendBootstrapError(res, bootstrapError.message, requestId);
-        return undefined;
+        return;
       }
 
       try {
-        cachedServer = await createServerlessHandler();
+        cachedExpressApp = await getExpressApp();
       } catch (error) {
         bootstrapError = error instanceof Error ? error : new Error(String(error));
         console.error('[serverless] bootstrap failed:', bootstrapError.message, bootstrapError.stack);
         sendBootstrapError(res, bootstrapError.message, requestId);
-        return undefined;
+        return;
       }
     }
 
-    return await cachedServer(req, res);
+    await runExpress(cachedExpressApp, req, res);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown serverless error';
     console.error('[serverless] request failed:', message);
     sendBootstrapError(res, message, requestId);
-    return undefined;
   }
 }

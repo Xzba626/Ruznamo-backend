@@ -43,6 +43,13 @@ describe('HealthController', () => {
     expect(result.timestamp).toBeDefined();
   });
 
+  it('returns root API info', () => {
+    const result = controller.root();
+    expect(result.success).toBe(true);
+    expect(result.data.links.health).toBe('/health');
+    expect(result.data.links.docs).toBe('/api/docs');
+  });
+
   it('returns readiness payload', async () => {
     const result = await controller.readiness();
     expect(result.status).toBe('ok');

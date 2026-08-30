@@ -106,6 +106,7 @@ https://ruznamo-backend-o4xk.vercel.app/api/v1/app/config?appVersion=1.0.0
 
 | Endpoint | Expected |
 |----------|----------|
+| `/` | `200` JSON with API links |
 | `/health` | `200` |
 | `/health/ready` | `200` (needs DB + migrations) |
 | `/api/v1/app/config` | `200` JSON |

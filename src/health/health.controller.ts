@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpCode } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   HealthCheck,
@@ -18,6 +18,38 @@ export class HealthController {
     private readonly prismaHealth: PrismaHealthIndicator,
     private readonly prisma: PrismaService,
   ) {}
+
+  @Get()
+  @ApiOperation({ summary: 'API root — service info and links' })
+  root(): {
+    success: true;
+    data: {
+      service: string;
+      version: string;
+      links: Record<string, string>;
+    };
+  } {
+    return {
+      success: true,
+      data: {
+        service: 'Ruznamo API',
+        version: '1.0.0',
+        links: {
+          health: '/health',
+          readiness: '/health/ready',
+          appConfig: '/api/v1/app/config',
+          docs: '/api/docs',
+        },
+      },
+    };
+  }
+
+  @Get('favicon.ico')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Browser favicon (no content)' })
+  favicon(): void {
+    return;
+  }
 
   @Get('health')
   @ApiOperation({ summary: 'Liveness probe' })
