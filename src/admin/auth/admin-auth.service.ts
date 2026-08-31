@@ -254,19 +254,20 @@ export class AdminAuthService {
       this.configService.get<string>('jwt.refreshExpiresIn', '30d'),
     );
 
-    const payload: AdminJwtPayload = {
+    const audience = this.configService.get<string>('jwt.adminAudience', 'ruznamo-admin');
+
+    const payload: Omit<AdminJwtPayload, 'aud'> = {
       sub: adminUserId,
       email,
       roles,
       permissions,
-      aud: this.configService.get<string>('jwt.adminAudience', 'ruznamo-admin'),
       type: 'access',
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('jwt.accessSecret'),
       expiresIn: accessExpiresIn,
-      audience: payload.aud,
+      audience,
     });
 
     const refreshToken = this.tokenHashService.generateOpaqueToken();
