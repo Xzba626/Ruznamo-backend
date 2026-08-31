@@ -28,7 +28,7 @@
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
-    "@nestjs/jwt": "^12.0.1",
+    "@nestjs/jwt": "11.0.2",
     "@nestjs/passport": "^12.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/swagger": "^11.0.0",
@@ -79,6 +79,9 @@
   },
   "engines": {
     "node": ">=20.19.0"
+  },
+  "overrides": {
+    "@nestjs/jwt": "11.0.2"
   },
   "prisma": {
     "seed": "ts-node -P tsconfig.scripts.json prisma/seed.ts"

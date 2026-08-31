@@ -71,7 +71,18 @@ export async function apiRequest<T>(
     return undefined as T;
   }
 
-  const json = (await res.json()) as ApiSuccess<T> | ApiErrorBody;
+  let json: ApiSuccess<T> | ApiErrorBody;
+  try {
+    json = (await res.json()) as ApiSuccess<T> | ApiErrorBody;
+  } catch {
+    throw new ApiClientError(
+      res.status,
+      'SERVER_ERROR',
+      res.status >= 500
+        ? 'Backend is unavailable (server error). Wait for Vercel redeploy or use local API.'
+        : 'Unexpected response from server.',
+    );
+  }
 
   if (!res.ok || !('success' in json) || !json.success) {
     const err = json as ApiErrorBody;
