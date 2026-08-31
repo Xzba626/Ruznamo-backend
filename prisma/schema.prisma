@@ -398,7 +398,6 @@ model AdminUser {
   telegramLinkTokens    AdminTelegramLinkToken[]
   approvedOrders        Order[]                  @relation("OrderApprovedBy")
   reviewedReceipts      Receipt[]                @relation("ReceiptReviewedBy")
-  auditLogs             AuditLog[]
 
   @@index([isActive])
 }
@@ -501,11 +500,10 @@ model AuditLog {
   userAgent  String?
   createdAt  DateTime       @default(now()) @db.Timestamptz(3)
 
-  adminUser AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
-
   @@index([action])
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([actorType, actorId])
 }
 
 model AppVersion {
