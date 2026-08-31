@@ -8,7 +8,7 @@ describe('AppConfigService', () => {
 
   const prisma = {
     appVersion: { findFirst: jest.fn() },
-    systemConfig: { findUnique: jest.fn() },
+    systemConfig: { findUnique: jest.fn(), findMany: jest.fn() },
   };
 
   beforeEach(async () => {
@@ -30,6 +30,7 @@ describe('AppConfigService', () => {
       releaseNotes: 'EN notes',
       releaseNotesTj: 'TJ notes',
     });
+    prisma.systemConfig.findMany.mockResolvedValue([]);
     prisma.systemConfig.findUnique.mockImplementation(
       async ({ where }: { where: { key: string } }) => {
         if (where.key === 'MAINTENANCE_MODE') return { value: 'false' };
@@ -58,6 +59,7 @@ describe('AppConfigService', () => {
       releaseNotes: null,
       releaseNotesTj: null,
     });
+    prisma.systemConfig.findMany.mockResolvedValue([]);
     prisma.systemConfig.findUnique.mockResolvedValue({ value: '1' });
 
     const result = await service.getPublicConfig(Platform.ANDROID, '1.0.0');

@@ -15,6 +15,8 @@ import { AdminSystemService } from './system/admin-system.service';
 import { AdminTelegramController } from './telegram/admin-telegram.controller';
 import { AdminTelegramWebhookController } from './telegram/admin-telegram-webhook.controller';
 import { AdminTelegramService } from './telegram/admin-telegram.service';
+import { AdminAppConfigController } from './app-config/admin-app-config.controller';
+import { AdminAppConfigService } from './app-config/admin-app-config.service';
 import { AdminUsersController } from './users/admin-users.controller';
 import { AdminUsersService } from './users/admin-users.service';
 
@@ -29,6 +31,7 @@ import { AdminUsersService } from './users/admin-users.service';
     AdminDevicesController,
     AdminAuditController,
     AdminSystemController,
+    AdminAppConfigController,
   ],
   providers: [
     AdminTelegramService,
@@ -38,6 +41,7 @@ import { AdminUsersService } from './users/admin-users.service';
     AdminDevicesService,
     AdminAuditService,
     AdminSystemService,
+    AdminAppConfigService,
   ],
   exports: [AdminAuthModule, AdminTelegramService],
 })

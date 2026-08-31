@@ -70,6 +70,10 @@ const SYSTEM_CONFIG = [
   },
   { key: 'MAINTENANCE_MODE', value: 'false' },
   { key: 'MAINTENANCE_MESSAGE_TJ', value: '' },
+  { key: 'ANNOUNCEMENT_ENABLED', value: 'false' },
+  { key: 'ANNOUNCEMENT_TITLE', value: '' },
+  { key: 'ANNOUNCEMENT_MESSAGE', value: '' },
+  { key: 'ANNOUNCEMENT_TYPE', value: 'INFO' },
 ] as const;
 
 async function seedPermissionsAndRoles() {
@@ -136,15 +140,51 @@ async function seedStandardPlan() {
 
   await prisma.plan.upsert({
     where: { code: PlanCode.PRO },
-    update: { isActive: false },
+    update: {
+      name: 'Pro',
+      nameTj: 'Pro',
+      isActive: true,
+      sortOrder: 2,
+    },
     create: {
       code: PlanCode.PRO,
       name: 'Pro',
       nameTj: 'Pro',
-      isActive: false,
+      isActive: true,
       sortOrder: 2,
     },
   });
+
+  const proPlan = await prisma.plan.findUnique({ where: { code: PlanCode.PRO } });
+  if (proPlan) {
+    const proFeatures = [
+      { key: 'planning_horizon_days', value: '90', valueType: FeatureValueType.INT },
+      { key: 'max_devices', value: '2', valueType: FeatureValueType.INT },
+      { key: 'cloud_sync', value: 'true', valueType: FeatureValueType.BOOL },
+      { key: 'advanced_analytics', value: 'true', valueType: FeatureValueType.BOOL },
+    ] as const;
+
+    for (const feature of proFeatures) {
+      await prisma.planFeature.upsert({
+        where: {
+          planId_key: {
+            planId: proPlan.id,
+            key: feature.key,
+          },
+        },
+        update: {
+          value: feature.value,
+          valueType: feature.valueType,
+        },
+        create: {
+          planId: proPlan.id,
+          key: feature.key,
+          value: feature.value,
+          valueType: feature.valueType,
+        },
+      });
+    }
+  }
 
   await prisma.plan.upsert({
     where: { code: PlanCode.PRO_PLUS },

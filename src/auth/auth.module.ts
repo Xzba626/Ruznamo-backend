@@ -1,0 +1,29 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { AuditModule } from '../audit/audit.module';
+import { SecurityModule } from '../security/security.module';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { MobileJwtAuthGuard } from './guards/mobile-jwt-auth.guard';
+import { MobileJwtStrategy } from './strategies/mobile-jwt.strategy';
+
+@Module({
+  imports: [
+    PassportModule.register({ defaultStrategy: 'mobile-jwt' }),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('jwt.accessSecret'),
+      }),
+    }),
+    SecurityModule,
+    AuditModule,
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, MobileJwtStrategy, MobileJwtAuthGuard],
+  exports: [AuthService, MobileJwtAuthGuard],
+})
+export class AuthModule {}

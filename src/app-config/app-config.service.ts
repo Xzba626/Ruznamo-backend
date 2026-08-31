@@ -29,7 +29,8 @@ export class AppConfigService {
     platform: Platform = Platform.ANDROID,
     clientAppVersion?: string,
   ): Promise<AppConfigResponseDto> {
-    const [appVersion, maintenanceMode, maintenanceMessage, configVersionRow] = await Promise.all([
+    const [appVersion, maintenanceMode, maintenanceMessage, configVersionRow, announcementKeys] =
+      await Promise.all([
       this.prisma.appVersion.findFirst({
         where: { platform, isActive: true },
         orderBy: { updatedAt: 'desc' },
@@ -37,7 +38,22 @@ export class AppConfigService {
       this.prisma.systemConfig.findUnique({ where: { key: 'MAINTENANCE_MODE' } }),
       this.prisma.systemConfig.findUnique({ where: { key: 'MAINTENANCE_MESSAGE_TJ' } }),
       this.prisma.systemConfig.findUnique({ where: { key: 'CONFIG_VERSION' } }),
+      this.prisma.systemConfig.findMany({
+        where: {
+          key: {
+            in: [
+              'ANNOUNCEMENT_ENABLED',
+              'ANNOUNCEMENT_TITLE',
+              'ANNOUNCEMENT_MESSAGE',
+              'ANNOUNCEMENT_TYPE',
+            ],
+          },
+        },
+      }),
     ]);
+
+    const announcementMap = Object.fromEntries(announcementKeys.map((row) => [row.key, row.value]));
+    const announcementEnabled = announcementMap.ANNOUNCEMENT_ENABLED === 'true';
 
     const maintenanceEnabled = maintenanceMode?.value === 'true';
     const latestVersion = appVersion?.latestVersion ?? '1.0.0';
@@ -71,6 +87,19 @@ export class AppConfigService {
         updateRecommended,
         releaseNotes: appVersion?.releaseNotesTj ?? appVersion?.releaseNotes ?? null,
       },
+      announcement: announcementEnabled
+        ? {
+            enabled: true,
+            title: announcementMap.ANNOUNCEMENT_TITLE ?? null,
+            message: announcementMap.ANNOUNCEMENT_MESSAGE ?? null,
+            type: announcementMap.ANNOUNCEMENT_TYPE ?? 'INFO',
+          }
+        : {
+            enabled: false,
+            title: null,
+            message: null,
+            type: null,
+          },
       serverTime: new Date().toISOString(),
     };
   }

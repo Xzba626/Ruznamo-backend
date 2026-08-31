@@ -168,8 +168,9 @@ model DeviceInstallation {
   createdAt      DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
 
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activations LicenseActivation[]
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activations   LicenseActivation[]
+  refreshTokens RefreshToken[]
 
   @@index([userId])
   @@index([userId, revokedAt])
@@ -359,6 +360,7 @@ model Receipt {
 model RefreshToken {
   id         String    @id @default(cuid())
   userId     String
+  deviceId   String?
   tokenHash  String    @unique
   expiresAt  DateTime  @db.Timestamptz(3)
   revokedAt  DateTime? @db.Timestamptz(3)
@@ -367,9 +369,11 @@ model RefreshToken {
   ipAddress  String?
   createdAt  DateTime  @default(now()) @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device DeviceInstallation? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([deviceId])
   @@index([expiresAt])
 }
 

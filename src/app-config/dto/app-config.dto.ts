@@ -48,6 +48,20 @@ export class AndroidConfigDto {
   releaseNotes!: string | null;
 }
 
+export class AnnouncementConfigDto {
+  @ApiProperty()
+  enabled!: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  title!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  message!: string | null;
+
+  @ApiPropertyOptional({ enum: ['INFO', 'WARNING', 'UPDATE', 'MAINTENANCE'], nullable: true })
+  type!: string | null;
+}
+
 export class AppConfigResponseDto {
   @ApiProperty({
     example: '1',
@@ -60,6 +74,9 @@ export class AppConfigResponseDto {
 
   @ApiProperty({ type: AndroidConfigDto })
   android!: AndroidConfigDto;
+
+  @ApiProperty({ type: AnnouncementConfigDto })
+  announcement!: AnnouncementConfigDto;
 
   @ApiProperty({ example: '2026-08-30T10:00:00.000Z' })
   serverTime!: string;

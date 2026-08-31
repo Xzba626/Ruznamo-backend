@@ -9,6 +9,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AppConfigModule } from './app-config/app-config.module';
 import { AdminModule } from './admin/admin.module';
+import { MobileModule } from './mobile/mobile.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { AdminModule } from './admin/admin.module';
     HealthModule,
     AppConfigModule,
     AdminModule,
+    MobileModule,
   ],
   providers: [
     {
