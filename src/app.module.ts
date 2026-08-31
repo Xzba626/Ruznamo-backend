@@ -8,6 +8,7 @@ import { CommonModule } from './common/common.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AppConfigModule } from './app-config/app-config.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { AppConfigModule } from './app-config/app-config.module';
     PrismaModule,
     HealthModule,
     AppConfigModule,
+    AdminModule,
   ],
   providers: [
     {

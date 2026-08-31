@@ -388,12 +388,64 @@ model AdminUser {
   createdAt    DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
 
-  roles            AdminUserRole[]
-  approvedOrders   Order[]         @relation("OrderApprovedBy")
-  reviewedReceipts Receipt[]       @relation("ReceiptReviewedBy")
-  auditLogs        AuditLog[]
+  roles                 AdminUserRole[]
+  refreshTokens         AdminRefreshToken[]
+  telegramIdentity      AdminTelegramIdentity?
+  telegramLinkTokens    AdminTelegramLinkToken[]
+  approvedOrders        Order[]                  @relation("OrderApprovedBy")
+  reviewedReceipts      Receipt[]                @relation("ReceiptReviewedBy")
+  auditLogs             AuditLog[]
 
   @@index([isActive])
+}
+
+model AdminRefreshToken {
+  id          String    @id @default(cuid())
+  adminUserId String
+  tokenHash   String    @unique
+  expiresAt   DateTime  @db.Timestamptz(3)
+  revokedAt   DateTime? @db.Timestamptz(3)
+  replacedBy  String?
+  userAgent   String?
+  ipAddress   String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+}
+
+model AdminTelegramIdentity {
+  id             String    @id @default(cuid())
+  adminUserId    String    @unique
+  telegramUserId BigInt    @unique
+  chatId         BigInt?
+  username       String?
+  firstName      String?
+  isVerified     Boolean   @default(false)
+  verifiedAt     DateTime? @db.Timestamptz(3)
+  lastSeenAt     DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([isVerified])
+}
+
+model AdminTelegramLinkToken {
+  id          String    @id @default(cuid())
+  adminUserId String
+  code        String    @unique
+  expiresAt   DateTime  @db.Timestamptz(3)
+  usedAt      DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([expiresAt])
 }
 
 model Role {
