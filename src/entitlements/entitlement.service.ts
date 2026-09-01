@@ -54,6 +54,26 @@ const DEFAULT_FEATURES: EntitlementFeatures = {
   advanced_analytics: false,
 };
 
+const PLAN_PRIORITY: Record<PlanCode, number> = {
+  [PlanCode.STANDARD]: 1,
+  [PlanCode.PRO]: 2,
+  [PlanCode.PRO_PLUS]: 3,
+};
+
+type LicenseWithPlan = {
+  id: string;
+  status: LicenseStatus;
+  keyPrefix: string;
+  startsAt: Date | null;
+  expiresAt: Date | null;
+  revokedAt: Date | null;
+  plan: {
+    code: PlanCode;
+    name: string;
+    features: Array<{ key: string; value: string; valueType: string }>;
+  };
+};
+
 @Injectable()
 export class EntitlementService {
   constructor(private readonly prisma: PrismaService) {}
@@ -72,6 +92,15 @@ export class EntitlementService {
         },
         devices: {
           where: { revokedAt: null },
+          include: {
+            activations: {
+              include: {
+                license: {
+                  include: { plan: { include: { features: true } } },
+                },
+              },
+            },
+          },
         },
       },
     });
@@ -81,21 +110,21 @@ export class EntitlementService {
     }
 
     if (user.status === UserStatus.SUSPENDED) {
-      return this.buildSnapshot(user, null, null, 'SUSPENDED', 'NONE', false, installationId);
+      return this.buildSnapshot(user, null, null, 'SUSPENDED', 'NONE', false, installationId, 0);
     }
 
     if (user.status === UserStatus.DELETED) {
-      return this.buildSnapshot(user, null, null, 'NONE', 'NONE', false, installationId);
+      return this.buildSnapshot(user, null, null, 'NONE', 'NONE', false, installationId, 0);
     }
 
     const now = new Date();
-    const activeLicense = user.licenses.find(
-      (license) =>
-        license.status === LicenseStatus.ACTIVE &&
-        (!license.expiresAt || license.expiresAt > now),
-    );
+    const activatedLicenses = this.collectActivatedLicenses(user);
+    const ownedLicenses = user.licenses as LicenseWithPlan[];
+    const candidateLicenses = this.mergeLicenseCandidates(ownedLicenses, activatedLicenses);
+    const activeLicense = this.pickBestActiveLicense(candidateLicenses, now);
 
     if (activeLicense) {
+      const activationCount = await this.countActiveLicenseActivations(activeLicense.id);
       return this.buildSnapshot(
         user,
         activeLicense,
@@ -104,6 +133,7 @@ export class EntitlementService {
         'LICENSE',
         true,
         installationId,
+        activationCount,
       );
     }
 
@@ -114,7 +144,7 @@ export class EntitlementService {
       trial.expiresAt > now;
 
     if (trialActive) {
-      return this.buildSnapshot(user, null, trial, 'TRIAL', 'TRIAL', true, installationId);
+      return this.buildSnapshot(user, null, trial, 'TRIAL', 'TRIAL', true, installationId, 0);
     }
 
     const trialExpired = trial && trial.expiresAt <= now;
@@ -126,6 +156,7 @@ export class EntitlementService {
       'NONE',
       false,
       installationId,
+      0,
     );
   }
 
@@ -135,8 +166,16 @@ export class EntitlementService {
   }
 
   async assertDeviceRegistrationAllowed(userId: string): Promise<void> {
-    const snapshot = await this.getSnapshot(userId);
-    if (snapshot.devices.activeCount >= snapshot.devices.max) {
+    const [snapshot, user] = await Promise.all([
+      this.getSnapshot(userId),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { devices: { where: { revokedAt: null } } },
+      }),
+    ]);
+
+    const userDeviceCount = user?.devices.length ?? 0;
+    if (userDeviceCount >= snapshot.devices.max) {
       throw new ForbiddenException({
         code: 'DEVICE_LIMIT_REACHED',
         message: 'Active device limit reached for your plan',
@@ -144,42 +183,98 @@ export class EntitlementService {
     }
   }
 
+  private collectActivatedLicenses(user: {
+    devices: Array<{
+      installationId: string;
+      activations: Array<{ license: LicenseWithPlan }>;
+    }>;
+  }): LicenseWithPlan[] {
+    const map = new Map<string, LicenseWithPlan>();
+    for (const device of user.devices) {
+      for (const activation of device.activations) {
+        if (!map.has(activation.license.id)) {
+          map.set(activation.license.id, activation.license);
+        }
+      }
+    }
+    return [...map.values()];
+  }
+
+  private mergeLicenseCandidates(
+    owned: LicenseWithPlan[],
+    activated: LicenseWithPlan[],
+  ): LicenseWithPlan[] {
+    const map = new Map<string, LicenseWithPlan>();
+    for (const license of [...owned, ...activated]) {
+      map.set(license.id, license);
+    }
+    return [...map.values()];
+  }
+
+  private pickBestActiveLicense(
+    licenses: LicenseWithPlan[],
+    now: Date,
+  ): LicenseWithPlan | null {
+    const active = licenses.filter(
+      (license) =>
+        (license.status === LicenseStatus.ACTIVE || license.status === LicenseStatus.PENDING) &&
+        !license.revokedAt &&
+        (!license.expiresAt || license.expiresAt > now),
+    );
+
+    if (active.length === 0) {
+      return null;
+    }
+
+    return active.sort((left, right) => {
+      const priorityDiff = PLAN_PRIORITY[right.plan.code] - PLAN_PRIORITY[left.plan.code];
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      const leftExpiry = left.expiresAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const rightExpiry = right.expiresAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return rightExpiry - leftExpiry;
+    })[0];
+  }
+
+  private async countActiveLicenseActivations(licenseId: string): Promise<number> {
+    return this.prisma.licenseActivation.count({
+      where: {
+        licenseId,
+        device: { revokedAt: null },
+      },
+    });
+  }
+
   private buildSnapshot(
     user: {
       devices: Array<{ installationId: string; revokedAt: Date | null }>;
-      licenses: Array<{
-        id: string;
-        status: LicenseStatus;
-        keyPrefix: string;
-        startsAt: Date | null;
-        expiresAt: Date | null;
-        plan: {
-          code: PlanCode;
-          name: string;
-          features: Array<{ key: string; value: string; valueType: string }>;
-        };
-      }>;
       trialGrant: {
         status: TrialGrantStatus;
         expiresAt: Date;
         startedAt: Date;
       } | null;
     },
-    license: (typeof user.licenses)[number] | null,
+    license: LicenseWithPlan | null,
     trial: (typeof user.trialGrant) | null,
     effectiveStatus: EffectiveStatus,
     source: AccessSource,
     access: boolean,
-    installationId?: string,
+    installationId: string | undefined,
+    licenseActivationCount: number,
   ): EntitlementSnapshot {
-    const activeCount = user.devices.filter((d) => !d.revokedAt).length;
+    const userDeviceCount = user.devices.filter((device) => !device.revokedAt).length;
     const features = license
       ? this.parsePlanFeatures(license.plan.features)
       : { ...DEFAULT_FEATURES };
 
     const currentInstallationActive = installationId
-      ? user.devices.some((d) => d.installationId === installationId && !d.revokedAt)
+      ? user.devices.some((device) => device.installationId === installationId && !device.revokedAt)
       : false;
+
+    const devicesActiveCount =
+      source === 'LICENSE' && license ? licenseActivationCount : userDeviceCount;
 
     return {
       access,
@@ -210,19 +305,41 @@ export class EntitlementService {
           }
         : null,
       devices: {
-        activeCount,
+        activeCount: devicesActiveCount,
         max: features.max_devices,
-        currentInstallationActive,
+        currentInstallationActive:
+          source === 'LICENSE' && license && installationId
+            ? this.deviceHasLicenseActivation(user, installationId, license.id)
+            : currentInstallationActive,
       },
       features,
       evaluatedAt: new Date(),
     };
   }
 
+  private deviceHasLicenseActivation(
+    user: {
+      devices: Array<{
+        installationId: string;
+        revokedAt: Date | null;
+        activations?: Array<{ license: { id: string } }>;
+      }>;
+    },
+    installationId: string,
+    licenseId: string,
+  ): boolean {
+    return user.devices.some(
+      (device) =>
+        device.installationId === installationId &&
+        !device.revokedAt &&
+        device.activations?.some((activation) => activation.license.id === licenseId),
+    );
+  }
+
   private parsePlanFeatures(
     planFeatures: Array<{ key: string; value: string; valueType: string }>,
   ): EntitlementFeatures {
-    const map = new Map(planFeatures.map((f) => [f.key, f.value]));
+    const map = new Map(planFeatures.map((feature) => [feature.key, feature.value]));
     return {
       planning_horizon_days: Number.parseInt(map.get('planning_horizon_days') ?? '28', 10),
       max_devices: Number.parseInt(map.get('max_devices') ?? '1', 10),

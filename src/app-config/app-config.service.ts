@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Platform } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigResponseDto } from './dto/app-config.dto';
@@ -23,7 +24,10 @@ function compareSemver(a: string, b: string): number {
 
 @Injectable()
 export class AppConfigService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
 
   async getPublicConfig(
     platform: Platform = Platform.ANDROID,
@@ -72,6 +76,10 @@ export class AppConfigService {
       }
     }
 
+    const telegramBotUsername = this.normalizeBotUsername(
+      this.configService.get<string>('telegram.botUsername'),
+    );
+
     return {
       configVersion: configVersionRow?.value ?? '1',
       maintenance: {
@@ -100,7 +108,13 @@ export class AppConfigService {
             message: null,
             type: null,
           },
+      telegramBotUsername,
       serverTime: new Date().toISOString(),
     };
+  }
+
+  private normalizeBotUsername(raw: string | undefined): string | null {
+    const trimmed = (raw ?? '').trim().replace(/^@+/, '');
+    return trimmed.length > 0 ? trimmed : null;
   }
 }

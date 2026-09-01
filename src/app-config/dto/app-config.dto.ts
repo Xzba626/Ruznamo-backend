@@ -80,4 +80,11 @@ export class AppConfigResponseDto {
 
   @ApiProperty({ example: '2026-08-30T10:00:00.000Z' })
   serverTime!: string;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 'ruznamo_bot',
+    description: 'Public Telegram bot username without @ prefix',
+  })
+  telegramBotUsername!: string | null;
 }

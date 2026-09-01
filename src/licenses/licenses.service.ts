@@ -4,10 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AuditActorType,
-  LicenseStatus,
-} from '@prisma/client';
+import { AuditActorType, LicenseStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { EntitlementService } from '../entitlements/entitlement.service';
@@ -32,87 +29,103 @@ export class LicensesService {
     const normalized = this.licenseKeyService.normalizeKey(licenseKey);
     const keyHash = this.licenseKeyService.hashKey(normalized);
 
-    const license = await this.prisma.license.findUnique({
-      where: { keyHash },
-      include: {
-        plan: { include: { features: true } },
-        activations: true,
-      },
-    });
-
-    if (!license) {
-      throw new NotFoundException({
-        code: 'LICENSE_INVALID',
-        message: 'License key is invalid',
-      });
-    }
-
-    if (license.status === LicenseStatus.REVOKED || license.revokedAt) {
-      throw new ForbiddenException({
-        code: 'LICENSE_REVOKED',
-        message: 'License has been revoked',
-      });
-    }
-
-    if (
-      license.status === LicenseStatus.EXPIRED ||
-      (license.expiresAt && license.expiresAt <= new Date())
-    ) {
-      throw new ForbiddenException({
-        code: 'LICENSE_EXPIRED',
-        message: 'License has expired',
-      });
-    }
-
-    if (license.userId && license.userId !== user.sub) {
-      throw new ForbiddenException({
-        code: 'LICENSE_ALREADY_ACTIVATED',
-        message: 'License is already assigned to another account',
-      });
-    }
-
-    const device = await this.prisma.deviceInstallation.findFirst({
-      where: { id: user.deviceId, userId: user.sub, revokedAt: null },
-    });
-
-    if (!device) {
-      throw new ForbiddenException({
-        code: 'DEVICE_REVOKED',
-        message: 'Current device is not active',
-      });
-    }
-
-    const maxDevices = this.readMaxDevices(license.plan.features);
-    const uniqueDeviceCount = new Set(license.activations.map((a) => a.deviceId)).size;
-    const alreadyOnDevice = license.activations.some((a) => a.deviceId === device.id);
-
-    if (!alreadyOnDevice && uniqueDeviceCount >= maxDevices) {
-      throw new ForbiddenException({
-        code: 'LICENSE_ACTIVATION_LIMIT',
-        message: 'License activation limit reached',
-      });
-    }
-
-    const now = new Date();
     const result = await this.prisma.$transaction(async (tx) => {
-      const updatedLicense = await tx.license.update({
-        where: { id: license.id },
-        data: {
-          userId: user.sub,
-          status: LicenseStatus.ACTIVE,
-          activatedAt: license.activatedAt ?? now,
-          startsAt: license.startsAt ?? now,
+      const license = await tx.license.findUnique({
+        where: { keyHash },
+        include: {
+          plan: { include: { features: true } },
         },
       });
 
-      if (!alreadyOnDevice) {
+      if (!license) {
+        throw new NotFoundException({
+          code: 'LICENSE_INVALID',
+          message: 'License key is invalid',
+        });
+      }
+
+      // Serialize concurrent activations for the same license (multi-device limit).
+      await tx.$executeRaw(Prisma.sql`SELECT id FROM "License" WHERE id = ${license.id} FOR UPDATE`);
+
+      this.assertLicenseActivatable(license);
+
+      const device = await tx.deviceInstallation.findFirst({
+        where: { id: user.deviceId, userId: user.sub, revokedAt: null },
+      });
+
+      if (!device) {
+        throw new ForbiddenException({
+          code: 'DEVICE_REVOKED',
+          message: 'Current device is not active',
+        });
+      }
+
+      const maxDevices = this.readMaxDevices(license.plan.features);
+
+      const existingActivation = await tx.licenseActivation.findUnique({
+        where: {
+          licenseId_deviceId: {
+            licenseId: license.id,
+            deviceId: device.id,
+          },
+        },
+      });
+
+      if (existingActivation) {
+        return { license, device, idempotent: true as const };
+      }
+
+      const activeActivationCount = await tx.licenseActivation.count({
+        where: {
+          licenseId: license.id,
+          device: { revokedAt: null },
+        },
+      });
+
+      if (activeActivationCount >= maxDevices) {
+        throw new ForbiddenException({
+          code: 'LICENSE_ACTIVATION_LIMIT',
+          message: 'License activation limit reached',
+        });
+      }
+
+      try {
         await tx.licenseActivation.create({
           data: {
             licenseId: license.id,
             deviceId: device.id,
           },
         });
+      } catch (error) {
+        if (this.isUniqueViolation(error)) {
+          const racedActivation = await tx.licenseActivation.findUnique({
+            where: {
+              licenseId_deviceId: {
+                licenseId: license.id,
+                deviceId: device.id,
+              },
+            },
+          });
+          if (racedActivation) {
+            return { license, device, idempotent: true as const };
+          }
+          throw new ForbiddenException({
+            code: 'LICENSE_ACTIVATION_LIMIT',
+            message: 'License activation limit reached',
+          });
+        }
+        throw error;
       }
+
+      const now = new Date();
+      await tx.license.update({
+        where: { id: license.id },
+        data: {
+          status: LicenseStatus.ACTIVE,
+          activatedAt: license.activatedAt ?? now,
+          startsAt: license.startsAt ?? now,
+        },
+      });
 
       await tx.licenseEvent.create({
         data: {
@@ -120,20 +133,28 @@ export class LicensesService {
           fromStatus: license.status,
           toStatus: LicenseStatus.ACTIVE,
           reason: 'mobile_activation',
-          metadata: { userId: user.sub, deviceId: device.id },
+          metadata: {
+            mobileUserId: user.sub,
+            deviceId: device.id,
+            purchaserUserId: license.userId,
+          },
         },
       });
 
-      return updatedLicense;
+      return { license, device, idempotent: false as const };
     });
 
     await this.auditService.log({
       actorType: AuditActorType.USER,
       actorId: user.sub,
-      action: 'license.activated',
+      action: result.idempotent ? 'license.activation.idempotent' : 'license.activated',
       entityType: 'License',
-      entityId: license.id,
-      metadata: { keyPrefix: license.keyPrefix },
+      entityId: result.license.id,
+      metadata: {
+        keyPrefix: result.license.keyPrefix,
+        deviceId: result.device.id,
+        purchaserUserId: result.license.userId,
+      },
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
     });
@@ -142,41 +163,62 @@ export class LicensesService {
 
     return {
       license: {
-        id: result.id,
-        status: result.status,
-        keyPrefix: license.keyPrefix,
-        plan: { code: license.plan.code, name: license.plan.name },
-        startsAt: result.startsAt,
-        expiresAt: result.expiresAt,
-        activatedAt: result.activatedAt,
+        id: result.license.id,
+        status: LicenseStatus.ACTIVE,
+        keyPrefix: result.license.keyPrefix,
+        plan: { code: result.license.plan.code, name: result.license.plan.name },
+        startsAt: result.license.startsAt,
+        expiresAt: result.license.expiresAt,
+        activatedAt: result.license.activatedAt,
       },
       entitlements: this.toPublicEntitlements(entitlements),
     };
   }
 
   async getMyLicenses(userId: string) {
-    const licenses = await this.prisma.license.findMany({
-      where: { userId },
+    const activations = await this.prisma.licenseActivation.findMany({
+      where: {
+        device: { userId, revokedAt: null },
+      },
       orderBy: { createdAt: 'desc' },
       include: {
-        plan: { select: { code: true, name: true } },
-        activations: {
+        license: {
           include: {
-            device: {
-              select: {
-                id: true,
-                installationId: true,
-                deviceName: true,
-                revokedAt: true,
+            plan: { select: { code: true, name: true } },
+            activations: {
+              include: {
+                device: {
+                  select: {
+                    id: true,
+                    installationId: true,
+                    deviceName: true,
+                    revokedAt: true,
+                  },
+                },
               },
             },
+          },
+        },
+        device: {
+          select: {
+            id: true,
+            installationId: true,
+            deviceName: true,
+            revokedAt: true,
           },
         },
       },
     });
 
+    const licenseMap = new Map<string, (typeof activations)[number]['license']>();
+    for (const activation of activations) {
+      if (!licenseMap.has(activation.license.id)) {
+        licenseMap.set(activation.license.id, activation.license);
+      }
+    }
+
     return {
-      items: licenses.map((license) => ({
+      items: [...licenseMap.values()].map((license) => ({
         id: license.id,
         status: license.status,
         keyPrefix: license.keyPrefix,
@@ -194,6 +236,29 @@ export class LicensesService {
         })),
       })),
     };
+  }
+
+  private assertLicenseActivatable(license: {
+    status: LicenseStatus;
+    revokedAt: Date | null;
+    expiresAt: Date | null;
+  }): void {
+    if (license.status === LicenseStatus.REVOKED || license.revokedAt) {
+      throw new ForbiddenException({
+        code: 'LICENSE_REVOKED',
+        message: 'License has been revoked',
+      });
+    }
+
+    if (
+      license.status === LicenseStatus.EXPIRED ||
+      (license.expiresAt && license.expiresAt <= new Date())
+    ) {
+      throw new ForbiddenException({
+        code: 'LICENSE_EXPIRED',
+        message: 'License has expired',
+      });
+    }
   }
 
   private readMaxDevices(features: Array<{ key: string; value: string }>): number {
@@ -219,9 +284,14 @@ export class LicensesService {
       devices: {
         active: snapshot.devices.activeCount,
         max: snapshot.devices.max,
+        currentInstallationActive: snapshot.devices.currentInstallationActive,
       },
       features: snapshot.features,
       evaluatedAt: snapshot.evaluatedAt,
     };
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
   }
 }

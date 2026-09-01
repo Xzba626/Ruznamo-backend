@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { Platform } from '@prisma/client';
 import { AppConfigService } from './app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,7 +16,14 @@ describe('AppConfigService', () => {
     jest.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AppConfigService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        AppConfigService,
+        { provide: PrismaService, useValue: prisma },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((key: string) => (key === 'telegram.botUsername' ? 'ruznamo_bot' : undefined)) },
+        },
+      ],
     }).compile();
 
     service = module.get(AppConfigService);
@@ -47,6 +55,7 @@ describe('AppConfigService', () => {
     expect(result.android.latestVersion).toBe('1.2.0');
     expect(result.android.updateRecommended).toBe(true);
     expect(result.android.updateRequired).toBe(false);
+    expect(result.telegramBotUsername).toBe('ruznamo_bot');
     expect(result.serverTime).toBeDefined();
   });
 

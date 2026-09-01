@@ -25,6 +25,8 @@ const auditActionLabels: Record<string, string> = {
   'mobile.logout_all': 'Выход из всех мобильных сессий',
   'trial.granted': 'Выдан пробный период',
   'license.activated': 'Лицензия активирована',
+  'license.activation.idempotent': 'Повторная активация лицензии (без изменений)',
+  'license.activation.duplicate': 'Повторная активация лицензии (без изменений)',
 };
 
 const entityTypeLabels: Record<string, string> = {
