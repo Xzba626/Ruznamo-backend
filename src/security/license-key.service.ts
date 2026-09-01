@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac } from 'crypto';
+import { createHmac, randomBytes } from 'crypto';
 
 @Injectable()
 export class LicenseKeyService {
   constructor(private readonly configService: ConfigService) {}
 
+  /** Generates a 64-character hexadecimal license key using CSPRNG. */
+  generateRawKey(): string {
+    return randomBytes(32).toString('hex');
+  }
+
   normalizeKey(licenseKey: string): string {
-    return licenseKey.trim().toUpperCase().replace(/\s+/g, '');
+    return licenseKey.trim().toLowerCase().replace(/\s+/g, '');
   }
 
   hashKey(normalizedKey: string): string {

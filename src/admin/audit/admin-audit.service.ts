@@ -32,10 +32,21 @@ export class AdminAuditService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { adminUser: { select: { email: true, displayName: true } } },
       }),
       this.prisma.auditLog.count({ where }),
     ]);
+
+    const adminIds = items
+      .filter((entry) => entry.actorType === AuditActorType.ADMIN && entry.actorId)
+      .map((entry) => entry.actorId as string);
+    const admins =
+      adminIds.length > 0
+        ? await this.prisma.adminUser.findMany({
+            where: { id: { in: adminIds } },
+            select: { id: true, email: true, displayName: true },
+          })
+        : [];
+    const adminMap = new Map(admins.map((admin) => [admin.id, admin]));
 
     return {
       items: items.map((entry) => ({
@@ -45,7 +56,10 @@ export class AdminAuditService {
         entityId: entry.entityId,
         actorType: entry.actorType as AuditActorType,
         actorId: entry.actorId,
-        actorEmail: entry.adminUser?.email ?? null,
+        actorEmail:
+          entry.actorType === AuditActorType.ADMIN && entry.actorId
+            ? (adminMap.get(entry.actorId)?.email ?? null)
+            : null,
         ipAddress: entry.ipAddress,
         createdAt: entry.createdAt,
         metadata: entry.metadata,

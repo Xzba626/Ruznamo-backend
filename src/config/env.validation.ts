@@ -77,10 +77,21 @@ export const envValidationSchema = Joi.object({
   CORS_ORIGINS: Joi.string().empty('').default('*'),
   API_BASE_URL: envUrl('API_BASE_URL', 'http://localhost:3000'),
   APP_BASE_URL: envUrl('APP_BASE_URL', 'http://localhost:3000'),
-  TELEGRAM_USER_BOT_TOKEN: Joi.string().allow('').optional(),
-  TELEGRAM_ADMIN_BOT_TOKEN: Joi.string().allow('').optional(),
-  TELEGRAM_WEBHOOK_SECRET: Joi.string().allow('').optional(),
-  ADMIN_TELEGRAM_CHAT_ID: Joi.string().allow('').optional(),
+  TELEGRAM_BOT_TOKEN: Joi.string().allow('').optional(),
+  TELEGRAM_BOT_USERNAME: Joi.string().allow('').optional(),
+  TELEGRAM_WEBHOOK_SECRET: Joi.when('TELEGRAM_BOT_TOKEN', {
+    is: Joi.string().min(1),
+    then: Joi.when('NODE_ENV', {
+      is: 'production',
+      then: Joi.string().min(16).required().messages({
+        'any.required':
+          'TELEGRAM_WEBHOOK_SECRET is required in production when TELEGRAM_BOT_TOKEN is set.',
+      }),
+      otherwise: Joi.string().allow('').optional(),
+    }),
+    otherwise: Joi.string().allow('').optional(),
+  }),
+  ADMIN_TELEGRAM_IDS: Joi.string().allow('').optional(),
   ANDROID_UPDATE_URL: optionalUrl(),
   LOG_LEVEL: Joi.string()
     .empty('')

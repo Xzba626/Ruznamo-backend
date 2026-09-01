@@ -29,9 +29,20 @@ export class AdminDashboardService {
       this.prisma.auditLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: 10,
-        include: { adminUser: { select: { email: true, displayName: true } } },
       }),
     ]);
+
+    const adminIds = recentAudit
+      .filter((entry) => entry.actorType === 'ADMIN' && entry.actorId)
+      .map((entry) => entry.actorId as string);
+    const admins =
+      adminIds.length > 0
+        ? await this.prisma.adminUser.findMany({
+            where: { id: { in: adminIds } },
+            select: { id: true, email: true },
+          })
+        : [];
+    const adminMap = new Map(admins.map((admin) => [admin.id, admin]));
 
     return {
       users: {
@@ -52,7 +63,10 @@ export class AdminDashboardService {
         entityType: entry.entityType,
         entityId: entry.entityId,
         actorType: entry.actorType,
-        actorEmail: entry.adminUser?.email ?? null,
+        actorEmail:
+          entry.actorType === 'ADMIN' && entry.actorId
+            ? (adminMap.get(entry.actorId)?.email ?? null)
+            : null,
         createdAt: entry.createdAt,
       })),
     };

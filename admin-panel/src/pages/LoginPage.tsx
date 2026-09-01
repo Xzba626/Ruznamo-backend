@@ -1,9 +1,11 @@
 import { FormEvent, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { ApiClientError } from '../api/client';
+import { getErrorMessage } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { t } from '../i18n';
 
 export function LoginPage() {
+  const strings = t();
   const { admin, login, loading } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +22,7 @@ export function LoginPage() {
     try {
       await login(username.trim(), password);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Authentication failed');
+      setError(getErrorMessage(err, strings.errors.authFailed));
     } finally {
       setSubmitting(false);
     }
@@ -29,15 +31,15 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={onSubmit}>
-        <h1>Admin Sign In</h1>
-        <p className="muted">No public registration. OWNER account only.</p>
+        <h1>{strings.login.title}</h1>
+        <p className="muted">{strings.login.subtitle}</p>
         {error && <div className="alert error">{error}</div>}
         <label>
-          Username
+          {strings.login.username}
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required />
         </label>
         <label>
-          Password
+          {strings.login.password}
           <div className="password-row">
             <input
               type={showPassword ? 'text' : 'password'}
@@ -47,12 +49,12 @@ export function LoginPage() {
               required
             />
             <button type="button" className="btn-secondary" onClick={() => setShowPassword((v) => !v)}>
-              {showPassword ? 'Hide' : 'Show'}
+              {showPassword ? strings.common.hide : strings.common.show}
             </button>
           </div>
         </label>
         <button type="submit" className="btn-primary" disabled={submitting}>
-          {submitting ? 'Signing in…' : 'Sign in'}
+          {submitting ? strings.login.submitting : strings.login.submit}
         </button>
       </form>
     </div>

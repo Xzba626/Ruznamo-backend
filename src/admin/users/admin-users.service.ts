@@ -30,6 +30,7 @@ export class AdminUsersService {
         orderBy: { createdAt: 'desc' },
         include: {
           trialGrant: { select: { status: true, expiresAt: true } },
+          telegramAccount: { select: { telegramId: true, username: true, firstName: true } },
           licenses: {
             where: { status: 'ACTIVE' },
             take: 1,
@@ -52,6 +53,13 @@ export class AdminUsersService {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         trial: user.trialGrant,
+        telegram: user.telegramAccount
+          ? {
+              telegramId: user.telegramAccount.telegramId.toString(),
+              username: user.telegramAccount.username,
+              firstName: user.telegramAccount.firstName,
+            }
+          : null,
         activeLicense: user.licenses[0] ?? null,
         deviceCount: user._count.devices,
       })),

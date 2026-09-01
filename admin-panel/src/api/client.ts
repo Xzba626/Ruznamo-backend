@@ -1,4 +1,5 @@
 import type { ApiErrorBody, ApiSuccess } from './types';
+import { localizeError } from '../i18n/errors';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
@@ -64,7 +65,11 @@ export async function apiRequest<T>(
     }
     const ok = await refreshPromise;
     if (ok) return apiRequest<T>(path, options, false);
-    throw new ApiClientError(401, 'UNAUTHORIZED', 'Session expired. Please sign in again.');
+    throw new ApiClientError(401, 'UNAUTHORIZED', localizeError('UNAUTHORIZED'));
+  }
+
+  if (res.status === 403) {
+    throw new ApiClientError(403, 'FORBIDDEN', localizeError('FORBIDDEN'));
   }
 
   if (res.status === 204) {
@@ -78,15 +83,17 @@ export async function apiRequest<T>(
     throw new ApiClientError(
       res.status,
       'SERVER_ERROR',
-      res.status >= 500
+      localizeError('SERVER_ERROR', res.status >= 500
         ? 'Backend is unavailable (server error). Wait for Vercel redeploy or use local API.'
-        : 'Unexpected response from server.',
+        : 'Unexpected response from server.'),
     );
   }
 
   if (!res.ok || !('success' in json) || !json.success) {
     const err = json as ApiErrorBody;
-    throw new ApiClientError(res.status, err.error?.code ?? 'ERROR', err.error?.message ?? 'Request failed');
+    const code = err.error?.code ?? 'ERROR';
+    const message = localizeError(code, err.error?.message ?? 'Request failed');
+    throw new ApiClientError(res.status, code, message);
   }
 
   return json.data;
@@ -100,4 +107,12 @@ export class ApiClientError extends Error {
   ) {
     super(message);
   }
+}
+
+/** Сообщение об ошибке API на русском для отображения в UI. */
+export function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiClientError) {
+    return err.message;
+  }
+  return fallback;
 }

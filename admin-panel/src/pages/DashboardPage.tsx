@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react';
 import { fetchDashboardSummary, fetchSystemStatus, fetchTelegramStatus } from '../api/admin';
-import { ApiClientError } from '../api/client';
+import { getErrorMessage } from '../api/client';
+import {
+  formatDateTime,
+  labelAuditAction,
+  labelSystemHealth,
+  labelTelegramConnected,
+  t,
+} from '../i18n';
 
 export function DashboardPage() {
+  const strings = t();
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof fetchDashboardSummary>> | null>(null);
   const [system, setSystem] = useState<Awaited<ReturnType<typeof fetchSystemStatus>> | null>(null);
   const [telegram, setTelegram] = useState<Awaited<ReturnType<typeof fetchTelegramStatus>> | null>(null);
@@ -16,49 +24,57 @@ export function DashboardPage() {
         setSystem(sys);
         setTelegram(tg);
       })
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load dashboard'))
+      .catch((err) => setError(getErrorMessage(err, strings.errors.loadDashboard)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [strings.errors.loadDashboard]);
 
-  if (loading) return <p>Loading dashboard…</p>;
+  if (loading) return <p>{strings.common.loading}</p>;
   if (error) return <div className="alert error">{error}</div>;
-  if (!summary) return <p>No data</p>;
+  if (!summary) return <p>{strings.common.noData}</p>;
 
   return (
     <div>
-      <h1>Dashboard</h1>
+      <h1>{strings.dashboard.title}</h1>
       <div className="grid cards">
-        <div className="card"><div className="label">Users</div><div className="value">{summary.users.total}</div></div>
-        <div className="card"><div className="label">Active users</div><div className="value">{summary.users.active}</div></div>
-        <div className="card"><div className="label">Trial users</div><div className="value">{summary.users.trial}</div></div>
-        <div className="card"><div className="label">Active licenses</div><div className="value">{summary.licenses.active}</div></div>
-        <div className="card"><div className="label">Active devices</div><div className="value">{summary.devices.active}</div></div>
+        <div className="card"><div className="label">{strings.dashboard.usersTotal}</div><div className="value">{summary.users.total}</div></div>
+        <div className="card"><div className="label">{strings.dashboard.usersActive}</div><div className="value">{summary.users.active}</div></div>
+        <div className="card"><div className="label">{strings.dashboard.usersTrial}</div><div className="value">{summary.users.trial}</div></div>
+        <div className="card"><div className="label">{strings.dashboard.licensesActive}</div><div className="value">{summary.licenses.active}</div></div>
+        <div className="card"><div className="label">{strings.dashboard.devicesActive}</div><div className="value">{summary.devices.active}</div></div>
         <div className="card">
-          <div className="label">Telegram</div>
-          <div className="value">{telegram?.isVerified ? 'Connected' : 'Not connected'}</div>
+          <div className="label">{strings.dashboard.telegram}</div>
+          <div className="value">{labelTelegramConnected(Boolean(telegram?.isVerified))}</div>
         </div>
       </div>
       <section className="section">
-        <h2>System</h2>
-        <p>API: {system?.api} · Database: {system?.database} · Readiness: {system?.readiness}</p>
+        <h2>{strings.dashboard.system}</h2>
+        <p>
+          {strings.dashboard.systemLine(
+            labelSystemHealth(system?.api ?? ''),
+            labelSystemHealth(system?.database ?? ''),
+            labelSystemHealth(system?.readiness ?? ''),
+          )}
+        </p>
       </section>
       <section className="section">
-        <h2>Recent activity</h2>
+        <h2>{strings.dashboard.recentActivity}</h2>
         {summary.recentActivity.length === 0 ? (
-          <p className="muted">No audit events yet.</p>
+          <p className="muted">{strings.dashboard.noAudit}</p>
         ) : (
-          <table>
-            <thead><tr><th>Time</th><th>Action</th><th>Actor</th></tr></thead>
-            <tbody>
-              {summary.recentActivity.map((e) => (
-                <tr key={e.id}>
-                  <td>{new Date(e.createdAt).toLocaleString()}</td>
-                  <td>{e.action}</td>
-                  <td>{e.actorEmail ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>{strings.dashboard.colTime}</th><th>{strings.dashboard.colAction}</th><th>{strings.dashboard.colActor}</th></tr></thead>
+              <tbody>
+                {summary.recentActivity.map((e) => (
+                  <tr key={e.id}>
+                    <td>{formatDateTime(e.createdAt)}</td>
+                    <td>{labelAuditAction(e.action)}</td>
+                    <td>{e.actorEmail ?? strings.common.dash}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

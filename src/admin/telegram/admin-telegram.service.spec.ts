@@ -22,8 +22,8 @@ describe('AdminTelegramService', () => {
 
   const configService = {
     get: jest.fn((key: string, fallback?: unknown) => {
-      if (key === 'telegram.adminTelegramIds') return [];
-      if (key === 'telegram.adminBotUsername') return 'ruznamo_admin_bot';
+      if (key === 'telegram.adminTelegramIds') return ['123456789'];
+      if (key === 'telegram.botUsername') return 'ruznamo_bot';
       return fallback;
     }),
   };
@@ -82,7 +82,7 @@ describe('AdminTelegramService', () => {
 
     await service.completeLinkFromBot({
       code: 'RZ-ABC123',
-      telegramUserId: 999888777n,
+      telegramUserId: 123456789n,
       username: 'ignored_username',
       firstName: 'Ignored',
     });
@@ -90,7 +90,7 @@ describe('AdminTelegramService', () => {
     expect(prisma.adminTelegramLinkToken.update).toHaveBeenCalled();
     expect(prisma.adminTelegramIdentity.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({ telegramUserId: 999888777n, isVerified: true }),
+        create: expect.objectContaining({ telegramUserId: 123456789n, isVerified: true }),
       }),
     );
   });

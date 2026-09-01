@@ -70,6 +70,8 @@ const SYSTEM_CONFIG = [
   },
   { key: 'MAINTENANCE_MODE', value: 'false' },
   { key: 'MAINTENANCE_MESSAGE_TJ', value: '' },
+  { key: 'PAYMENT_CARD_NUMBER', value: '' },
+  { key: 'PAYMENT_RECIPIENT_NAME', value: '' },
   { key: 'ANNOUNCEMENT_ENABLED', value: 'false' },
   { key: 'ANNOUNCEMENT_TITLE', value: '' },
   { key: 'ANNOUNCEMENT_MESSAGE', value: '' },

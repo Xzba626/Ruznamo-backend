@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { fetchDevices } from '../api/admin';
-import { ApiClientError } from '../api/client';
+import { getErrorMessage } from '../api/client';
 import type { Paginated } from '../api/types';
+import { formatDate, formatDateTime, labelDeviceActive, labelPlatform, t } from '../i18n';
 
 type DeviceRow = {
   id: string;
@@ -16,6 +17,7 @@ type DeviceRow = {
 };
 
 export function DevicesPage() {
+  const strings = t();
   const [data, setData] = useState<Paginated<DeviceRow> | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -26,9 +28,9 @@ export function DevicesPage() {
     setLoading(true);
     fetchDevices(page, search)
       .then((res) => setData(res as Paginated<DeviceRow>))
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load devices'))
+      .catch((err) => setError(getErrorMessage(err, strings.errors.loadDevices)))
       .finally(() => setLoading(false));
-  }, [page, search]);
+  }, [page, search, strings.errors.loadDevices]);
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -37,46 +39,46 @@ export function DevicesPage() {
 
   return (
     <div>
-      <h1>Devices</h1>
+      <h1>{strings.devices.title}</h1>
       <form className="toolbar" onSubmit={onSearch}>
-        <input placeholder="Search devices…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <button type="submit" className="btn-secondary">Search</button>
+        <input placeholder={strings.devices.searchPlaceholder} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <button type="submit" className="btn-secondary">{strings.common.search}</button>
       </form>
-      {loading && <p>Loading devices…</p>}
+      {loading && <p>{strings.devices.loading}</p>}
       {error && <div className="alert error">{error}</div>}
-      {!loading && data && data.items.length === 0 && <p className="muted">No devices found.</p>}
+      {!loading && data && data.items.length === 0 && <p className="muted">{strings.devices.empty}</p>}
       {!loading && data && data.items.length > 0 && (
         <>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Device</th>
-                  <th>User</th>
-                  <th>Platform</th>
-                  <th>Status</th>
-                  <th>Last seen</th>
-                  <th>Registered</th>
+                  <th>{strings.devices.colDevice}</th>
+                  <th>{strings.devices.colUser}</th>
+                  <th>{strings.devices.colPlatform}</th>
+                  <th>{strings.devices.colStatus}</th>
+                  <th>{strings.devices.colLastSeen}</th>
+                  <th>{strings.devices.colRegistered}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.items.map((device) => (
                   <tr key={device.id}>
                     <td>{device.deviceName ?? device.installationId}</td>
-                    <td>{device.user.displayName ?? device.user.email ?? '—'}</td>
-                    <td>{device.platform}</td>
-                    <td>{device.isActive ? 'Active' : 'Revoked'}</td>
-                    <td>{device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : '—'}</td>
-                    <td>{new Date(device.createdAt).toLocaleDateString()}</td>
+                    <td>{device.user.displayName ?? device.user.email ?? strings.common.dash}</td>
+                    <td>{labelPlatform(device.platform)}{device.appVersion ? ` · ${device.appVersion}` : ''}</td>
+                    <td>{labelDeviceActive(device.isActive)}</td>
+                    <td>{device.lastSeenAt ? formatDateTime(device.lastSeenAt) : strings.common.dash}</td>
+                    <td>{formatDate(device.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <div className="pager">
-            <button type="button" className="btn-secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-            <span>Page {data.meta.page} of {data.meta.totalPages}</span>
-            <button type="button" className="btn-secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+            <button type="button" className="btn-secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{strings.common.previousPage}</button>
+            <span>{strings.common.pageOf(data.meta.page, data.meta.totalPages)}</span>
+            <button type="button" className="btn-secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((p) => p + 1)}>{strings.common.nextPage}</button>
           </div>
         </>
       )}

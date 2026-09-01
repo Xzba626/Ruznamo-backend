@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module';
 import { AppConfigModule } from './app-config/app-config.module';
 import { AdminModule } from './admin/admin.module';
 import { MobileModule } from './mobile/mobile.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { MobileModule } from './mobile/mobile.module';
     AppConfigModule,
     AdminModule,
     MobileModule,
+    TelegramModule,
   ],
   providers: [
     {

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { createTelegramConnect, fetchTelegramStatus } from '../api/admin';
-import { ApiClientError } from '../api/client';
+import { getErrorMessage } from '../api/client';
+import { formatDateTime, labelTelegramConnected, t } from '../i18n';
 
 export function TelegramPage() {
+  const strings = t();
   const [status, setStatus] = useState<Awaited<ReturnType<typeof fetchTelegramStatus>> | null>(null);
-  const [code, setCode] = useState<{ code: string; expiresAt: string; instructions: string } | null>(null);
+  const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
@@ -14,7 +16,7 @@ export function TelegramPage() {
     try {
       setStatus(await fetchTelegramStatus());
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to load Telegram status');
+      setError(getErrorMessage(err, strings.errors.loadTelegram));
     } finally {
       setLoading(false);
     }
@@ -29,38 +31,37 @@ export function TelegramPage() {
     setError('');
     try {
       const result = await createTelegramConnect();
-      setCode({ code: result.code, expiresAt: result.expiresAt, instructions: result.instructions });
+      setCode({ code: result.code, expiresAt: result.expiresAt });
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to generate code');
+      setError(getErrorMessage(err, strings.errors.loadTelegram));
     } finally {
       setGenerating(false);
     }
   }
 
-  if (loading) return <p>Loading Telegram status…</p>;
+  if (loading) return <p>{strings.telegram.loading}</p>;
 
   return (
     <div>
-      <h1>Telegram</h1>
+      <h1>{strings.telegram.title}</h1>
       {error && <div className="alert error">{error}</div>}
       <div className="card section">
-        <p><strong>Status:</strong> {status?.isVerified ? 'Connected' : 'Not connected'}</p>
-        {status?.telegramUserId && <p><strong>Telegram ID:</strong> {status.telegramUserId}</p>}
-        {status?.verifiedAt && <p><strong>Connected at:</strong> {new Date(status.verifiedAt).toLocaleString()}</p>}
+        <p><strong>{strings.telegram.status}:</strong> {labelTelegramConnected(Boolean(status?.isVerified))}</p>
+        {status?.telegramUserId && <p><strong>{strings.telegram.telegramId}:</strong> {status.telegramUserId}</p>}
+        {status?.verifiedAt && <p><strong>{strings.telegram.connectedAt}:</strong> {formatDateTime(status.verifiedAt)}</p>}
       </div>
       {!status?.isVerified && (
         <section className="section">
-          <p className="muted">Generate a one-time code, then send <code>/start CODE</code> to the Admin Bot.</p>
+          <p className="muted">{strings.telegram.generateHint}</p>
           <button type="button" className="btn-primary" onClick={() => void generateCode()} disabled={generating}>
-            {generating ? 'Generating…' : 'Generate connection code'}
+            {generating ? strings.telegram.generating : strings.telegram.generate}
           </button>
           {code && (
             <div className="card section">
-              <p><strong>Code:</strong> <span className="mono">{code.code}</span></p>
-              <p><strong>Expires:</strong> {new Date(code.expiresAt).toLocaleString()}</p>
-              <p>{code.instructions}</p>
+              <p><strong>{strings.telegram.code}:</strong> <span className="mono">{code.code}</span></p>
+              <p><strong>{strings.telegram.expires}:</strong> {formatDateTime(code.expiresAt)}</p>
               <button type="button" className="btn-secondary" onClick={() => void load()}>
-                Refresh status
+                {strings.telegram.refreshStatus}
               </button>
             </div>
           )}

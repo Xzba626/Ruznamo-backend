@@ -175,6 +175,19 @@ th, td {
   align-items: center;
   gap: 0.75rem;
   margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.actions-cell .btn-primary,
+.actions-cell .btn-danger {
+  white-space: nowrap;
 }
 
 .form-stack {

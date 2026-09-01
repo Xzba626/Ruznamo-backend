@@ -57,3 +57,30 @@ export function createTelegramConnect() {
     { method: 'POST' },
   );
 }
+
+export function fetchOrders(page = 1, search = '') {
+  const q = new URLSearchParams({ page: String(page), limit: '20' });
+  if (search) q.set('search', search);
+  return apiRequest<Paginated<Record<string, unknown>>>(`/api/v1/admin/orders?${q}`);
+}
+
+export function approveOrder(orderId: string) {
+  return apiRequest<{ orderId: string; status: string }>(`/api/v1/admin/orders/${orderId}/approve`, {
+    method: 'PATCH',
+    body: JSON.stringify({}),
+  });
+}
+
+export function rejectOrder(orderId: string, reason?: string) {
+  return apiRequest<{ orderId: string; status: string }>(`/api/v1/admin/orders/${orderId}/reject`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function revokeLicense(licenseId: string) {
+  return apiRequest(`/api/v1/admin/licenses/${licenseId}/revoke`, {
+    method: 'PATCH',
+    body: JSON.stringify({}),
+  });
+}

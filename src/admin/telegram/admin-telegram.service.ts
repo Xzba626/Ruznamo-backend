@@ -22,7 +22,6 @@ export interface AdminTelegramStatus {
   firstName: string | null;
   verifiedAt: Date | null;
   lastSeenAt: Date | null;
-  envBootstrapIds: string[];
 }
 
 @Injectable()
@@ -45,7 +44,7 @@ export class AdminTelegramService {
       },
     });
 
-    const botUsername = this.configService.get<string>('telegram.adminBotUsername');
+    const botUsername = this.configService.get<string>('telegram.botUsername');
     const deepLink = botUsername ? `https://t.me/${botUsername}?start=${code}` : null;
 
     await this.auditService.log({
@@ -61,7 +60,7 @@ export class AdminTelegramService {
       expiresAt,
       deepLink,
       instructions:
-        'Open the admin Telegram bot and send /start with this code, or use the deep link. The code expires in 15 minutes.',
+        'Откройте бота Telegram и отправьте /start с этим кодом или используйте ссылку. Код действует 15 минут.',
     };
   }
 
@@ -78,7 +77,6 @@ export class AdminTelegramService {
       firstName: identity?.firstName ?? null,
       verifiedAt: identity?.verifiedAt ?? null,
       lastSeenAt: identity?.lastSeenAt ?? null,
-      envBootstrapIds: this.configService.get<string[]>('telegram.adminTelegramIds', []),
     };
   }
 
@@ -223,7 +221,7 @@ export class AdminTelegramService {
   }
 
   private async sendBotMessage(chatId: number, text: string): Promise<void> {
-    const token = this.configService.get<string>('telegram.adminBotToken');
+    const token = this.configService.get<string>('telegram.botToken');
     if (!token) {
       return;
     }

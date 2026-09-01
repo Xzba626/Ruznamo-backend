@@ -130,6 +130,7 @@ model TelegramAccount {
   id         String   @id @default(cuid())
   userId     String   @unique
   telegramId BigInt   @unique
+  chatId     BigInt?
   username   String?
   firstName  String?
   lastName   String?
@@ -313,6 +314,7 @@ model Order {
   amount          Decimal       @db.Decimal(10, 2)
   currency        String        @default("TJS")
   status          OrderStatus   @default(PENDING)
+  awaitingReceipt Boolean       @default(false)
   paidAt          DateTime?     @db.Timestamptz(3)
   approvedAt      DateTime?     @db.Timestamptz(3)
   approvedById    String?
@@ -330,21 +332,23 @@ model Order {
   license    License?
 
   @@index([userId])
+  @@index([userId, status])
   @@index([status])
   @@index([createdAt])
 }
 
 model Receipt {
-  id              String        @id @default(cuid())
-  orderId         String
-  telegramFileId  String
-  fileType        String
-  status          ReceiptStatus @default(PENDING)
-  submittedAt     DateTime      @default(now()) @db.Timestamptz(3)
-  reviewedAt      DateTime?     @db.Timestamptz(3)
-  reviewedById    String?
-  rejectionReason String?
-  metadata        Json?
+  id               String        @id @default(cuid())
+  orderId          String
+  telegramFileId   String
+  fileType         String
+  telegramUpdateId BigInt?       @unique
+  status           ReceiptStatus @default(PENDING)
+  submittedAt      DateTime      @default(now()) @db.Timestamptz(3)
+  reviewedAt       DateTime?     @db.Timestamptz(3)
+  reviewedById     String?
+  rejectionReason  String?
+  metadata         Json?
 
   order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
   reviewedBy AdminUser? @relation("ReceiptReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
@@ -554,4 +558,10 @@ model NotificationOutbox {
   updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([status, scheduledAt])
+  @@index([type, status])
+}
+
+model TelegramProcessedUpdate {
+  updateId  BigInt   @id
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 }

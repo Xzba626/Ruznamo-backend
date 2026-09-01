@@ -1,15 +1,19 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { t } from '../i18n';
+
+const strings = t();
 
 const nav = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/users', label: 'Users', permission: 'users:read' },
-  { to: '/licenses', label: 'Licenses', permission: 'licenses:read' },
-  { to: '/devices', label: 'Devices', permission: 'devices:read' },
-  { to: '/telegram', label: 'Telegram' },
-  { to: '/audit', label: 'Audit Logs', permission: 'audit:read' },
-  { to: '/system', label: 'System' },
-  { to: '/profile', label: 'Profile' },
+  { to: '/', label: strings.nav.dashboard },
+  { to: '/users', label: strings.nav.users, permission: 'users:read' },
+  { to: '/licenses', label: strings.nav.licenses, permission: 'licenses:read' },
+  { to: '/devices', label: strings.nav.devices, permission: 'devices:read' },
+  { to: '/orders', label: strings.nav.orders, permission: 'orders:read' },
+  { to: '/telegram', label: strings.nav.telegram },
+  { to: '/audit', label: strings.nav.audit, permission: 'audit:read' },
+  { to: '/system', label: strings.nav.system },
+  { to: '/profile', label: strings.nav.profile },
 ];
 
 export function Layout() {
@@ -18,7 +22,7 @@ export function Layout() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">Ruznamo Admin</div>
+        <div className="brand">{strings.brand}</div>
         <nav>
           {nav
             .filter((item) => !item.permission || hasPermission(item.permission))
@@ -33,7 +37,7 @@ export function Layout() {
         <header className="topbar">
           <div>{admin?.email}</div>
           <button type="button" className="btn-secondary" onClick={() => void logout()}>
-            Logout
+            {strings.common.logout}
           </button>
         </header>
         <main className="content">

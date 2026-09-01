@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { UsersPage } from './pages/UsersPage';
 import { LicensesPage } from './pages/LicensesPage';
 import { DevicesPage } from './pages/DevicesPage';
+import { OrdersPage } from './pages/OrdersPage';
 import { TelegramPage } from './pages/TelegramPage';
 import { AuditPage } from './pages/AuditPage';
 import { SystemPage } from './pages/SystemPage';
@@ -29,6 +30,7 @@ export function App() {
             <Route path="users" element={<UsersPage />} />
             <Route path="licenses" element={<LicensesPage />} />
             <Route path="devices" element={<DevicesPage />} />
+            <Route path="orders" element={<OrdersPage />} />
             <Route path="telegram" element={<TelegramPage />} />
             <Route path="audit" element={<AuditPage />} />
             <Route path="system" element={<SystemPage />} />

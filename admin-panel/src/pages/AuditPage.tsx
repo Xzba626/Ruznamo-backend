@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { fetchAudit } from '../api/admin';
-import { ApiClientError } from '../api/client';
+import { getErrorMessage } from '../api/client';
 import type { Paginated } from '../api/types';
+import { formatDateTime, labelAuditAction, labelEntityType, t } from '../i18n';
 
 type AuditRow = {
   id: string;
@@ -14,6 +15,7 @@ type AuditRow = {
 };
 
 export function AuditPage() {
+  const strings = t();
   const [data, setData] = useState<Paginated<AuditRow> | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -23,46 +25,49 @@ export function AuditPage() {
     setLoading(true);
     fetchAudit(page)
       .then((res) => setData(res as Paginated<AuditRow>))
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load audit logs'))
+      .catch((err) => setError(getErrorMessage(err, strings.errors.loadAudit)))
       .finally(() => setLoading(false));
-  }, [page]);
+  }, [page, strings.errors.loadAudit]);
 
   return (
     <div>
-      <h1>Audit Logs</h1>
-      {loading && <p>Loading audit logs…</p>}
+      <h1>{strings.audit.title}</h1>
+      {loading && <p>{strings.audit.loading}</p>}
       {error && <div className="alert error">{error}</div>}
-      {!loading && data && data.items.length === 0 && <p className="muted">No audit events found.</p>}
+      {!loading && data && data.items.length === 0 && <p className="muted">{strings.audit.empty}</p>}
       {!loading && data && data.items.length > 0 && (
         <>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>Action</th>
-                  <th>Entity</th>
-                  <th>Actor</th>
-                  <th>IP</th>
+                  <th>{strings.audit.colTime}</th>
+                  <th>{strings.audit.colAction}</th>
+                  <th>{strings.audit.colEntity}</th>
+                  <th>{strings.audit.colActor}</th>
+                  <th>{strings.audit.colIp}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.items.map((entry) => (
                   <tr key={entry.id}>
-                    <td>{new Date(entry.createdAt).toLocaleString()}</td>
-                    <td>{entry.action}</td>
-                    <td>{entry.entityType}{entry.entityId ? ` #${entry.entityId.slice(0, 8)}` : ''}</td>
-                    <td>{entry.actorEmail ?? '—'}</td>
-                    <td>{entry.ipAddress ?? '—'}</td>
+                    <td>{formatDateTime(entry.createdAt)}</td>
+                    <td>{labelAuditAction(entry.action)}</td>
+                    <td>
+                      {labelEntityType(entry.entityType)}
+                      {entry.entityId ? ` #${entry.entityId.slice(0, 8)}` : ''}
+                    </td>
+                    <td>{entry.actorEmail ?? strings.common.dash}</td>
+                    <td>{entry.ipAddress ?? strings.common.dash}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <div className="pager">
-            <button type="button" className="btn-secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-            <span>Page {data.meta.page} of {data.meta.totalPages}</span>
-            <button type="button" className="btn-secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+            <button type="button" className="btn-secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{strings.common.previousPage}</button>
+            <span>{strings.common.pageOf(data.meta.page, data.meta.totalPages)}</span>
+            <button type="button" className="btn-secondary" disabled={page >= data.meta.totalPages} onClick={() => setPage((p) => p + 1)}>{strings.common.nextPage}</button>
           </div>
         </>
       )}
