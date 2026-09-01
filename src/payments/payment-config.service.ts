@@ -21,16 +21,16 @@ export interface PaymentDisplayConfig {
 export class PaymentConfigService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStandardPrice(billingPeriod: BillingPeriod): Promise<PlanPriceQuote> {
+  async getPlanPrice(planCode: PlanCode, billingPeriod: BillingPeriod): Promise<PlanPriceQuote> {
     const plan = await this.prisma.plan.findUnique({
-      where: { code: PlanCode.STANDARD },
+      where: { code: planCode },
       include: {
         prices: { where: { billingPeriod, isActive: true }, take: 1 },
       },
     });
 
     if (!plan || plan.prices.length === 0) {
-      throw new Error('STANDARD plan price is not configured');
+      throw new Error(`${planCode} plan price is not configured for ${billingPeriod}`);
     }
 
     const price = plan.prices[0];
@@ -42,6 +42,10 @@ export class PaymentConfigService {
       amount: price.amount.toString(),
       currency: price.currency,
     };
+  }
+
+  async getStandardPrice(billingPeriod: BillingPeriod): Promise<PlanPriceQuote> {
+    return this.getPlanPrice(PlanCode.STANDARD, billingPeriod);
   }
 
   async getPaymentDisplayConfig(): Promise<PaymentDisplayConfig> {

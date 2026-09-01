@@ -34,6 +34,7 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
 
   const supportRelay = {
     relayFreeText: jest.fn().mockResolvedValue('sent'),
+    relayMedia: jest.fn().mockResolvedValue('sent'),
   };
 
   const auditService = { log: jest.fn() };
@@ -106,12 +107,27 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
       expect.objectContaining({ action: 'telegram.user.started' }),
     );
   });
+
+  it('relays support photo when no payment order', async () => {
+    await processor.processUpdate({
+      update_id: 4,
+      message: {
+        message_id: 4,
+        photo: [{ file_id: 'ph_1' }],
+        from: { id: 111, first_name: 'User' },
+        chat: { id: 111 },
+      },
+    });
+
+    expect(supportRelay.relayMedia).toHaveBeenCalled();
+    expect(orderService.findAwaitingReceiptOrder).toHaveBeenCalled();
+  });
 });
 
 describe('TelegramUpdateProcessor admin callbacks', () => {
   const prisma = {
     telegramProcessedUpdate: { create: jest.fn().mockResolvedValue({}) },
-    order: { findFirst: jest.fn() },
+    order: { findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null) },
     license: { findFirst: jest.fn() },
   };
 
@@ -156,7 +172,7 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     await (processor as unknown as { handleCallback: (u: unknown) => Promise<void> }).handleCallback({
       callback_query: {
         id: 'cb_1',
-        data: 'approve:ord_1',
+        data: 'payment:approve:ord_1',
         from: { id: 111 },
         message: { chat: { id: 111 } },
       },
@@ -182,7 +198,7 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     await (processor as unknown as { handleCallback: (u: unknown) => Promise<void> }).handleCallback({
       callback_query: {
         id: 'cb_2',
-        data: 'approve:ord_1',
+        data: 'payment:approve:ord_1',
         from: { id: 999 },
         message: { chat: { id: 999 } },
       },

@@ -334,11 +334,8 @@ export class PaymentApprovalService {
 
   private calculateExpiresAt(start: Date, billingPeriod: BillingPeriod): Date {
     const expires = new Date(start);
-    if (billingPeriod === BillingPeriod.YEARLY) {
-      expires.setFullYear(expires.getFullYear() + 1);
-    } else {
-      expires.setMonth(expires.getMonth() + 1);
-    }
+    const days = billingPeriod === BillingPeriod.YEARLY ? 365 : 30;
+    expires.setDate(expires.getDate() + days);
     return expires;
   }
 

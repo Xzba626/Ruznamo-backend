@@ -1,6 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuditActorType, BillingPeriod, LicenseStatus, OrderStatus } from '@prisma/client';
+import {
+  AuditActorType,
+  BillingPeriod,
+  LicenseStatus,
+  OrderStatus,
+  PlanCode,
+  TelegramLanguage,
+} from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { AdminTelegramService } from '../admin/telegram/admin-telegram.service';
 import {
@@ -10,11 +17,18 @@ import {
 import { OrderService } from '../payments/order.service';
 import { PaymentApprovalService } from '../payments/payment-approval.service';
 import { PaymentConfigService } from '../payments/payment-config.service';
-import { TelegramAccountService } from '../payments/telegram-account.service';
+import { ResolvedTelegramUser, TelegramAccountService } from '../payments/telegram-account.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
+import { billingPeriodDays, getTelegramI18n } from './i18n';
 import { TelegramSupportRelayService } from './telegram-support-relay.service';
-import { CB, formatAmount, formatDateTj, TG } from './telegram.messages';
+import {
+  CB,
+  formatAmount,
+  formatDateLocalized,
+  parsePaymentCallback,
+  TG_ADMIN,
+} from './telegram.messages';
 import { InlineKeyboardMarkup, TelegramUpdate } from './telegram.types';
 
 @Injectable()
@@ -64,6 +78,14 @@ export class TelegramUpdateProcessor {
     return ids.includes(telegramUserId.toString());
   }
 
+  private i18n(user: ResolvedTelegramUser) {
+    return getTelegramI18n(user.language);
+  }
+
+  private langCode(user: ResolvedTelegramUser): 'TJ' | 'RU' {
+    return user.language === TelegramLanguage.RU ? 'RU' : 'TJ';
+  }
+
   private async handleMessage(update: TelegramUpdate): Promise<void> {
     const message = update.message!;
     const from = message.from;
@@ -75,12 +97,28 @@ export class TelegramUpdateProcessor {
     const chatId = BigInt(message.chat.id);
 
     if (message.photo?.length) {
-      await this.handleReceiptUpload(update, telegramId, chatId, message.photo.at(-1)!.file_id, 'photo');
+      await this.handleMediaUpload(
+        update,
+        telegramId,
+        chatId,
+        message.photo.at(-1)!.file_id,
+        'photo',
+        from.username,
+        from.first_name,
+      );
       return;
     }
 
     if (message.document) {
-      await this.handleReceiptUpload(update, telegramId, chatId, message.document.file_id, 'document');
+      await this.handleMediaUpload(
+        update,
+        telegramId,
+        chatId,
+        message.document.file_id,
+        'document',
+        from.username,
+        from.first_name,
+      );
       return;
     }
 
@@ -95,7 +133,14 @@ export class TelegramUpdateProcessor {
     }
 
     if (text === '/help') {
-      await this.botApi.sendMessage(chatId, TG.help, this.helpKeyboard());
+      const resolved = await this.telegramAccountService.resolveTelegramUser({
+        telegramId,
+        chatId,
+        username: from.username,
+        firstName: from.first_name,
+      });
+      const msgs = this.i18n(resolved);
+      await this.botApi.sendMessage(chatId, msgs.help, this.helpKeyboard(resolved));
       return;
     }
 
@@ -121,9 +166,11 @@ export class TelegramUpdateProcessor {
       firstName: from.first_name,
     });
 
+    const msgs = this.i18n(resolved);
+
     const awaitingReceipt = await this.orderService.findAwaitingReceiptOrder(resolved.userId);
     if (awaitingReceipt) {
-      await this.botApi.sendMessage(chatId, TG.askReceipt);
+      await this.botApi.sendMessage(chatId, msgs.askReceipt);
       return;
     }
 
@@ -154,10 +201,87 @@ export class TelegramUpdateProcessor {
     });
 
     if (relayResult === 'sent') {
-      await this.botApi.sendMessage(chatId, TG.supportRelayed);
+      await this.botApi.sendMessage(chatId, msgs.supportRelayed);
     } else {
-      await this.botApi.sendMessage(chatId, TG.supportRelayUnavailable);
+      await this.botApi.sendMessage(chatId, msgs.supportRelayUnavailable);
     }
+  }
+
+  private async handleMediaUpload(
+    update: TelegramUpdate,
+    telegramId: bigint,
+    chatId: bigint,
+    fileId: string,
+    fileType: 'photo' | 'document',
+    username?: string,
+    firstName?: string,
+  ): Promise<void> {
+    if (this.isAdmin(telegramId)) {
+      return;
+    }
+
+    const resolved = await this.telegramAccountService.resolveTelegramUser({
+      telegramId,
+      chatId,
+      username,
+      firstName,
+    });
+
+    const msgs = this.i18n(resolved);
+    const order = await this.orderService.findAwaitingReceiptOrder(resolved.userId);
+
+    if (order) {
+      await this.submitReceiptAndNotify(update, resolved, chatId, order.id, fileId, fileType, msgs);
+      return;
+    }
+
+    this.logger.log({
+      updateId: update.update_id,
+      telegramUserId: telegramId.toString(),
+      handler: 'support_media_relay',
+    });
+
+    const relayResult = await this.supportRelay.relayMedia({
+      telegramUserId: telegramId,
+      chatId,
+      fileId,
+      fileType,
+      firstName,
+      username,
+    });
+
+    if (relayResult === 'sent') {
+      await this.botApi.sendMessage(chatId, msgs.supportAttachmentRelayed);
+    } else if (relayResult === 'no_admins') {
+      await this.botApi.sendMessage(chatId, msgs.supportRelayUnavailable);
+    } else {
+      await this.botApi.sendMessage(chatId, msgs.unsupportedAttachment);
+    }
+  }
+
+  private async submitReceiptAndNotify(
+    update: TelegramUpdate,
+    resolved: ResolvedTelegramUser,
+    chatId: bigint,
+    orderId: string,
+    fileId: string,
+    fileType: 'photo' | 'document',
+    msgs: ReturnType<typeof getTelegramI18n>,
+  ): Promise<void> {
+    const result = await this.orderService.submitReceipt({
+      orderId,
+      userId: resolved.userId,
+      telegramFileId: fileId,
+      fileType,
+      telegramUpdateId: BigInt(update.update_id),
+    });
+
+    if (result.duplicate) {
+      return;
+    }
+
+    await this.botApi.sendMessage(chatId, msgs.receiptReceived);
+    await this.notifyAdminsPaymentReview(result.order.id);
   }
 
   private async tryAdminPairing(
@@ -176,16 +300,16 @@ export class TelegramUpdateProcessor {
     });
 
     if (result.ok) {
-      await this.botApi.sendMessage(chatId, TG.adminConnected);
+      await this.botApi.sendMessage(chatId, TG_ADMIN.adminConnected);
       return;
     }
 
     if (result.reason === 'expired') {
-      await this.botApi.sendMessage(chatId, TG.adminConnectExpired);
+      await this.botApi.sendMessage(chatId, TG_ADMIN.adminConnectExpired);
       return;
     }
 
-    await this.botApi.sendMessage(chatId, TG.adminConnectUnauthorized);
+    await this.botApi.sendMessage(chatId, TG_ADMIN.adminConnectUnauthorized);
   }
 
   private async handleStart(
@@ -221,8 +345,24 @@ export class TelegramUpdateProcessor {
     });
 
     if (this.isAdmin(telegramId)) {
-      await this.botApi.sendMessage(chatId, TG.adminWelcome);
+      await this.botApi.sendMessage(chatId, TG_ADMIN.adminWelcome);
+      return;
     }
+
+    if (!resolved.language) {
+      await this.botApi.sendMessage(chatId, getTelegramI18n(null).languageSelect, this.languageKeyboard());
+      return;
+    }
+
+    await this.sendMainMenu(resolved, chatId, firstName);
+  }
+
+  private async sendMainMenu(
+    resolved: ResolvedTelegramUser,
+    chatId: bigint,
+    firstName?: string,
+  ): Promise<void> {
+    const msgs = this.i18n(resolved);
 
     const activeLicense = await this.prisma.license.findFirst({
       where: {
@@ -237,17 +377,13 @@ export class TelegramUpdateProcessor {
     if (activeLicense?.expiresAt) {
       await this.botApi.sendMessage(
         chatId,
-        TG.welcomeActiveLicense(formatDateTj(activeLicense.expiresAt)),
-        this.activeLicenseKeyboard(),
+        msgs.welcomeActiveLicense(formatDateLocalized(activeLicense.expiresAt, this.langCode(resolved))),
+        this.activeLicenseKeyboard(resolved),
       );
       return;
     }
 
-    await this.botApi.sendMessage(
-      chatId,
-      TG.welcomeNoLicense(firstName),
-      this.periodSelectionKeyboard(),
-    );
+    await this.botApi.sendMessage(chatId, msgs.welcomeNoLicense(firstName), await this.planSelectionKeyboard(resolved));
   }
 
   private async handleCallback(update: TelegramUpdate): Promise<void> {
@@ -256,8 +392,33 @@ export class TelegramUpdateProcessor {
     const telegramId = BigInt(query.from.id);
     const chatId = BigInt(query.message?.chat.id ?? query.from.id);
 
-    if (data.startsWith('approve:') || data.startsWith('reject:')) {
-      await this.handleAdminDecision(query.id, data, telegramId, chatId);
+    const paymentCallback = parsePaymentCallback(data);
+    if (paymentCallback) {
+      await this.handleAdminDecision(
+        query.id,
+        paymentCallback.action,
+        paymentCallback.orderId,
+        telegramId,
+        chatId,
+        query.message?.message_id,
+      );
+      return;
+    }
+
+    if (data === CB.LANG_TJ || data === CB.LANG_RU) {
+      const language = data === CB.LANG_RU ? TelegramLanguage.RU : TelegramLanguage.TJ;
+      const resolved = await this.telegramAccountService.resolveTelegramUser({
+        telegramId,
+        chatId,
+        username: query.from.username,
+        firstName: query.from.first_name,
+      });
+      await this.telegramAccountService.setLanguage(resolved.telegramAccountId, language);
+      const updated = { ...resolved, language };
+      const msgs = this.i18n(updated);
+      await this.botApi.answerCallbackQuery(query.id);
+      await this.botApi.sendMessage(chatId, msgs.languageChanged);
+      await this.sendMainMenu(updated, chatId, query.from.first_name);
       return;
     }
 
@@ -268,39 +429,28 @@ export class TelegramUpdateProcessor {
       firstName: query.from.first_name,
     });
 
-    if (data === CB.PERIOD_MONTHLY) {
-      await this.startOrderFlow(resolved.userId, chatId, BillingPeriod.MONTHLY);
+    const msgs = this.i18n(resolved);
+
+    if (data === CB.PLAN_STANDARD) {
+      await this.startOrderFlow(resolved, chatId, PlanCode.STANDARD);
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
 
-    if (data === CB.PERIOD_YEARLY) {
-      await this.startOrderFlow(resolved.userId, chatId, BillingPeriod.YEARLY);
+    if (data === CB.PLAN_PRO) {
+      await this.startOrderFlow(resolved, chatId, PlanCode.PRO);
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
 
-    if (data === CB.ACTION_PAID) {
-      const order = await this.orderService.findAwaitingReceiptOrder(resolved.userId);
-      if (!order) {
-        const pending = await this.prisma.order.findFirst({
-          where: { userId: resolved.userId, status: 'PENDING', awaitingReceipt: false },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (pending) {
-          await this.orderService.markAwaitingReceipt(pending.id, resolved.userId);
-        } else {
-          await this.botApi.answerCallbackQuery(query.id, TG.noAwaitingOrder);
-          return;
-        }
-      }
-      await this.botApi.sendMessage(chatId, TG.askReceipt);
+    if (data === CB.ACTION_LANGUAGE) {
+      await this.botApi.sendMessage(chatId, msgs.languageSelect, this.languageKeyboard());
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
 
     if (data === CB.ACTION_RETRY || data === CB.ACTION_GET_KEY) {
-      await this.botApi.sendMessage(chatId, TG.welcomeNoLicense(), this.periodSelectionKeyboard());
+      await this.botApi.sendMessage(chatId, msgs.welcomeNoLicense(), await this.planSelectionKeyboard(resolved));
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
@@ -308,12 +458,17 @@ export class TelegramUpdateProcessor {
     if (data === CB.ACTION_MY_KEY) {
       const stored = await this.paymentApprovalService.getStoredLicenseKeyForUser(resolved.userId);
       if (stored) {
+        const days = 30;
         await this.botApi.sendMessage(
           chatId,
-          TG.licenseApproved(formatDateTj(stored.expiresAt ?? new Date()), stored.key),
+          msgs.paymentApproved(
+            stored.key,
+            days,
+            formatDateLocalized(stored.expiresAt ?? new Date(), this.langCode(resolved)),
+          ),
         );
       } else {
-        await this.botApi.sendMessage(chatId, TG.help);
+        await this.botApi.sendMessage(chatId, msgs.help, this.helpKeyboard(resolved));
       }
       await this.botApi.answerCallbackQuery(query.id);
       return;
@@ -328,81 +483,52 @@ export class TelegramUpdateProcessor {
       if (license) {
         await this.botApi.sendMessage(
           chatId,
-          TG.subscriptionInfo(
+          msgs.subscriptionInfo(
             license.plan.name,
-            license.expiresAt ? formatDateTj(license.expiresAt) : '—',
+            license.expiresAt ? formatDateLocalized(license.expiresAt, this.langCode(resolved)) : '—',
             license.keyPrefix,
           ),
         );
       } else {
-        await this.botApi.sendMessage(chatId, TG.welcomeNoLicense(), this.periodSelectionKeyboard());
+        await this.botApi.sendMessage(chatId, msgs.welcomeNoLicense(), await this.planSelectionKeyboard(resolved));
       }
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
 
     if (data === CB.ACTION_HELP) {
-      await this.botApi.sendMessage(chatId, TG.help, this.helpKeyboard());
+      await this.botApi.sendMessage(chatId, msgs.help, this.helpKeyboard(resolved));
       await this.botApi.answerCallbackQuery(query.id);
     }
   }
 
-  private async startOrderFlow(userId: string, chatId: bigint, billingPeriod: BillingPeriod): Promise<void> {
-    const [monthly, yearly, payment] = await Promise.all([
-      this.paymentConfigService.getStandardPrice(BillingPeriod.MONTHLY),
-      this.paymentConfigService.getStandardPrice(BillingPeriod.YEARLY),
-      this.paymentConfigService.getPaymentDisplayConfig(),
-    ]);
+  private async startOrderFlow(
+    resolved: ResolvedTelegramUser,
+    chatId: bigint,
+    planCode: PlanCode,
+  ): Promise<void> {
+    const billingPeriod = BillingPeriod.MONTHLY;
+    const quote = await this.paymentConfigService.getPlanPrice(planCode, billingPeriod);
+    const payment = await this.paymentConfigService.getPaymentDisplayConfig();
+    const days = billingPeriodDays(billingPeriod);
+    const msgs = this.i18n(resolved);
+    const lang = this.langCode(resolved);
 
-    await this.orderService.findOrCreatePendingOrder(userId, billingPeriod);
-    const text = TG.paymentInfo(
-      formatAmount(monthly.amount, monthly.currency),
-      formatAmount(yearly.amount, yearly.currency),
+    await this.orderService.startPaymentFlow(resolved.userId, quote.planId, billingPeriod);
+
+    const text = msgs.paymentInstructions(
+      quote.planName,
+      formatAmount(quote.amount, quote.currency, lang),
+      days,
       payment.cardNumber ?? '—',
       payment.recipientName ?? '—',
       payment.instructions ?? '',
     );
 
-    await this.botApi.sendMessage(chatId, text, {
-      inline_keyboard: [[{ text: '💳 Ман пардохт кардам', callback_data: CB.ACTION_PAID }]],
-    });
+    await this.botApi.sendMessage(chatId, text);
   }
 
-  private async handleReceiptUpload(
-    update: TelegramUpdate,
-    telegramId: bigint,
-    chatId: bigint,
-    fileId: string,
-    fileType: 'photo' | 'document',
-  ): Promise<void> {
-    const resolved = await this.telegramAccountService.resolveTelegramUser({
-      telegramId,
-      chatId,
-    });
-
-    const order = await this.orderService.findAwaitingReceiptOrder(resolved.userId);
-    if (!order) {
-      await this.botApi.sendMessage(chatId, TG.noAwaitingOrder);
-      return;
-    }
-
-    const result = await this.orderService.submitReceipt({
-      orderId: order.id,
-      userId: resolved.userId,
-      telegramFileId: fileId,
-      fileType,
-      telegramUpdateId: BigInt(update.update_id),
-    });
-
-    if (result.duplicate) {
-      return;
-    }
-
-    await this.botApi.sendMessage(chatId, TG.receiptReceived);
-    await this.notifyAdmins(result.order.id);
-  }
-
-  private async notifyAdmins(orderId: string): Promise<void> {
+  private async notifyAdminsPaymentReview(orderId: string): Promise<void> {
     const order = await this.orderService.getOrderForAdminReview(orderId);
     if (!order || order.receipts.length === 0) {
       return;
@@ -410,20 +536,26 @@ export class TelegramUpdateProcessor {
 
     const receipt = order.receipts[0];
     const tgAccount = order.user.telegramAccount;
-    const periodLabel = order.billingPeriod === BillingPeriod.MONTHLY ? '1 моҳ' : '1 сол';
+    const days = billingPeriodDays(order.billingPeriod);
+    const displayName = tgAccount?.firstName ?? order.user.displayName ?? '—';
+    const username = tgAccount?.username ? `@${tgAccount.username}` : '—';
+
     const caption =
-      `🔔 *Аризаи нав барои пардохт*\n\n` +
-      `ID: \`${order.id}\`\n` +
-      `Telegram ID: \`${tgAccount?.telegramId.toString() ?? '—'}\`\n` +
-      `Муддат: ${periodLabel}\n` +
-      `Маблағ: ${order.amount} ${order.currency}\n` +
-      `Ҳолат: ${order.status}`;
+      `💳 Новая проверка оплаты\n\n` +
+      `Пользователь: ${displayName}\n` +
+      `Telegram: ${username}\n` +
+      `ID: \`${tgAccount?.telegramId.toString() ?? '—'}\`\n` +
+      `Тариф: ${order.plan.name}\n` +
+      `Срок: ${days} дней\n` +
+      `Сумма: ${order.amount} ${order.currency}\n` +
+      `Order: \`${order.id}\`\n` +
+      `Время: ${order.createdAt.toISOString()}`;
 
     const keyboard: InlineKeyboardMarkup = {
       inline_keyboard: [
         [
-          { text: '✅ Тасдиқ кардан', callback_data: CB.approve(orderId) },
-          { text: '❌ Рад кардан', callback_data: CB.reject(orderId) },
+          { text: '✅ Подтвердить оплату', callback_data: CB.approve(orderId) },
+          { text: '❌ Отклонить', callback_data: CB.reject(orderId) },
         ],
       ],
     };
@@ -445,24 +577,27 @@ export class TelegramUpdateProcessor {
 
   private async handleAdminDecision(
     callbackQueryId: string,
-    data: string,
+    action: 'approve' | 'reject',
+    orderId: string,
     telegramId: bigint,
     adminChatId: bigint,
+    adminMessageId?: number,
   ): Promise<void> {
+    const resolved = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { user: { include: { telegramAccount: true } } },
+    });
+    const userLang = resolved?.user.telegramAccount?.language;
+    const userMsgs = getTelegramI18n(userLang ?? null);
+
     if (!this.isAdmin(telegramId)) {
       await this.auditService.log({
         actorType: AuditActorType.TELEGRAM_BOT,
         action: 'telegram.admin.unauthorized',
         entityType: 'TelegramCallback',
-        metadata: { telegramUserId: telegramId.toString(), data },
+        metadata: { telegramUserId: telegramId.toString(), orderId, action },
       });
-      await this.botApi.answerCallbackQuery(callbackQueryId, TG.adminUnauthorized);
-      return;
-    }
-
-    const [action, orderId] = data.split(':');
-    if (!orderId?.trim()) {
-      await this.botApi.answerCallbackQuery(callbackQueryId, TG.adminUnauthorized);
+      await this.botApi.answerCallbackQuery(callbackQueryId, userMsgs.adminUnauthorized);
       return;
     }
 
@@ -476,16 +611,23 @@ export class TelegramUpdateProcessor {
       try {
         const result = await this.paymentApprovalService.approve(orderId, actor);
         if (result.alreadyProcessed) {
-          await this.botApi.answerCallbackQuery(callbackQueryId, TG.adminApprovedDuplicate);
+          await this.botApi.answerCallbackQuery(callbackQueryId, userMsgs.adminApprovedDuplicate);
           return;
         }
 
         const order = await this.orderService.getOrderForAdminReview(orderId);
         const userChatId = order?.user.telegramAccount?.chatId ?? order?.user.telegramAccount?.telegramId;
+        const billingPeriod = order?.billingPeriod ?? BillingPeriod.MONTHLY;
+        const days = billingPeriodDays(billingPeriod);
+
         if (userChatId) {
           await this.botApi.sendMessage(
             userChatId,
-            TG.licenseApproved(formatDateTj(result.expiresAt), result.licenseKey),
+            userMsgs.paymentApproved(
+              result.licenseKey,
+              days,
+              formatDateLocalized(result.expiresAt, userLang === TelegramLanguage.RU ? 'RU' : 'TJ'),
+            ),
           );
           await this.auditService.log({
             actorType: AuditActorType.TELEGRAM_BOT,
@@ -496,63 +638,109 @@ export class TelegramUpdateProcessor {
           });
         }
 
-        await this.botApi.answerCallbackQuery(callbackQueryId, '✅ Тасдиқ шуд');
-        await this.botApi.sendMessage(adminChatId, `✅ Фармоиш ${orderId} тасдиқ шуд.`);
+        await this.botApi.answerCallbackQuery(callbackQueryId, '✅ Подтверждено');
+        await this.botApi.sendMessage(adminChatId, `✅ Оплата подтверждена\nOrder: ${orderId}`);
+        if (adminMessageId) {
+          await this.botApi.editMessageReplyMarkup(adminChatId, adminMessageId, { inline_keyboard: [] });
+        }
       } catch (error) {
         this.logger.warn({ orderId, error }, 'Approve failed');
-        await this.botApi.answerCallbackQuery(callbackQueryId, 'Хatolik');
+        await this.botApi.answerCallbackQuery(callbackQueryId, 'Ошибка');
       }
       return;
     }
 
-    if (action === 'reject') {
-      try {
-        const result = await this.paymentApprovalService.reject(orderId, actor);
-        const order = await this.orderService.getOrderForAdminReview(orderId);
-        const userChatId = order?.user.telegramAccount?.chatId ?? order?.user.telegramAccount?.telegramId;
-        if (userChatId && !result.alreadyProcessed) {
-          await this.botApi.sendMessage(userChatId, TG.licenseRejected, {
-            inline_keyboard: [[{ text: '🔄 Пардохтро такрор кардан', callback_data: CB.ACTION_RETRY }]],
-          });
-        }
-        await this.botApi.answerCallbackQuery(
-          callbackQueryId,
-          result.alreadyProcessed ? TG.adminRejectedDuplicate : '❌ Рад шуд',
-        );
-      } catch (error) {
-        this.logger.warn({ orderId, error }, 'Reject failed');
-        await this.botApi.answerCallbackQuery(callbackQueryId, 'Хatolik');
+    try {
+      const result = await this.paymentApprovalService.reject(orderId, actor);
+      const order = await this.orderService.getOrderForAdminReview(orderId);
+      const userChatId = order?.user.telegramAccount?.chatId ?? order?.user.telegramAccount?.telegramId;
+      if (userChatId && !result.alreadyProcessed) {
+        await this.botApi.sendMessage(userChatId, userMsgs.paymentRejected, {
+          inline_keyboard: [[{ text: userMsgs.menuRetry, callback_data: CB.ACTION_RETRY }]],
+        });
       }
+      await this.botApi.answerCallbackQuery(
+        callbackQueryId,
+        result.alreadyProcessed ? userMsgs.adminRejectedDuplicate : '❌ Отклонено',
+      );
+      if (!result.alreadyProcessed) {
+        await this.botApi.sendMessage(adminChatId, `❌ Оплата отклонена\nOrder: ${orderId}`);
+        if (adminMessageId) {
+          await this.botApi.editMessageReplyMarkup(adminChatId, adminMessageId, { inline_keyboard: [] });
+        }
+      }
+    } catch (error) {
+      this.logger.warn({ orderId, error }, 'Reject failed');
+      await this.botApi.answerCallbackQuery(callbackQueryId, 'Ошибка');
     }
   }
 
-  private periodSelectionKeyboard(): InlineKeyboardMarkup {
+  private languageKeyboard(): InlineKeyboardMarkup {
+    const msgs = getTelegramI18n(null);
     return {
       inline_keyboard: [
         [
-          { text: '1 моҳ', callback_data: CB.PERIOD_MONTHLY },
-          { text: '1 сол', callback_data: CB.PERIOD_YEARLY },
+          { text: msgs.languageButtonTj, callback_data: CB.LANG_TJ },
+          { text: msgs.languageButtonRu, callback_data: CB.LANG_RU },
         ],
-        [{ text: '❓ Кӯмак', callback_data: CB.ACTION_HELP }],
       ],
     };
   }
 
-  private activeLicenseKeyboard(): InlineKeyboardMarkup {
+  private async planSelectionKeyboard(resolved: ResolvedTelegramUser): Promise<InlineKeyboardMarkup> {
+    const msgs = this.i18n(resolved);
+    const lang = this.langCode(resolved);
+    const days = billingPeriodDays(BillingPeriod.MONTHLY);
+    const [standard, pro] = await Promise.all([
+      this.paymentConfigService.getPlanPrice(PlanCode.STANDARD, BillingPeriod.MONTHLY),
+      this.paymentConfigService.getPlanPrice(PlanCode.PRO, BillingPeriod.MONTHLY),
+    ]);
+
     return {
       inline_keyboard: [
         [
-          { text: '🔑 Калиди ман', callback_data: CB.ACTION_MY_KEY },
-          { text: '📋 Обунаи ман', callback_data: CB.ACTION_MY_SUB },
+          {
+            text: msgs.planStandard(formatAmount(standard.amount, standard.currency, lang), days),
+            callback_data: CB.PLAN_STANDARD,
+          },
         ],
-        [{ text: '❓ Кӯмак', callback_data: CB.ACTION_HELP }],
+        [
+          {
+            text: msgs.planPro(formatAmount(pro.amount, pro.currency, lang), days),
+            callback_data: CB.PLAN_PRO,
+          },
+        ],
+        [
+          { text: msgs.menuLanguage, callback_data: CB.ACTION_LANGUAGE },
+          { text: msgs.menuHelp, callback_data: CB.ACTION_HELP },
+        ],
       ],
     };
   }
 
-  private helpKeyboard(): InlineKeyboardMarkup {
+  private activeLicenseKeyboard(resolved: ResolvedTelegramUser): InlineKeyboardMarkup {
+    const msgs = this.i18n(resolved);
     return {
-      inline_keyboard: [[{ text: '🔑 Калид гирифтан', callback_data: CB.ACTION_GET_KEY }]],
+      inline_keyboard: [
+        [
+          { text: msgs.menuMyKey, callback_data: CB.ACTION_MY_KEY },
+          { text: msgs.menuMySub, callback_data: CB.ACTION_MY_SUB },
+        ],
+        [
+          { text: msgs.menuLanguage, callback_data: CB.ACTION_LANGUAGE },
+          { text: msgs.menuHelp, callback_data: CB.ACTION_HELP },
+        ],
+      ],
+    };
+  }
+
+  private helpKeyboard(resolved: ResolvedTelegramUser): InlineKeyboardMarkup {
+    const msgs = this.i18n(resolved);
+    return {
+      inline_keyboard: [
+        [{ text: msgs.menuGetKey, callback_data: CB.ACTION_GET_KEY }],
+        [{ text: msgs.menuLanguage, callback_data: CB.ACTION_LANGUAGE }],
+      ],
     };
   }
 }

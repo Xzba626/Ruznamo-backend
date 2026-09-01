@@ -16,6 +16,15 @@ export interface SupportRelayInput {
   orderStatus?: string;
 }
 
+export interface SupportMediaRelayInput {
+  telegramUserId: bigint;
+  chatId: bigint;
+  fileId: string;
+  fileType: 'photo' | 'document';
+  firstName?: string;
+  username?: string;
+}
+
 @Injectable()
 export class TelegramSupportRelayService {
   private readonly logger = new Logger(TelegramSupportRelayService.name);
@@ -74,6 +83,63 @@ export class TelegramSupportRelayService {
     });
 
     return 'sent';
+  }
+
+  async relayMedia(input: SupportMediaRelayInput): Promise<'sent' | 'no_admins' | 'failed'> {
+    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+    if (adminIds.length === 0) {
+      this.logger.warn('Support media relay skipped: ADMIN_TELEGRAM_IDS is empty');
+      await this.auditService.log({
+        actorType: AuditActorType.TELEGRAM_BOT,
+        actorId: input.telegramUserId.toString(),
+        action: 'telegram.support.media.skipped',
+        entityType: 'TelegramMessage',
+        metadata: { reason: 'no_admin_ids' },
+      });
+      return 'no_admins';
+    }
+
+    const caption = this.buildMediaCaption(input);
+    let sent = false;
+
+    for (const adminId of adminIds) {
+      try {
+        const chat = BigInt(adminId);
+        if (input.fileType === 'photo') {
+          await this.botApi.sendPhoto(chat, input.fileId, caption);
+        } else {
+          await this.botApi.sendDocument(chat, input.fileId, caption);
+        }
+        sent = true;
+      } catch (error) {
+        this.logger.warn({ adminId, error }, 'Failed to relay support media to admin');
+      }
+    }
+
+    if (!sent) {
+      return 'failed';
+    }
+
+    await this.auditService.log({
+      actorType: AuditActorType.TELEGRAM_BOT,
+      actorId: input.telegramUserId.toString(),
+      action: 'telegram.support.media.relayed',
+      entityType: 'TelegramMessage',
+      metadata: { fileType: input.fileType },
+    });
+
+    return 'sent';
+  }
+
+  private buildMediaCaption(input: SupportMediaRelayInput): string {
+    const name = input.firstName?.trim() || '—';
+    const username = input.username ? `@${input.username}` : '—';
+    return (
+      `📎 Вложение в поддержку Ruznamo\n\n` +
+      `Имя: ${name}\n` +
+      `Username: ${username}\n` +
+      `Telegram ID: ${input.telegramUserId.toString()}`
+    );
   }
 
   private buildAdminMessage(input: SupportRelayInput): string {

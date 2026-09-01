@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { UserCategory, UserStatus } from '@prisma/client';
+import { BillingPeriod, PlanCode, TelegramLanguage, UserCategory, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface ResolvedTelegramUser {
@@ -9,6 +9,7 @@ export interface ResolvedTelegramUser {
   chatId: bigint;
   username: string | null;
   firstName: string | null;
+  language: TelegramLanguage | null;
 }
 
 @Injectable()
@@ -44,6 +45,7 @@ export class TelegramAccountService {
         chatId: input.chatId,
         username: updated.username,
         firstName: updated.firstName,
+        language: updated.language,
       };
     }
 
@@ -77,7 +79,16 @@ export class TelegramAccountService {
       chatId: input.chatId,
       username: created.account.username,
       firstName: created.account.firstName,
+      language: created.account.language,
     };
+  }
+
+  async setLanguage(telegramAccountId: string, language: TelegramLanguage): Promise<TelegramLanguage> {
+    const updated = await this.prisma.telegramAccount.update({
+      where: { id: telegramAccountId },
+      data: { language },
+    });
+    return updated.language ?? language;
   }
 
   async getChatIdForUser(userId: string): Promise<bigint | null> {

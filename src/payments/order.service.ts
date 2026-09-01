@@ -17,11 +17,12 @@ export class OrderService {
     private readonly auditService: AuditService,
   ) {}
 
-  async findOrCreatePendingOrder(userId: string, billingPeriod: BillingPeriod) {
+  async findOrCreatePendingOrder(userId: string, planId: string, billingPeriod: BillingPeriod) {
     const existing = await this.prisma.order.findFirst({
       where: {
         userId,
         status: OrderStatus.PENDING,
+        planId,
         billingPeriod,
       },
       orderBy: { createdAt: 'desc' },
@@ -31,7 +32,12 @@ export class OrderService {
       return existing;
     }
 
-    const quote = await this.paymentConfig.getStandardPrice(billingPeriod);
+    const plan = await this.prisma.plan.findUnique({ where: { id: planId } });
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+
+    const quote = await this.paymentConfig.getPlanPrice(plan.code, billingPeriod);
     const order = await this.prisma.order.create({
       data: {
         userId,
@@ -55,15 +61,8 @@ export class OrderService {
     return order;
   }
 
-  async markAwaitingReceipt(orderId: string, userId: string) {
-    const order = await this.prisma.order.findFirst({
-      where: { id: orderId, userId, status: OrderStatus.PENDING },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
+  async startPaymentFlow(userId: string, planId: string, billingPeriod: BillingPeriod) {
+    const order = await this.findOrCreatePendingOrder(userId, planId, billingPeriod);
     return this.prisma.order.update({
       where: { id: order.id },
       data: { awaitingReceipt: true },

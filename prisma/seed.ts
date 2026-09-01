@@ -159,6 +159,34 @@ async function seedStandardPlan() {
 
   const proPlan = await prisma.plan.findUnique({ where: { code: PlanCode.PRO } });
   if (proPlan) {
+    const proPrices = [
+      { billingPeriod: BillingPeriod.MONTHLY, amount: '30.00' },
+      { billingPeriod: BillingPeriod.YEARLY, amount: '300.00' },
+    ] as const;
+
+    for (const price of proPrices) {
+      await prisma.planPrice.upsert({
+        where: {
+          planId_billingPeriod: {
+            planId: proPlan.id,
+            billingPeriod: price.billingPeriod,
+          },
+        },
+        update: {
+          amount: price.amount,
+          currency: 'TJS',
+          isActive: true,
+        },
+        create: {
+          planId: proPlan.id,
+          billingPeriod: price.billingPeriod,
+          amount: price.amount,
+          currency: 'TJS',
+          isActive: true,
+        },
+      });
+    }
+
     const proFeatures = [
       { key: 'planning_horizon_days', value: '90', valueType: FeatureValueType.INT },
       { key: 'max_devices', value: '2', valueType: FeatureValueType.INT },

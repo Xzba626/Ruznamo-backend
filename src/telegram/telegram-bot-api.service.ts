@@ -86,4 +86,16 @@ export class TelegramBotApiService {
       show_alert: Boolean(text),
     }).then(() => undefined);
   }
+
+  editMessageReplyMarkup(
+    chatId: number | bigint,
+    messageId: number,
+    replyMarkup: InlineKeyboardMarkup,
+  ): Promise<void> {
+    return this.call('editMessageReplyMarkup', {
+      chat_id: Number(chatId),
+      message_id: messageId,
+      reply_markup: replyMarkup,
+    }).then(() => undefined);
+  }
 }

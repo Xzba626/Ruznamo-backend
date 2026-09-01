@@ -115,6 +115,11 @@ export class AdminOrdersService {
   }
 
   async approve(orderId: string, adminId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { billingPeriod: true },
+    });
+
     const result = await this.paymentApprovalService.approve(orderId, {
       actorType: AuditActorType.ADMIN,
       actorId: adminId,
@@ -126,6 +131,7 @@ export class AdminOrdersService {
         licenseId: result.licenseId,
         licenseKey: result.licenseKey,
         expiresAt: result.expiresAt,
+        billingPeriod: order?.billingPeriod,
       });
     }
 

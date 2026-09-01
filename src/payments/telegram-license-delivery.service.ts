@@ -3,7 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { AuditActorType } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { formatDateTj, TG } from '../telegram/telegram.messages';
+import { billingPeriodDays, getTelegramI18n } from '../telegram/i18n';
+import { formatDateLocalized } from '../telegram/telegram.messages';
 
 @Injectable()
 export class TelegramLicenseDeliveryService {
@@ -20,6 +21,7 @@ export class TelegramLicenseDeliveryService {
     licenseId: string;
     licenseKey: string;
     expiresAt: Date;
+    billingPeriod?: 'MONTHLY' | 'YEARLY';
   }): Promise<boolean> {
     const token = this.configService.get<string>('telegram.botToken', '');
     if (!token) {
@@ -29,7 +31,7 @@ export class TelegramLicenseDeliveryService {
 
     const account = await this.prisma.telegramAccount.findUnique({
       where: { userId: input.userId },
-      select: { chatId: true, telegramId: true },
+      select: { chatId: true, telegramId: true, language: true },
     });
 
     const chatId = account?.chatId ?? account?.telegramId;
@@ -38,12 +40,21 @@ export class TelegramLicenseDeliveryService {
       return false;
     }
 
+    const msgs = getTelegramI18n(account?.language);
+    const lang = account?.language === 'RU' ? 'RU' : 'TJ';
+    const days = billingPeriodDays(input.billingPeriod ?? 'MONTHLY');
+    const text = msgs.paymentApproved(
+      input.licenseKey,
+      days,
+      formatDateLocalized(input.expiresAt, lang),
+    );
+
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: Number(chatId),
-        text: TG.licenseApproved(formatDateTj(input.expiresAt), input.licenseKey),
+        text,
         parse_mode: 'Markdown',
       }),
     });

@@ -100,6 +100,11 @@ enum OutboxStatus {
   FAILED
 }
 
+enum TelegramLanguage {
+  TJ
+  RU
+}
+
 // ---------------------------------------------------------------------------
 // Users & identity
 // ---------------------------------------------------------------------------
@@ -127,14 +132,15 @@ model User {
 }
 
 model TelegramAccount {
-  id         String   @id @default(cuid())
-  userId     String   @unique
-  telegramId BigInt   @unique
+  id         String            @id @default(cuid())
+  userId     String            @unique
+  telegramId BigInt            @unique
   chatId     BigInt?
   username   String?
   firstName  String?
   lastName   String?
-  linkedAt   DateTime @default(now()) @db.Timestamptz(3)
+  language   TelegramLanguage?
+  linkedAt   DateTime          @default(now()) @db.Timestamptz(3)
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
