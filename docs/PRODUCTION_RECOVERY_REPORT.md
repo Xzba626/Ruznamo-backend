@@ -9,8 +9,8 @@
 
 | Item | Value |
 |------|-------|
-| LOCAL SHA | `fc64095` → **new commit after this push** |
-| REMOTE SHA (pre-push) | `fc64095` |
+| LOCAL SHA | `590491f` |
+| REMOTE SHA | `590491f` |
 | BACKEND URL | `https://ruznamo-backend-o4xk.vercel.app` |
 | ADMIN URL | `https://admin-panel-ten-tau-90.vercel.app` |
 | ADMIN BUNDLE (pre-push) | `index-DaWxVcoI.js` matched local build |
@@ -57,7 +57,7 @@
 - With secret → 200 ✓
 - `@Ruznamo_bot` registered to correct URL
 
-**RUNTIME VERIFIED:** PARTIAL — webhook accepts updates; full user-visible reply requires live Telegram client (not automated here).
+**RUNTIME VERIFIED:** PARTIAL — webhook 401/200 probes OK; synthetic `/start` update returned HTTP 200 (`scripts/probe-telegram-start.ts`). `getWebhookInfo.last_error_message` still shows pre-migration 500 (stale until Telegram delivers a successful user update). User-visible reply requires live Telegram client.
 
 ---
 
@@ -67,7 +67,7 @@
 **PREVIOUS PROBLEM:** HTTP 500 (schema drift)  
 **ROOT CAUSE:** Missing `Order.paymentMethodId` column  
 **FIX:** Migration deploy + list/detail now include `paymentMethodName`  
-**CODE:** YES | **TEST:** YES | **DEPLOYED:** pending push | **RUNTIME VERIFIED:** forensic `order.findMany` succeeded post-migrate
+**CODE:** YES | **TEST:** YES | **DEPLOYED:** YES (`590491f`) | **RUNTIME VERIFIED:** `scripts/probe-admin-orders-list.ts` → 5 orders, no query error; admin bundle `index-C_yK8i38.js` live
 
 ---
 
@@ -107,11 +107,19 @@ Device app versions: 5× `1.0.0`, 2× `1.0.1` (System page should show distribut
 
 ---
 
+## Payment methods (requisites)
+
+**PaymentMethod rows in production:** 0  
+**Fallback:** When no active `PaymentMethod` exists, Telegram purchase flow uses legacy `AppConfig` card/recipient (`telegram-update.processor.ts` `startOrderFlow`).  
+**Recommendation:** Admin adds requisites via Telegram menu `💳 Реквизиты` (ADMIN_TELEGRAM_IDS) for multi-method UX.
+
+---
+
 ## Hard blockers remaining
 
-1. **Admin browser QA** — credentials not available in audit session (`xzba626@gmail.com` exists; password required).
-2. **Full Telegram E2E** — requires human Telegram client to confirm visible bot replies.
-3. **Android activation E2E** — requires device or test key (not run).
+1. **Admin browser QA** — login page loads (Russian UI); password not available in audit session (1 `AdminUser` in DB).
+2. **Full Telegram purchase E2E** — webhook processing verified; human must confirm visible bot UI + receipt/approve cycle.
+3. **Android activation E2E** — existing production journeys verified in DB (`licenseJourneys` in forensic audit); no new device test run.
 
 ---
 

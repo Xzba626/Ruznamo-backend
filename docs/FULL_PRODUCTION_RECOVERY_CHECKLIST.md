@@ -23,7 +23,7 @@
 | 37–42 | System page | CODE DONE | real DB/device versions |
 | 43–47 | Analytics + audit | CODE DONE | analytics page in admin bundle |
 | 51–53 | Tests + build | VERIFIED | 135 backend tests; admin build OK |
-| 54 | Commit / push / deploy | IN PROGRESS | this commit |
-| 55 | Human-like Admin QA | BLOCKED | no admin password in audit session |
-| 56–59 | Telegram/Plan E2E | PARTIAL | webhook probes only |
-| 63–64 | Final report | IN PROGRESS | PRODUCTION_RECOVERY_REPORT.md |
+| 54 | Commit / push / deploy | VERIFIED | `590491f` on origin/main |
+| 55 | Human-like Admin QA | BLOCKED | login page OK; password not in session |
+| 56–59 | Telegram/Plan E2E | PARTIAL | `/start` webhook 200; full purchase needs human Telegram |
+| 63–64 | Final report | VERIFIED | PRODUCTION_RECOVERY_REPORT.md |
