@@ -9,11 +9,13 @@ export {
   labelAdminActive,
   labelTelegramConnected,
   labelPlanCode,
+  labelPlan,
   labelPlatform,
   knownOrderStatuses,
   knownLicenseStatuses,
 } from './status';
-export { labelAuditAction, labelEntityType, knownAuditActions } from './audit';
+export { labelAuditAction, labelEntityType, formatAuditAction, knownAuditActions } from './audit';
+export type { AuditActionPresentation } from './audit';
 export { localizeError, formatApiError, knownErrorCodes } from './errors';
 export { formatDateTime, formatDate, formatMoney, formatTelegramUser, labelRole } from './format';
 

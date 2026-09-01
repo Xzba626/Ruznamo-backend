@@ -17,6 +17,12 @@ export const LICENSE_STATUS_LABELS_RU: Record<string, string> = {
   SUSPENDED: 'Приостановлена',
 };
 
+export const PLAN_CODE_LABELS_RU: Record<string, string> = {
+  STANDARD: 'Стандарт',
+  PRO: 'Про',
+  PRO_PLUS: 'Про+',
+};
+
 export const AUDIT_ACTION_LABELS_RU: Record<string, string> = {
   'telegram.user.started': 'Пользователь запустил Telegram-бота',
   'telegram.order.created': 'Создана заявка на оплату',

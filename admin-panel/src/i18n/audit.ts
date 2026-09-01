@@ -39,14 +39,37 @@ const entityTypeLabels: Record<string, string> = {
   SystemConfig: 'Конфигурация',
   AdminTelegramLinkToken: 'Код привязки Telegram',
   AdminTelegramIdentity: 'Telegram администратора',
+  TelegramCallback: 'Telegram',
 };
 
+export const UNKNOWN_AUDIT_ACTION_LABEL = 'Неизвестное системное событие';
+export const UNKNOWN_ENTITY_LABEL = 'Неизвестный объект';
+
+export interface AuditActionPresentation {
+  label: string;
+  technicalCode?: string;
+}
+
+export function formatAuditAction(action: string): AuditActionPresentation {
+  const known = auditActionLabels[action];
+  if (known) {
+    return { label: known };
+  }
+  return { label: UNKNOWN_AUDIT_ACTION_LABEL, technicalCode: action };
+}
+
 export function labelAuditAction(action: string): string {
-  return auditActionLabels[action] ?? action;
+  return formatAuditAction(action).label;
 }
 
 export function labelEntityType(entityType: string): string {
-  return entityTypeLabels[entityType] ?? entityType;
+  if (entityTypeLabels[entityType]) {
+    return entityTypeLabels[entityType];
+  }
+  if (/^[A-Z][A-Za-z]+$/.test(entityType)) {
+    return UNKNOWN_ENTITY_LABEL;
+  }
+  return entityTypeLabels[entityType] ?? UNKNOWN_ENTITY_LABEL;
 }
 
 export const knownAuditActions = Object.keys(auditActionLabels);

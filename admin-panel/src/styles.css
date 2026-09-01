@@ -196,6 +196,15 @@ th, td {
   max-width: 420px;
 }
 
+.audit-technical-code {
+  font-size: 0.75rem;
+  margin-top: 0.125rem;
+}
+
+.audit-action-cell {
+  min-width: 12rem;
+}
+
 @media (max-width: 768px) {
   .app-shell {
     grid-template-columns: 1fr;

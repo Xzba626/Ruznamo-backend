@@ -9,6 +9,7 @@ import {
   formatTelegramUser,
   labelBillingPeriod,
   labelOrderStatus,
+  labelPlan,
   t,
 } from '../i18n';
 
@@ -133,7 +134,7 @@ export function OrdersPage() {
                       <td className="mono">{String((data.meta.page - 1) * data.meta.limit + index + 1)}</td>
                       <td>{order.user.displayName ?? order.user.email ?? strings.common.dash}</td>
                       <td>{formatTelegramUser(telegram ?? undefined)}</td>
-                      <td>{order.plan.name}</td>
+                      <td>{labelPlan(order.plan)}</td>
                       <td>{labelBillingPeriod(order.billingPeriod)}</td>
                       <td>{formatMoney(order.amount, order.currency)}</td>
                       <td>{labelOrderStatus(order.status)}</td>

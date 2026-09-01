@@ -376,6 +376,11 @@ export class TelegramUpdateProcessor {
     }
 
     const [action, orderId] = data.split(':');
+    if (!orderId?.trim()) {
+      await this.botApi.answerCallbackQuery(callbackQueryId, TG.adminUnauthorized);
+      return;
+    }
+
     const actor = {
       actorType: AuditActorType.TELEGRAM_BOT,
       actorId: telegramId.toString(),

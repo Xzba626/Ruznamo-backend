@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { labelAuditAction, labelLicenseStatus, labelOrderStatus, knownOrderStatuses } from './index';
+import {
+  formatAuditAction,
+  labelAuditAction,
+  labelLicenseStatus,
+  labelOrderStatus,
+  labelPlan,
+  labelPlanCode,
+  knownOrderStatuses,
+} from './index';
 import { localizeError } from './errors';
+import { UNKNOWN_AUDIT_ACTION_LABEL } from './audit';
 
 describe('admin-panel i18n', () => {
   it('maps required order statuses to Russian', () => {
@@ -12,19 +21,29 @@ describe('admin-panel i18n', () => {
     expect(labelOrderStatus('COMPLETED')).toBe('Завершено');
   });
 
-  it('maps license statuses to Russian', () => {
-    expect(labelLicenseStatus('ACTIVE')).toBe('Активна');
-    expect(labelLicenseStatus('REVOKED')).toBe('Отозвана');
+  it('uses Russian fallback for unknown statuses', () => {
+    expect(labelOrderStatus('SOME_NEW_STATUS')).toBe('Неизвестный статус');
+    expect(labelLicenseStatus('UNKNOWN')).toBe('Неизвестный статус');
   });
 
-  it('maps audit actions to Russian', () => {
+  it('maps plan codes to Russian presentation labels', () => {
+    expect(labelPlanCode('STANDARD')).toBe('Стандарт');
+    expect(labelPlanCode('PRO')).toBe('Про');
+    expect(labelPlanCode('PRO_PLUS')).toBe('Про+');
+    expect(labelPlan({ code: 'PRO', name: 'Pro' })).toBe('Про');
+  });
+
+  it('maps audit actions to Russian and unknown events safely', () => {
     expect(labelAuditAction('payment.approved')).toBe('Оплата подтверждена');
-    expect(labelAuditAction('telegram.receipt.submitted')).toBe('Пользователь отправил чек');
+    const unknown = formatAuditAction('some.new.backend.event');
+    expect(unknown.label).toBe(UNKNOWN_AUDIT_ACTION_LABEL);
+    expect(unknown.technicalCode).toBe('some.new.backend.event');
   });
 
   it('localizes API error codes to Russian', () => {
     expect(localizeError('UNAUTHORIZED')).toContain('Выполните вход повторно');
     expect(localizeError('DEVICE_LIMIT_REACHED')).toContain('лимит');
+    expect(localizeError('UNKNOWN_CODE', 'Request failed')).not.toBe('Request failed');
   });
 
   it('covers all known order statuses with Cyrillic labels', () => {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchAudit } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import type { Paginated } from '../api/types';
-import { formatDateTime, labelAuditAction, labelEntityType, t } from '../i18n';
+import { formatAuditAction, formatDateTime, labelEntityType, t } from '../i18n';
 
 type AuditRow = {
   id: string;
@@ -13,6 +13,21 @@ type AuditRow = {
   ipAddress: string | null;
   createdAt: string;
 };
+
+function AuditActionCell({ action }: { action: string }) {
+  const strings = t();
+  const presentation = formatAuditAction(action);
+  return (
+    <div className="audit-action-cell">
+      <div>{presentation.label}</div>
+      {presentation.technicalCode && (
+        <div className="muted audit-technical-code">
+          {strings.audit.technicalCode(presentation.technicalCode)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AuditPage() {
   const strings = t();
@@ -52,7 +67,7 @@ export function AuditPage() {
                 {data.items.map((entry) => (
                   <tr key={entry.id}>
                     <td>{formatDateTime(entry.createdAt)}</td>
-                    <td>{labelAuditAction(entry.action)}</td>
+                    <td><AuditActionCell action={entry.action} /></td>
                     <td>
                       {labelEntityType(entry.entityType)}
                       {entry.entityId ? ` #${entry.entityId.slice(0, 8)}` : ''}

@@ -2,6 +2,7 @@ import {
   AUDIT_ACTION_LABELS_RU,
   LICENSE_STATUS_LABELS_RU,
   ORDER_STATUS_LABELS_RU,
+  PLAN_CODE_LABELS_RU,
 } from './admin-status-labels';
 
 describe('Admin Russian status mappings', () => {
@@ -18,6 +19,11 @@ describe('Admin Russian status mappings', () => {
     expect(LICENSE_STATUS_LABELS_RU.ACTIVE).toBe('Активна');
     expect(LICENSE_STATUS_LABELS_RU.EXPIRED).toBe('Истекла');
     expect(LICENSE_STATUS_LABELS_RU.REVOKED).toBe('Отозвана');
+  });
+
+  it('maps plan codes to Russian presentation labels', () => {
+    expect(PLAN_CODE_LABELS_RU.PRO).toBe('Про');
+    expect(PLAN_CODE_LABELS_RU.PRO_PLUS).toBe('Про+');
   });
 
   it('maps audit payment actions to Russian', () => {

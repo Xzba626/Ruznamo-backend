@@ -62,34 +62,36 @@ const userCategoryLabels: Record<string, string> = {
   PERSONAL: 'Личный',
 };
 
+const UNKNOWN_STATUS_LABEL = 'Неизвестный статус';
+
 const planCodeLabels: Record<string, string> = {
   STANDARD: 'Стандарт',
-  PRO: 'Pro',
-  PRO_PLUS: 'Pro Plus',
+  PRO: 'Про',
+  PRO_PLUS: 'Про+',
 };
 
 export function labelOrderStatus(status: string): string {
-  return orderStatusLabels[status] ?? status;
+  return orderStatusLabels[status] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function labelLicenseStatus(status: string): string {
-  return licenseStatusLabels[status] ?? status;
+  return licenseStatusLabels[status] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function labelUserStatus(status: string): string {
-  return userStatusLabels[status] ?? status;
+  return userStatusLabels[status] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function labelReceiptStatus(status: string): string {
-  return receiptStatusLabels[status] ?? status;
+  return receiptStatusLabels[status] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function labelTrialStatus(status: string): string {
-  return trialStatusLabels[status] ?? status;
+  return trialStatusLabels[status] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function labelBillingPeriod(period: string): string {
-  return billingPeriodLabels[period] ?? period;
+  return billingPeriodLabels[period] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function labelSystemHealth(value: string): string {
@@ -97,11 +99,16 @@ export function labelSystemHealth(value: string): string {
 }
 
 export function labelUserCategory(category: string): string {
-  return userCategoryLabels[category] ?? category;
+  return userCategoryLabels[category] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function labelPlanCode(code: string): string {
-  return planCodeLabels[code] ?? code;
+  return planCodeLabels[code] ?? UNKNOWN_STATUS_LABEL;
+}
+
+/** Отображаемое название тарифа для администратора (по коду, не по name из БД). */
+export function labelPlan(plan: { code: string; name?: string }): string {
+  return labelPlanCode(plan.code);
 }
 
 export function labelPlatform(platform: string): string {
@@ -110,7 +117,7 @@ export function labelPlatform(platform: string): string {
     IOS: 'iOS',
     WEB: 'Web',
   };
-  return map[platform] ?? platform;
+  return map[platform] ?? UNKNOWN_STATUS_LABEL;
 }
 
 export function labelDeviceActive(isActive: boolean): string {

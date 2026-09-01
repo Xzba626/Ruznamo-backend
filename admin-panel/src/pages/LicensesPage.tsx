@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { fetchLicenses, revokeLicense } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import type { Paginated } from '../api/types';
-import { formatDate, labelLicenseStatus, t } from '../i18n';
+import { formatDate, labelLicenseStatus, labelPlan, t } from '../i18n';
 import { useAuth } from '../context/AuthContext';
 
 type LicenseRow = {
@@ -86,7 +86,7 @@ export function LicensesPage() {
                 {data.items.map((license) => (
                   <tr key={license.id}>
                     <td className="mono">{license.keyPrefix}</td>
-                    <td>{license.plan.name}</td>
+                    <td>{labelPlan(license.plan)}</td>
                     <td>{license.user?.displayName ?? license.user?.email ?? strings.common.dash}</td>
                     <td>{labelLicenseStatus(license.status)}</td>
                     <td>{license.activationCount}</td>

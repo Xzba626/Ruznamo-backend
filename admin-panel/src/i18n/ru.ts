@@ -145,6 +145,7 @@ export const ru = {
     colEntity: 'Объект',
     colActor: 'Исполнитель',
     colIp: 'IP',
+    technicalCode: (code: string) => `Технический код: ${code}`,
   },
   system: {
     title: 'Система',

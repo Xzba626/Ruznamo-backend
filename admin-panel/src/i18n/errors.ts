@@ -38,7 +38,7 @@ export function localizeError(code: string, fallbackMessage?: string): string {
 
   return fallbackMessage && /[а-яА-ЯёЁ]/.test(fallbackMessage)
     ? fallbackMessage
-    : (errorCodeLabels.ERROR ?? 'Произошла ошибка');
+    : errorCodeLabels.ERROR;
 }
 
 export function formatApiError(err: { code: string; message: string }): string {

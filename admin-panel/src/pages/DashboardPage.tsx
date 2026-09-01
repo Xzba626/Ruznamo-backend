@@ -2,12 +2,27 @@ import { useEffect, useState } from 'react';
 import { fetchDashboardSummary, fetchSystemStatus, fetchTelegramStatus } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import {
+  formatAuditAction,
   formatDateTime,
-  labelAuditAction,
   labelSystemHealth,
   labelTelegramConnected,
   t,
 } from '../i18n';
+
+function AuditActionCell({ action }: { action: string }) {
+  const strings = t();
+  const presentation = formatAuditAction(action);
+  return (
+    <div className="audit-action-cell">
+      <div>{presentation.label}</div>
+      {presentation.technicalCode && (
+        <div className="muted audit-technical-code">
+          {strings.audit.technicalCode(presentation.technicalCode)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function DashboardPage() {
   const strings = t();
@@ -68,7 +83,7 @@ export function DashboardPage() {
                 {summary.recentActivity.map((e) => (
                   <tr key={e.id}>
                     <td>{formatDateTime(e.createdAt)}</td>
-                    <td>{labelAuditAction(e.action)}</td>
+                    <td><AuditActionCell action={e.action} /></td>
                     <td>{e.actorEmail ?? strings.common.dash}</td>
                   </tr>
                 ))}
