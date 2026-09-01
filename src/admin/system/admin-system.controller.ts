@@ -18,4 +18,11 @@ export class AdminSystemController {
   status() {
     return this.systemService.getStatus();
   }
+
+  @Get('telegram')
+  @RequirePermissions('dashboard:read')
+  @ApiOperation({ summary: 'Telegram runtime configuration (masked, no secrets)' })
+  telegram() {
+    return this.systemService.getTelegramRuntimeStatus();
+  }
 }

@@ -1,4 +1,9 @@
 import { registerAs } from '@nestjs/config';
+import {
+  readAdminTelegramIds,
+  readTelegramBotToken,
+  readTelegramBotUsername,
+} from './telegram-env.util';
 
 const parseEnvInt = (value: string | undefined, fallback: number): number => {
   const trimmed = value?.trim();
@@ -37,7 +42,7 @@ export const securityConfig = registerAs('security', () => ({
 }));
 
 export const telegramConfig = registerAs('telegram', () => {
-  const rawToken = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
+  const rawToken = readTelegramBotToken();
   const webhookSecret = (process.env.TELEGRAM_WEBHOOK_SECRET ?? '').trim();
   const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
   const misconfigured = isProduction && Boolean(rawToken) && !webhookSecret;
@@ -55,13 +60,10 @@ export const telegramConfig = registerAs('telegram', () => {
 
   return {
     botToken: enabled ? botToken : '',
-    botUsername: (process.env.TELEGRAM_BOT_USERNAME ?? '').trim(),
+    botUsername: readTelegramBotUsername(),
     webhookSecret,
     enabled,
     misconfigured,
-    adminTelegramIds: (process.env.ADMIN_TELEGRAM_IDS ?? '')
-      .split(',')
-      .map((id) => id.trim())
-      .filter((id) => /^\d+$/.test(id)),
+    adminTelegramIds: readAdminTelegramIds(),
   };
 });

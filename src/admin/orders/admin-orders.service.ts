@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AuditActorType, OrderStatus, Prisma } from '@prisma/client';
 import { PaymentApprovalService } from '../../payments/payment-approval.service';
+import { TelegramLicenseDeliveryService } from '../../payments/telegram-license-delivery.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginateMeta, PaginationQueryDto } from '../common/dto/pagination.dto';
 
@@ -9,6 +10,7 @@ export class AdminOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentApprovalService: PaymentApprovalService,
+    private readonly telegramLicenseDelivery: TelegramLicenseDeliveryService,
   ) {}
 
   async list(query: PaginationQueryDto) {
@@ -117,6 +119,15 @@ export class AdminOrdersService {
       actorType: AuditActorType.ADMIN,
       actorId: adminId,
     });
+
+    if (!result.alreadyProcessed) {
+      await this.telegramLicenseDelivery.deliverLicenseKey({
+        userId: result.userId,
+        licenseId: result.licenseId,
+        licenseKey: result.licenseKey,
+        expiresAt: result.expiresAt,
+      });
+    }
 
     return {
       orderId: result.orderId,

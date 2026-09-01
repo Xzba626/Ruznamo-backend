@@ -16,9 +16,14 @@ describe('AdminOrdersService', () => {
     reject: jest.fn(),
   };
 
+  const telegramLicenseDelivery = {
+    deliverLicenseKey: jest.fn().mockResolvedValue(true),
+  };
+
   const service = new AdminOrdersService(
     prisma as never,
     paymentApprovalService as unknown as PaymentApprovalService,
+    telegramLicenseDelivery as never,
   );
 
   beforeEach(() => {
@@ -38,6 +43,7 @@ describe('AdminOrdersService', () => {
   it('approve delegates to PaymentApprovalService without exposing license key', async () => {
     paymentApprovalService.approve.mockResolvedValue({
       orderId: 'ord_1',
+      userId: 'usr_1',
       licenseId: 'lic_1',
       licenseKey: 'secret-key-must-not-leak',
       expiresAt: new Date(),

@@ -20,6 +20,7 @@ export interface PaymentActorContext {
 
 export interface PaymentApprovalResult {
   orderId: string;
+  userId: string;
   licenseId: string;
   licenseKey: string;
   expiresAt: Date;
@@ -194,6 +195,7 @@ export class PaymentApprovalService {
       const storedKey = await this.findStoredLicenseKey(txResult.licenseId, txResult.userId);
       return {
         orderId,
+        userId: txResult.userId,
         licenseId: txResult.licenseId,
         licenseKey: storedKey ?? '[already-delivered]',
         expiresAt: txResult.expiresAt ?? new Date(),
@@ -216,6 +218,7 @@ export class PaymentApprovalService {
 
     return {
       orderId,
+      userId: txResult.userId,
       licenseId: txResult.licenseId,
       licenseKey: txResult.licenseKey,
       expiresAt: txResult.expiresAt,

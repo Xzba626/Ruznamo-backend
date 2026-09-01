@@ -45,4 +45,21 @@ describe('telegramConfig', () => {
     expect(config.enabled).toBe(true);
     expect(config.botToken).toBe('123456:ABC-DEF');
   });
+
+  it('falls back to deprecated TELEGRAM_USER_BOT_TOKEN when primary is empty', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.TELEGRAM_BOT_TOKEN = '';
+    process.env.TELEGRAM_USER_BOT_TOKEN = '123456:LEGACY';
+
+    const config = telegramConfig();
+    expect(config.botToken).toBe('123456:LEGACY');
+  });
+
+  it('normalizes TELEGRAM_BOT_USERNAME from t.me URL', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.TELEGRAM_BOT_USERNAME = 'https://t.me/Ruznamo_bot';
+
+    const config = telegramConfig();
+    expect(config.botUsername).toBe('Ruznamo_bot');
+  });
 });

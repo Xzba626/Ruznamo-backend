@@ -59,6 +59,38 @@ describe('AppConfigService', () => {
     expect(result.serverTime).toBeDefined();
   });
 
+  it('normalizes t.me URL in telegram bot username config', async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AppConfigService,
+        { provide: PrismaService, useValue: prisma },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) =>
+              key === 'telegram.botUsername' ? 'https://t.me/Ruznamo_bot' : undefined,
+            ),
+          },
+        },
+      ],
+    }).compile();
+
+    const urlService = module.get(AppConfigService);
+    prisma.appVersion.findFirst.mockResolvedValue({
+      latestVersion: '1.0.0',
+      minimumSupportedVersion: '1.0.0',
+      updateUrl: null,
+      forceUpdate: false,
+      releaseNotes: null,
+      releaseNotesTj: null,
+    });
+    prisma.systemConfig.findMany.mockResolvedValue([]);
+    prisma.systemConfig.findUnique.mockResolvedValue({ value: '1' });
+
+    const result = await urlService.getPublicConfig(Platform.ANDROID);
+    expect(result.telegramBotUsername).toBe('Ruznamo_bot');
+  });
+
   it('marks updateRequired when client below minimum version', async () => {
     prisma.appVersion.findFirst.mockResolvedValue({
       latestVersion: '2.0.0',

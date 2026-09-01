@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Platform } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigResponseDto } from './dto/app-config.dto';
+import { normalizeTelegramBotUsername } from '../telegram/telegram-bot-username.util';
 
 function compareSemver(a: string, b: string): number {
   const parse = (value: string): number[] =>
@@ -76,7 +77,7 @@ export class AppConfigService {
       }
     }
 
-    const telegramBotUsername = this.normalizeBotUsername(
+    const telegramBotUsername = normalizeTelegramBotUsername(
       this.configService.get<string>('telegram.botUsername'),
     );
 
@@ -111,10 +112,5 @@ export class AppConfigService {
       telegramBotUsername,
       serverTime: new Date().toISOString(),
     };
-  }
-
-  private normalizeBotUsername(raw: string | undefined): string | null {
-    const trimmed = (raw ?? '').trim().replace(/^@+/, '');
-    return trimmed.length > 0 ? trimmed : null;
   }
 }

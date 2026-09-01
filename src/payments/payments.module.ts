@@ -5,6 +5,7 @@ import { OrderService } from './order.service';
 import { PaymentApprovalService } from './payment-approval.service';
 import { PaymentConfigService } from './payment-config.service';
 import { TelegramAccountService } from './telegram-account.service';
+import { TelegramLicenseDeliveryService } from './telegram-license-delivery.service';
 
 @Module({
   imports: [AuditModule, SecurityModule],
@@ -13,12 +14,14 @@ import { TelegramAccountService } from './telegram-account.service';
     TelegramAccountService,
     OrderService,
     PaymentApprovalService,
+    TelegramLicenseDeliveryService,
   ],
   exports: [
     PaymentConfigService,
     TelegramAccountService,
     OrderService,
     PaymentApprovalService,
+    TelegramLicenseDeliveryService,
   ],
 })
 export class PaymentsModule {}

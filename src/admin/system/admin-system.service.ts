@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HealthCheckService, PrismaHealthIndicator } from '@nestjs/terminus';
+import { maskSecret, normalizeTelegramBotUsername } from '../../config/telegram-env.util';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -33,6 +34,26 @@ export class AdminSystemService {
       readiness,
       version: '1.0.0',
       environment: this.configService.get<string>('app.nodeEnv', 'development'),
+    };
+  }
+
+  getTelegramRuntimeStatus() {
+    const token = maskSecret(this.configService.get<string>('telegram.botToken'));
+    const webhookSecret = maskSecret(this.configService.get<string>('telegram.webhookSecret'));
+    const rawUsername = this.configService.get<string>('telegram.botUsername', '');
+    const botUsername = normalizeTelegramBotUsername(rawUsername);
+    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+
+    return {
+      enabled: this.configService.get<boolean>('telegram.enabled', false),
+      misconfigured: this.configService.get<boolean>('telegram.misconfigured', false),
+      botToken: token,
+      webhookSecret,
+      botUsername,
+      botUsernameRawPresent: Boolean(rawUsername?.trim()),
+      botUsernameNormalized: botUsername !== null,
+      adminTelegramIdsCount: adminIds.length,
+      webhookUrl: 'https://ruznamo-backend-o4xk.vercel.app/api/v1/telegram/webhook',
     };
   }
 }

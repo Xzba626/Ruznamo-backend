@@ -22,6 +22,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "admin:bootstrap": "ts-node -P tsconfig.scripts.json scripts/admin-bootstrap.ts",
+    "telegram:audit": "ts-node -P tsconfig.scripts.json scripts/telegram-runtime-audit.ts",
+    "telegram:webhook": "ts-node -P tsconfig.scripts.json scripts/telegram-runtime-audit.ts --register-webhook",
     "postinstall": "npx prisma generate"
   },
   "dependencies": {

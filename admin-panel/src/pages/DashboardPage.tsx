@@ -33,11 +33,18 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchDashboardSummary(), fetchSystemStatus(), fetchTelegramStatus()])
-      .then(([s, sys, tg]) => {
-        setSummary(s);
-        setSystem(sys);
-        setTelegram(tg);
+    Promise.allSettled([fetchDashboardSummary(), fetchSystemStatus(), fetchTelegramStatus()])
+      .then(([summaryResult, systemResult, telegramResult]) => {
+        if (summaryResult.status === 'rejected') {
+          throw summaryResult.reason;
+        }
+        setSummary(summaryResult.value);
+        if (systemResult.status === 'fulfilled') {
+          setSystem(systemResult.value);
+        }
+        if (telegramResult.status === 'fulfilled') {
+          setTelegram(telegramResult.value);
+        }
       })
       .catch((err) => setError(getErrorMessage(err, strings.errors.loadDashboard)))
       .finally(() => setLoading(false));
