@@ -36,12 +36,32 @@ export const securityConfig = registerAs('security', () => ({
   throttleLimit: parseEnvInt(process.env.THROTTLE_LIMIT, 100),
 }));
 
-export const telegramConfig = registerAs('telegram', () => ({
-  botToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
-  botUsername: process.env.TELEGRAM_BOT_USERNAME ?? '',
-  webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? '',
-  adminTelegramIds: (process.env.ADMIN_TELEGRAM_IDS ?? '')
-    .split(',')
-    .map((id) => id.trim())
-    .filter((id) => /^\d+$/.test(id)),
-}));
+export const telegramConfig = registerAs('telegram', () => {
+  const rawToken = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
+  const webhookSecret = (process.env.TELEGRAM_WEBHOOK_SECRET ?? '').trim();
+  const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
+  const misconfigured = isProduction && Boolean(rawToken) && !webhookSecret;
+
+  if (misconfigured) {
+    // API must boot on Vercel; Telegram stays disabled until webhook secret is set.
+    console.warn(
+      '[telegram] TELEGRAM_BOT_TOKEN is set but TELEGRAM_WEBHOOK_SECRET is missing. ' +
+        'Telegram bot is disabled until you add TELEGRAM_WEBHOOK_SECRET in Vercel and redeploy.',
+    );
+  }
+
+  const botToken = misconfigured ? '' : rawToken;
+  const enabled = Boolean(botToken) && (!isProduction || Boolean(webhookSecret));
+
+  return {
+    botToken: enabled ? botToken : '',
+    botUsername: (process.env.TELEGRAM_BOT_USERNAME ?? '').trim(),
+    webhookSecret,
+    enabled,
+    misconfigured,
+    adminTelegramIds: (process.env.ADMIN_TELEGRAM_IDS ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => /^\d+$/.test(id)),
+  };
+});

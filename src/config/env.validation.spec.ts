@@ -92,4 +92,29 @@ describe('envValidationSchema', () => {
     expect(value.API_BASE_URL).toBe('https://ruznamo-backend-o4xk.vercel.app');
     expect(value.APP_BASE_URL).toBe('https://ruznamo-backend-o4xk.vercel.app');
   });
+
+  it('allows production boot when TELEGRAM_BOT_TOKEN is set without webhook secret', () => {
+    const { error } = envValidationSchema.validate(
+      {
+        ...validEnv,
+        NODE_ENV: 'production',
+        TELEGRAM_BOT_TOKEN: '123456:ABC-DEF',
+        TELEGRAM_WEBHOOK_SECRET: '',
+      },
+      nestValidationOptions,
+    );
+    expect(error).toBeUndefined();
+  });
+
+  it('rejects TELEGRAM_WEBHOOK_SECRET shorter than 16 characters when set', () => {
+    const { error } = envValidationSchema.validate(
+      {
+        ...validEnv,
+        TELEGRAM_WEBHOOK_SECRET: 'short',
+      },
+      nestValidationOptions,
+    );
+    expect(error).toBeDefined();
+    expect(error?.message).toContain('TELEGRAM_WEBHOOK_SECRET');
+  });
 });
