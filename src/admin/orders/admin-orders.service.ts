@@ -64,6 +64,7 @@ export class AdminOrdersService {
         amount: order.amount.toString(),
         currency: order.currency,
         createdAt: order.createdAt,
+        paymentMethodName: order.paymentMethodName,
         user: serializeOrderUser(order.user),
         plan: order.plan,
         hasReceipt: order.receipts.length > 0,
@@ -135,6 +136,10 @@ export class AdminOrdersService {
       approvedAt: order.approvedAt,
       rejectedAt: order.rejectedAt,
       rejectionReason: order.rejectionReason,
+      paymentMethodName: order.paymentMethodName,
+      paymentMethodType: order.paymentMethodType,
+      paymentMethodValue: order.paymentMethodValue,
+      paymentMethodRecipient: order.paymentMethodRecipient,
       user: serializeOrderUser(order.user),
       plan: {
         code: order.plan.code,

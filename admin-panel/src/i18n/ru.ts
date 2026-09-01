@@ -135,6 +135,7 @@ export const ru = {
     colPlan: 'Тариф',
     colPeriod: 'Срок',
     colAmount: 'Сумма',
+    colPaymentMethod: 'Способ оплаты',
     colStatus: 'Статус',
     colDate: 'Дата',
     colReceipt: 'Чек',

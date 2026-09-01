@@ -21,6 +21,7 @@ type OrderRow = {
   amount: string;
   currency: string;
   createdAt: string;
+  paymentMethodName?: string | null;
   hasReceipt: boolean;
   license: { id: string; keyPrefix: string; status: string } | null;
   user: {
@@ -42,6 +43,10 @@ type OrderDetail = {
   approvedAt?: string | null;
   rejectedAt?: string | null;
   rejectionReason?: string | null;
+  paymentMethodName?: string | null;
+  paymentMethodType?: string | null;
+  paymentMethodValue?: string | null;
+  paymentMethodRecipient?: string | null;
   user: OrderRow['user'];
   plan: { code: string; name: string; deviceLimit: number | null };
   receipts: Array<{ id: string; status: string; submittedAt: string }>;
@@ -175,6 +180,7 @@ export function OrdersPage() {
                   <th>{strings.orders.colPlan}</th>
                   <th>{strings.orders.colPeriod}</th>
                   <th>{strings.orders.colAmount}</th>
+                  <th>{strings.orders.colPaymentMethod}</th>
                   <th>{strings.orders.colStatus}</th>
                   <th>{strings.orders.colDate}</th>
                   <th>{strings.orders.colReceipt}</th>
@@ -203,6 +209,7 @@ export function OrdersPage() {
                       <td>{labelPlan(order.plan)}</td>
                       <td>{labelBillingPeriod(order.billingPeriod)}</td>
                       <td>{formatMoney(order.amount, order.currency)}</td>
+                      <td>{order.paymentMethodName ?? strings.common.dash}</td>
                       <td>{labelOrderStatus(order.status)}</td>
                       <td>{formatDateTime(order.createdAt)}</td>
                       <td>{order.hasReceipt ? strings.orders.hasReceipt : strings.orders.noReceipt}</td>
@@ -261,6 +268,9 @@ export function OrdersPage() {
             <>
               <h3>{strings.orders.sectionPayment}</h3>
               <p>{labelOrderStatus(detail.status)} · {labelPlan(detail.plan)} · {labelBillingPeriod(detail.billingPeriod)} · {formatMoney(detail.amount, detail.currency)}</p>
+              {detail.paymentMethodName && (
+                <p>{strings.orders.colPaymentMethod}: {detail.paymentMethodName}{detail.paymentMethodRecipient ? ` · ${detail.paymentMethodRecipient}` : ''}</p>
+              )}
               <p className="muted">{formatDateTime(detail.createdAt)}</p>
 
               <h3>{strings.orders.sectionTelegram}</h3>
