@@ -304,60 +304,158 @@ npm run build  →  PASS (nest build)
 
 ---
 
-## 14. Runtime tests possible locally
+## 14. Runtime tests (local gate — 2026-09-01)
 
-Without production deploy, locally verifiable:
+| Check | Result |
+|-------|--------|
+| `npm test` | **103/103 PASS** (all suites, including `app.bootstrap.spec.ts`) |
+| Targeted Telegram suites | **34 tests PASS** (`telegram`, `admin-link`, `admin-telegram`) |
+| `npm run build` | **PASS** |
 
-- Unit/integration tests above ✅
-- `npm run build` ✅
-- Manual webhook simulation via processor specs ✅
-
-Requires DB + bot token for full local E2E (not run in this session).
+Note: earlier session reported `app.bootstrap.spec.ts` failing when Neon was unreachable; at verification time DB was reachable and bootstrap passed.
 
 ---
 
-## 15. Production tests NOT performed (deploy required)
+## 15. PRODUCTION VERIFICATION (deploy session — 2026-09-01)
 
-The following require **backend deploy to Vercel** (not done — per user instruction):
+### Git / commit / push
 
-| Test | Expected |
-|------|----------|
-| Generate code in Admin Panel | `RZ-XXXXXX` displayed |
-| Send `RZ-XXXXXX` to `@Ruznamo_bot` | Russian success message |
-| Refresh Admin Panel status | Telegram подключён |
-| User sends «Салом, ман савол дорам» | Admin receives relay; user gets Tajik ack |
-| Invalid code | Generic invalid message |
-| Expired code | Expired message |
-| `/start` | User welcome, not relayed |
-| Pairing code | Not relayed as support message |
+| Item | Value |
+|------|-------|
+| Branch | `main` |
+| Commit SHA | `e8e4f6c16804d13625e5e12476ceef1d3790f9a5` |
+| Commit message | `баъд аз аудити бехатари m` |
+| Remote | `origin/main` — **in sync** (no unpushed commits) |
+| Working tree | **clean** — BLOCK changes already committed |
+
+BLOCK files in commit `e8e4f6c` (14 files): pairing util, `AdminTelegramService`, `TelegramUpdateProcessor`, `TelegramSupportRelayService`, tests, admin-panel Telegram UI/i18n, this report.
+
+**Secrets in git:** `.env` not tracked; no bot token / webhook secret / real admin IDs in committed files.
+
+### Pre-deploy test gate
+
+- Full suite: **103 PASS**
+- Build: **PASS**
+
+### Production env (masked, no secret values)
+
+Local `.env` has **empty** `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` — `npm run telegram:audit` cannot call `getMe` / `getWebhookInfo` from this machine.
+
+Indirect production signals:
+
+| Variable | Evidence |
+|----------|----------|
+| `TELEGRAM_WEBHOOK_SECRET` | **present** — `POST /api/v1/telegram/webhook` without header → **401** `Invalid webhook secret` |
+| `TELEGRAM_BOT_TOKEN` | **likely present** — webhook endpoint active; `GET /api/v1/app/config` returns `telegramBotUsername: "Ruznamo_bot"` (bot enabled path) |
+| `TELEGRAM_BOT_USERNAME` | **normalized** — production `telegramBotUsername` = `Ruznamo_bot` ✅ |
+| `ADMIN_TELEGRAM_IDS` | **not verified remotely** — requires authenticated `GET /api/v1/admin/system/telegram` or Vercel dashboard; local `.env` empty |
+
+Admin Panel frontend: **no** `TELEGRAM_BOT_TOKEN` / webhook secret in `admin-panel/` source or `.env.production` (only `VITE_API_BASE_URL`).
+
+### Backend deployment
+
+| Check | Result |
+|-------|--------|
+| `GET /health` | **200** `status: ok` |
+| `GET /health/ready` | **200** database `up` |
+| Vercel CLI deploy SHA | **not confirmed** — CLI not authenticated in this environment |
+| Auto-deploy from `main` push | **assumed** — commit pushed; health endpoints healthy |
+
+### Admin Panel deployment
+
+| Check | Result |
+|-------|--------|
+| URL | `https://admin-panel-ten-tau-90.vercel.app` |
+| Login page | Russian UI loads ✅ |
+| New Telegram strings | **deployed** — JS bundle contains `Открыть бота в Telegram` |
+
+### Webhook regression (`npm run telegram:audit`)
+
+```
+TELEGRAM_BOT_TOKEN: missing (local)
+POST .../api/v1/telegram/webhook → 401 Invalid webhook secret
+```
+
+`getMe` / `getWebhookInfo` / `last_error_message` — **not run** (no local bot token). Re-run on a machine with `TELEGRAM_BOT_TOKEN` in `.env`:
+
+```bash
+npm run telegram:audit
+```
+
+### Production DB (AdminTelegramIdentity)
+
+Probe at verification time (`scripts/probe-admin-telegram-status.ts`):
+
+```json
+{
+  "connected": false,
+  "isVerified": false,
+  "telegramUserId": null
+}
+```
+
+→ **Pairing E2E not yet completed** on production.
+
+### Real E2E tests — NOT completed from automation
+
+| Test | Status | Blocker |
+|------|--------|---------|
+| Admin Panel → generate `RZ-XXXXXX` | ⏳ | Admin login credentials not available in automation |
+| Plain-text `RZ-XXXXXX` → bot Russian success | ⏳ | Requires manual Telegram send or local `TELEGRAM_BOT_TOKEN` |
+| `AdminTelegramIdentity` created | ❌ not yet | DB shows disconnected |
+| Admin Panel «Telegram подключён» | ⏳ | Depends on pairing |
+| Free-text relay «Салом, ман савол дорам» | ⏳ | Requires non-admin Telegram user + `ADMIN_TELEGRAM_IDS` on production |
+| Negative pairing tests | ⏳ | Manual |
+| Handler regressions (`/start`, receipt, callbacks) | ⏳ | Manual |
+
+### Regressions checked indirectly
+
+| Flow | Status |
+|------|--------|
+| Webhook security | ✅ 401 without secret |
+| Health / DB | ✅ ready |
+| Web Admin approval without `ADMIN_TELEGRAM_IDS` | ✅ code unchanged — not re-tested live |
+| License delivery on approve | ⏳ not tested (no test order) |
 
 ---
 
 ## 16. Remaining blockers
 
-1. **Deploy** — uncommitted changes must be deployed to production for live verification
-2. **`ADMIN_TELEGRAM_IDS`** — must be numeric Telegram user ID; redeploy after env change
-3. **`TELEGRAM_BOT_USERNAME`** — should be `Ruznamo_bot` (not full URL) for deep links
-4. **`app.bootstrap.spec.ts`** — fails without live DB; consider mocking Prisma in CI
-5. **Admin Panel deploy** — UI instruction updates in `admin-panel/` need separate Vercel deploy
+1. **Real Telegram E2E** — perform manually (checklist below) or run `npm run telegram:audit` locally with production `TELEGRAM_BOT_TOKEN` in `.env`
+2. **Confirm `ADMIN_TELEGRAM_IDS`** on Vercel = numeric Telegram user ID(s); **redeploy** after any env change
+3. **Vercel deployment SHA** — confirm in Vercel dashboard that production = `e8e4f6c`
+4. **Pairing** — production DB still shows `connected: false` until admin sends code to `@Ruznamo_bot`
+
+### Manual E2E checklist (for operator)
+
+1. Login → Admin Panel → Telegram → generate code
+2. From whitelisted Telegram account, send `RZ-XXXXXX` as **plain text** (not `/start`)
+3. Expect: «Telegram успешно подключён к админ-панели Ruznamo.»
+4. Refresh status → «Telegram подключён»
+5. Re-send same code → rejection
+6. From **non-admin** user: «Салом, ман савол дорам» → admin receives relay + Tajik ack to user
 
 ---
 
 ## 17. Final verdict
 
-### **B — Code repaired, deployment/runtime verification pending**
+### **B — Code deployed (push complete), runtime E2E incomplete**
 
 | Criterion | Status |
 |-----------|--------|
-| Root cause identified | ✅ Plain-text pairing handler missing |
-| Targeted fix implemented | ✅ |
-| Handler priority correct | ✅ |
-| Automated tests for pairing/relay | ✅ |
-| Build | ✅ |
-| Production Telegram pairing E2E | ⏳ Pending deploy |
-| Production free-text relay E2E | ⏳ Pending deploy |
+| Commit + push to `main` | ✅ `e8e4f6c` |
+| Production health / DB ready | ✅ |
+| Webhook secret configured | ✅ (401 probe) |
+| `TELEGRAM_BOT_USERNAME` normalized | ✅ `Ruznamo_bot` |
+| Admin Panel UI deployed | ✅ new strings in bundle |
+| `getWebhookInfo` / `last_error_message` | ⏳ needs local token |
+| Plain-text pairing E2E | ❌ not verified (DB still disconnected) |
+| Free-text relay E2E | ⏳ not verified |
+| Handler regressions live | ⏳ not verified |
 
-**Not A** because real Telegram pairing and relay delivery were not verified against production `@Ruznamo_bot` after deploy.
+**Not A** — production Telegram pairing and relay were not confirmed end-to-end in this session.
+
+**Not C** — no new production blocker found in code; deployment path healthy; pairing fix awaits operator E2E.
 
 ---
 
