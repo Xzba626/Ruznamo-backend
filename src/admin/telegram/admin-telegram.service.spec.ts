@@ -1,4 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AdminTelegramService } from './admin-telegram.service';
 import { AuditService } from '../../audit/audit.service';
@@ -52,9 +51,8 @@ describe('AdminTelegramService', () => {
       expiresAt: new Date(Date.now() - 60_000),
     });
 
-    await expect(
-      service.completeLinkFromBot({ code: 'RZ-ABC123', telegramUserId: 123n }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    const result = await service.tryCompleteLinkFromBot({ code: 'RZ-ABC123', telegramUserId: 123n });
+    expect(result).toEqual({ ok: false, reason: 'expired' });
   });
 
   it('rejects reused link token', async () => {
@@ -66,9 +64,8 @@ describe('AdminTelegramService', () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
 
-    await expect(
-      service.completeLinkFromBot({ code: 'RZ-ABC123', telegramUserId: 123n }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    const result = await service.tryCompleteLinkFromBot({ code: 'RZ-ABC123', telegramUserId: 123n });
+    expect(result).toEqual({ ok: false, reason: 'invalid' });
   });
 
   it('binds telegram user id on valid token', async () => {
@@ -80,19 +77,37 @@ describe('AdminTelegramService', () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
 
-    await service.completeLinkFromBot({
+    const result = await service.tryCompleteLinkFromBot({
       code: 'RZ-ABC123',
       telegramUserId: 123456789n,
       username: 'ignored_username',
       firstName: 'Ignored',
     });
 
+    expect(result).toEqual({ ok: true });
     expect(prisma.adminTelegramLinkToken.update).toHaveBeenCalled();
     expect(prisma.adminTelegramIdentity.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({ telegramUserId: 123456789n, isVerified: true }),
       }),
     );
+  });
+
+  it('rejects telegram user not in ADMIN_TELEGRAM_IDS whitelist', async () => {
+    prisma.adminTelegramLinkToken.findUnique.mockResolvedValue({
+      id: 'tok_1',
+      adminUserId: 'adm_1',
+      code: 'RZ-ABC123',
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const result = await service.tryCompleteLinkFromBot({
+      code: 'RZ-ABC123',
+      telegramUserId: 999999999n,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'unauthorized' });
   });
 
   it('treats unlinked telegram user as unauthorized', async () => {

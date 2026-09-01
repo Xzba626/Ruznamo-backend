@@ -129,12 +129,13 @@ export const ru = {
     telegramId: 'Telegram ID',
     connectedAt: 'Дата подключения',
     generateHint:
-      'Сгенерируйте одноразовый код и отправьте боту команду /start КОД.',
+      '1. Нажмите «Сгенерировать код подключения».\n2. Отправьте код боту @Ruznamo_bot (можно просто вставить RZ-… или /start RZ-…).\n3. Нажмите «Обновить статус».',
     generate: 'Сгенерировать код подключения',
     generating: 'Генерация…',
     code: 'Код',
     expires: 'Истекает',
     refreshStatus: 'Обновить статус',
+    openBot: 'Открыть бота в Telegram',
   },
   audit: {
     title: 'Журнал аудита',

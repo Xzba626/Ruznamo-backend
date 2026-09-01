@@ -1,6 +1,113 @@
 import { AuditActorType } from '@prisma/client';
 import { TelegramUpdateProcessor } from './telegram-update.processor';
 
+describe('TelegramUpdateProcessor pairing and relay', () => {
+  const prisma = {
+    telegramProcessedUpdate: { create: jest.fn().mockResolvedValue({}) },
+    order: { findFirst: jest.fn().mockResolvedValue(null) },
+    license: { findFirst: jest.fn() },
+  };
+
+  const configService = {
+    get: jest.fn((key: string, fallback?: unknown) => {
+      if (key === 'telegram.adminTelegramIds') return ['999'];
+      return fallback;
+    }),
+  };
+
+  const botApi = {
+    sendMessage: jest.fn(),
+    answerCallbackQuery: jest.fn(),
+  };
+
+  const telegramAccountService = {
+    resolveTelegramUser: jest.fn().mockResolvedValue({ userId: 'usr_1' }),
+  };
+
+  const orderService = {
+    findAwaitingReceiptOrder: jest.fn().mockResolvedValue(null),
+  };
+
+  const adminTelegramService = {
+    tryCompleteLinkFromBot: jest.fn(),
+  };
+
+  const supportRelay = {
+    relayFreeText: jest.fn().mockResolvedValue('sent'),
+  };
+
+  const auditService = { log: jest.fn() };
+
+  const processor = new TelegramUpdateProcessor(
+    prisma as never,
+    configService as never,
+    botApi as never,
+    telegramAccountService as never,
+    orderService as never,
+    {} as never,
+    {} as never,
+    adminTelegramService as never,
+    supportRelay as never,
+    auditService as never,
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('handles plain admin pairing code before relay', async () => {
+    adminTelegramService.tryCompleteLinkFromBot.mockResolvedValue({ ok: true });
+
+    await processor.processUpdate({
+      update_id: 1,
+      message: {
+        message_id: 1,
+        text: 'RZ-ABC123',
+        from: { id: 999, first_name: 'Admin' },
+        chat: { id: 999 },
+      },
+    });
+
+    expect(adminTelegramService.tryCompleteLinkFromBot).toHaveBeenCalled();
+    expect(supportRelay.relayFreeText).not.toHaveBeenCalled();
+    expect(botApi.sendMessage).toHaveBeenCalled();
+  });
+
+  it('relays unknown free text from regular users', async () => {
+    await processor.processUpdate({
+      update_id: 2,
+      message: {
+        message_id: 2,
+        text: 'Салом, ман савол дорам',
+        from: { id: 111, first_name: 'User', username: 'user1' },
+        chat: { id: 111 },
+      },
+    });
+
+    expect(supportRelay.relayFreeText).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Салом, ман савол дорам' }),
+    );
+    expect(botApi.sendMessage).toHaveBeenCalled();
+  });
+
+  it('does not relay /start user flow as free text', async () => {
+    await processor.processUpdate({
+      update_id: 3,
+      message: {
+        message_id: 3,
+        text: '/start',
+        from: { id: 111, first_name: 'User' },
+        chat: { id: 111 },
+      },
+    });
+
+    expect(supportRelay.relayFreeText).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'telegram.user.started' }),
+    );
+  });
+});
+
 describe('TelegramUpdateProcessor admin callbacks', () => {
   const prisma = {
     telegramProcessedUpdate: { create: jest.fn().mockResolvedValue({}) },
@@ -36,7 +143,8 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     { getOrderForAdminReview: jest.fn() } as never,
     paymentApprovalService as never,
     {} as never,
-    {} as never,
+    { tryCompleteLinkFromBot: jest.fn() } as never,
+    { relayFreeText: jest.fn() } as never,
     auditService as never,
   );
 
@@ -64,6 +172,7 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
   it('allows approve callback for configured admin telegram id', async () => {
     paymentApprovalService.approve.mockResolvedValue({
       orderId: 'ord_1',
+      userId: 'usr_1',
       licenseId: 'lic_1',
       licenseKey: 'k'.repeat(64),
       expiresAt: new Date(),

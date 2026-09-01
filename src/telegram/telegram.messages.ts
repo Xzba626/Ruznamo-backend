@@ -20,9 +20,15 @@ export const TG = {
   adminUnauthorized: 'Иҷозати дастрасӣ нест.',
   adminApprovedDuplicate: 'Ин ариза аллакай тасдиқ шудааст.',
   adminRejectedDuplicate: 'Ин ариза аллакай рад шудааст.',
-  adminConnected: 'Telegram бо панели маъмуриат пайваст шуд.',
-  adminConnectInvalid: 'Рамзи пайваст нодуруст ё мӯҳлаташ гузаштааст.',
+  adminConnected: 'Telegram успешно подключён к админ-панели Ruznamo.',
+  adminConnectExpired: 'Код подключения истёк. Создайте новый код в админ-панели.',
+  adminConnectInvalid: 'Код подключения недействителен или уже использован.',
+  adminConnectUnauthorized:
+    'Код подключения недействителен или уже использован.',
   adminWelcome: 'Салом! Шумо ҳамчун маъмур шинохта шудед.',
+  supportRelayed: 'Паёми шумо ба маъмур фиристода шуд. Лутфан интизор шавед.',
+  supportRelayUnavailable:
+    'Дастгирии муваққатан дастнорас аст. Лутфан дертар кӯшиш кунед.',
 } as const;
 
 export const CB = {

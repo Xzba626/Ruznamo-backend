@@ -6,7 +6,7 @@ import { formatDateTime, labelTelegramConnected, t } from '../i18n';
 export function TelegramPage() {
   const strings = t();
   const [status, setStatus] = useState<Awaited<ReturnType<typeof fetchTelegramStatus>> | null>(null);
-  const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [code, setCode] = useState<{ code: string; expiresAt: string; deepLink: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
@@ -31,7 +31,7 @@ export function TelegramPage() {
     setError('');
     try {
       const result = await createTelegramConnect();
-      setCode({ code: result.code, expiresAt: result.expiresAt });
+      setCode({ code: result.code, expiresAt: result.expiresAt, deepLink: result.deepLink });
     } catch (err) {
       setError(getErrorMessage(err, strings.errors.loadTelegram));
     } finally {
@@ -60,6 +60,11 @@ export function TelegramPage() {
             <div className="card section">
               <p><strong>{strings.telegram.code}:</strong> <span className="mono">{code.code}</span></p>
               <p><strong>{strings.telegram.expires}:</strong> {formatDateTime(code.expiresAt)}</p>
+              {code.deepLink && (
+                <p>
+                  <a href={code.deepLink} target="_blank" rel="noreferrer">{strings.telegram.openBot}</a>
+                </p>
+              )}
               <button type="button" className="btn-secondary" onClick={() => void load()}>
                 {strings.telegram.refreshStatus}
               </button>

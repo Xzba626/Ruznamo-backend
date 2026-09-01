@@ -42,6 +42,13 @@ export class TelegramBotApiService {
     }).then(() => undefined);
   }
 
+  sendPlainMessage(chatId: number | bigint, text: string): Promise<void> {
+    return this.call('sendMessage', {
+      chat_id: Number(chatId),
+      text,
+    }).then(() => undefined);
+  }
+
   sendPhoto(
     chatId: number | bigint,
     photoFileId: string,

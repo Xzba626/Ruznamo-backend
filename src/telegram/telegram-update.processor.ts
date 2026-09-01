@@ -1,14 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuditActorType, BillingPeriod, LicenseStatus } from '@prisma/client';
+import { AuditActorType, BillingPeriod, LicenseStatus, OrderStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { AdminTelegramService } from '../admin/telegram/admin-telegram.service';
+import {
+  extractAdminLinkCodeFromStart,
+  normalizeAdminLinkCode,
+} from '../admin/telegram/admin-link-code.util';
 import { OrderService } from '../payments/order.service';
 import { PaymentApprovalService } from '../payments/payment-approval.service';
 import { PaymentConfigService } from '../payments/payment-config.service';
 import { TelegramAccountService } from '../payments/telegram-account.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
+import { TelegramSupportRelayService } from './telegram-support-relay.service';
 import { CB, formatAmount, formatDateTj, TG } from './telegram.messages';
 import { InlineKeyboardMarkup, TelegramUpdate } from './telegram.types';
 
@@ -25,6 +30,7 @@ export class TelegramUpdateProcessor {
     private readonly paymentApprovalService: PaymentApprovalService,
     private readonly paymentConfigService: PaymentConfigService,
     private readonly adminTelegramService: AdminTelegramService,
+    private readonly supportRelay: TelegramSupportRelayService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -90,7 +96,96 @@ export class TelegramUpdateProcessor {
 
     if (text === '/help') {
       await this.botApi.sendMessage(chatId, TG.help, this.helpKeyboard());
+      return;
     }
+
+    const pairingCode = normalizeAdminLinkCode(text);
+    if (pairingCode) {
+      this.logger.log({
+        updateId: update.update_id,
+        telegramUserId: telegramId.toString(),
+        handler: 'admin_pairing_plain',
+      });
+      await this.tryAdminPairing(pairingCode, telegramId, chatId, from.username, from.first_name);
+      return;
+    }
+
+    if (this.isAdmin(telegramId)) {
+      return;
+    }
+
+    const resolved = await this.telegramAccountService.resolveTelegramUser({
+      telegramId,
+      chatId,
+      username: from.username,
+      firstName: from.first_name,
+    });
+
+    const awaitingReceipt = await this.orderService.findAwaitingReceiptOrder(resolved.userId);
+    if (awaitingReceipt) {
+      await this.botApi.sendMessage(chatId, TG.askReceipt);
+      return;
+    }
+
+    const activeOrder = await this.prisma.order.findFirst({
+      where: {
+        userId: resolved.userId,
+        status: {
+          in: [OrderStatus.PENDING, OrderStatus.RECEIPT_SUBMITTED, OrderStatus.UNDER_REVIEW],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    this.logger.log({
+      updateId: update.update_id,
+      telegramUserId: telegramId.toString(),
+      handler: 'support_relay',
+    });
+
+    const relayResult = await this.supportRelay.relayFreeText({
+      telegramUserId: telegramId,
+      chatId,
+      text,
+      firstName: from.first_name,
+      username: from.username,
+      orderId: activeOrder?.id,
+      orderStatus: activeOrder?.status,
+    });
+
+    if (relayResult === 'sent') {
+      await this.botApi.sendMessage(chatId, TG.supportRelayed);
+    } else {
+      await this.botApi.sendMessage(chatId, TG.supportRelayUnavailable);
+    }
+  }
+
+  private async tryAdminPairing(
+    code: string,
+    telegramId: bigint,
+    chatId: bigint,
+    username?: string,
+    firstName?: string,
+  ): Promise<void> {
+    const result = await this.adminTelegramService.tryCompleteLinkFromBot({
+      code,
+      telegramUserId: telegramId,
+      chatId,
+      username,
+      firstName,
+    });
+
+    if (result.ok) {
+      await this.botApi.sendMessage(chatId, TG.adminConnected);
+      return;
+    }
+
+    if (result.reason === 'expired') {
+      await this.botApi.sendMessage(chatId, TG.adminConnectExpired);
+      return;
+    }
+
+    await this.botApi.sendMessage(chatId, TG.adminConnectUnauthorized);
   }
 
   private async handleStart(
@@ -100,23 +195,13 @@ export class TelegramUpdateProcessor {
     username?: string,
     firstName?: string,
   ): Promise<void> {
-    const parts = text.split(/\s+/);
-    const rawCode = parts[1];
-
-    if (rawCode) {
-      const code = rawCode.startsWith('RZ-') ? rawCode : `RZ-${rawCode.toUpperCase()}`;
-      try {
-        await this.adminTelegramService.completeLinkFromBot({
-          code,
-          telegramUserId: telegramId,
-          chatId,
-          username,
-          firstName,
-        });
-        await this.botApi.sendMessage(chatId, TG.adminConnected);
-      } catch {
-        await this.botApi.sendMessage(chatId, TG.adminConnectInvalid);
-      }
+    const startCode = extractAdminLinkCodeFromStart(text);
+    if (startCode) {
+      this.logger.log({
+        telegramUserId: telegramId.toString(),
+        handler: 'admin_pairing_start',
+      });
+      await this.tryAdminPairing(startCode, telegramId, chatId, username, firstName);
       return;
     }
 

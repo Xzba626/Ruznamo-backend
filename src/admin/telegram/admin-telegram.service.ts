@@ -4,8 +4,15 @@ import { AuditActorType } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { normalizeAdminLinkCode } from './admin-link-code.util';
 
 const LINK_CODE_TTL_MINUTES = 15;
+
+export type AdminLinkFailureReason = 'invalid' | 'expired' | 'unauthorized';
+
+export type AdminLinkResult =
+  | { ok: true }
+  | { ok: false; reason: AdminLinkFailureReason };
 
 export interface AdminTelegramConnectResult {
   code: string;
@@ -45,7 +52,7 @@ export class AdminTelegramService {
     });
 
     const botUsername = this.configService.get<string>('telegram.botUsername');
-    const deepLink = botUsername ? `https://t.me/${botUsername}?start=${code}` : null;
+    const deepLink = botUsername ? `https://t.me/${botUsername}?start=${encodeURIComponent(code)}` : null;
 
     await this.auditService.log({
       actorType: AuditActorType.ADMIN,
@@ -60,7 +67,7 @@ export class AdminTelegramService {
       expiresAt,
       deepLink,
       instructions:
-        'Откройте бота Telegram и отправьте /start с этим кодом или используйте ссылку. Код действует 15 минут.',
+        'Отправьте код боту: вставьте RZ-… как сообщение, или /start RZ-…, или откройте ссылку ниже. Код действует 15 минут.',
     };
   }
 
@@ -80,22 +87,32 @@ export class AdminTelegramService {
     };
   }
 
-  /**
-   * Called by Telegram bot webhook (BLOCK 6). Verifies one-time code and binds identity.
-   */
-  async completeLinkFromBot(input: {
+  async tryCompleteLinkFromBot(input: {
     code: string;
     telegramUserId: bigint;
     chatId?: bigint;
     username?: string;
     firstName?: string;
-  }): Promise<void> {
+  }): Promise<AdminLinkResult> {
+    const normalizedCode = normalizeAdminLinkCode(input.code);
+    if (!normalizedCode) {
+      return { ok: false, reason: 'invalid' };
+    }
+
     const token = await this.prisma.adminTelegramLinkToken.findUnique({
-      where: { code: input.code },
+      where: { code: normalizedCode },
     });
 
-    if (!token || token.usedAt || token.expiresAt < new Date()) {
-      throw new NotFoundException('Invalid or expired Telegram link code');
+    if (!token) {
+      return { ok: false, reason: 'invalid' };
+    }
+
+    if (token.usedAt) {
+      return { ok: false, reason: 'invalid' };
+    }
+
+    if (token.expiresAt < new Date()) {
+      return { ok: false, reason: 'expired' };
     }
 
     const envIds = this.configService
@@ -103,11 +120,10 @@ export class AdminTelegramService {
       .map((id) => id.trim())
       .filter(Boolean);
     const telegramIdStr = input.telegramUserId.toString();
-    const envAllowed =
-      envIds.length === 0 || envIds.includes(telegramIdStr);
+    const envAllowed = envIds.length === 0 || envIds.includes(telegramIdStr);
 
     if (!envAllowed) {
-      throw new NotFoundException('Telegram user is not authorized for admin binding');
+      return { ok: false, reason: 'unauthorized' };
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -152,6 +168,21 @@ export class AdminTelegramService {
       entityType: 'AdminTelegramIdentity',
       metadata: { telegramUserId: telegramIdStr },
     });
+
+    return { ok: true };
+  }
+
+  async completeLinkFromBot(input: {
+    code: string;
+    telegramUserId: bigint;
+    chatId?: bigint;
+    username?: string;
+    firstName?: string;
+  }): Promise<void> {
+    const result = await this.tryCompleteLinkFromBot(input);
+    if (!result.ok) {
+      throw new NotFoundException(result.reason);
+    }
   }
 
   async isVerifiedTelegramUser(telegramUserId: bigint): Promise<boolean> {
@@ -178,24 +209,31 @@ export class AdminTelegramService {
       if (!rawCode) {
         await this.sendBotMessage(
           chatId,
-          'Unauthorized. Generate a connection code in the Ruznamo Admin Panel first.',
+          'Сначала создайте код подключения в админ-панели Ruznamo.',
         );
         return;
       }
 
-      const code = rawCode.startsWith('RZ-') ? rawCode : `RZ-${rawCode.toUpperCase()}`;
+      const code = normalizeAdminLinkCode(rawCode);
+      if (!code) {
+        await this.sendBotMessage(chatId, 'Код подключения недействителен или уже использован.');
+        return;
+      }
 
-      try {
-        await this.completeLinkFromBot({
-          code,
-          telegramUserId,
-          chatId: BigInt(chatId),
-          username: message.from.username,
-          firstName: message.from.first_name,
-        });
-        await this.sendBotMessage(chatId, 'Telegram connected successfully. You are now linked as admin.');
-      } catch {
-        await this.sendBotMessage(chatId, 'Invalid or expired connection code.');
+      const result = await this.tryCompleteLinkFromBot({
+        code,
+        telegramUserId,
+        chatId: BigInt(chatId),
+        username: message.from.username,
+        firstName: message.from.first_name,
+      });
+
+      if (result.ok) {
+        await this.sendBotMessage(chatId, 'Telegram успешно подключён к админ-панели Ruznamo.');
+      } else if (result.reason === 'expired') {
+        await this.sendBotMessage(chatId, 'Код подключения истёк. Создайте новый код в админ-панели.');
+      } else {
+        await this.sendBotMessage(chatId, 'Код подключения недействителен или уже использован.');
       }
       return;
     }
@@ -203,20 +241,20 @@ export class AdminTelegramService {
     if (text === '/help') {
       const authorized = await this.isVerifiedTelegramUser(telegramUserId);
       if (!authorized) {
-        await this.sendBotMessage(chatId, 'Unauthorized. Connect via Admin Panel first.');
+        await this.sendBotMessage(chatId, 'Сначала подключите Telegram через админ-панель.');
         return;
       }
-      await this.sendBotMessage(chatId, 'Ruznamo Admin Bot. Commands: /status, /help');
+      await this.sendBotMessage(chatId, 'Ruznamo Admin Bot. Команды: /status, /help');
       return;
     }
 
     if (text === '/status') {
       const authorized = await this.isVerifiedTelegramUser(telegramUserId);
       if (!authorized) {
-        await this.sendBotMessage(chatId, 'Unauthorized.');
+        await this.sendBotMessage(chatId, 'Сначала подключите Telegram через админ-панель.');
         return;
       }
-      await this.sendBotMessage(chatId, 'System status: use Admin Panel → System for details.');
+      await this.sendBotMessage(chatId, 'Статус системы: см. Админ-панель → Система.');
     }
   }
 
