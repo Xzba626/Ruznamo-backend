@@ -20,12 +20,13 @@ import { PaymentConfigService } from '../payments/payment-config.service';
 import { ResolvedTelegramUser, TelegramAccountService } from '../payments/telegram-account.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
-import { billingPeriodDays, getTelegramI18n } from './i18n';
+import { billingPeriodDays, getTelegramI18n, LICENSE_DURATION_DAYS } from './i18n';
 import { TelegramSupportRelayService } from './telegram-support-relay.service';
 import {
   CB,
   formatAmount,
   formatDateLocalized,
+  parseDurationCallback,
   parsePaymentCallback,
   TG_ADMIN,
 } from './telegram.messages';
@@ -432,13 +433,37 @@ export class TelegramUpdateProcessor {
     const msgs = this.i18n(resolved);
 
     if (data === CB.PLAN_STANDARD) {
-      await this.startOrderFlow(resolved, chatId, PlanCode.STANDARD);
+      await this.botApi.sendMessage(
+        chatId,
+        msgs.chooseDuration(msgs.planStandardLabel),
+        await this.durationSelectionKeyboard(resolved, PlanCode.STANDARD),
+      );
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
 
     if (data === CB.PLAN_PRO) {
-      await this.startOrderFlow(resolved, chatId, PlanCode.PRO);
+      await this.botApi.sendMessage(
+        chatId,
+        msgs.chooseDuration(msgs.planProLabel),
+        await this.durationSelectionKeyboard(resolved, PlanCode.PRO),
+      );
+      await this.botApi.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const durationSelection = parseDurationCallback(data);
+    if (durationSelection) {
+      try {
+        await this.startOrderFlow(
+          resolved,
+          chatId,
+          durationSelection.planCode as PlanCode,
+          durationSelection.billingPeriod as BillingPeriod,
+        );
+      } catch {
+        await this.botApi.sendMessage(chatId, msgs.durationUnavailable);
+      }
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
@@ -506,8 +531,8 @@ export class TelegramUpdateProcessor {
     resolved: ResolvedTelegramUser,
     chatId: bigint,
     planCode: PlanCode,
+    billingPeriod: BillingPeriod,
   ): Promise<void> {
-    const billingPeriod = BillingPeriod.MONTHLY;
     const quote = await this.paymentConfigService.getPlanPrice(planCode, billingPeriod);
     const payment = await this.paymentConfigService.getPaymentDisplayConfig();
     const days = billingPeriodDays(billingPeriod);
@@ -689,33 +714,47 @@ export class TelegramUpdateProcessor {
 
   private async planSelectionKeyboard(resolved: ResolvedTelegramUser): Promise<InlineKeyboardMarkup> {
     const msgs = this.i18n(resolved);
-    const lang = this.langCode(resolved);
-    const days = billingPeriodDays(BillingPeriod.MONTHLY);
-    const [standard, pro] = await Promise.all([
-      this.paymentConfigService.getPlanPrice(PlanCode.STANDARD, BillingPeriod.MONTHLY),
-      this.paymentConfigService.getPlanPrice(PlanCode.PRO, BillingPeriod.MONTHLY),
-    ]);
 
     return {
       inline_keyboard: [
-        [
-          {
-            text: msgs.planStandard(formatAmount(standard.amount, standard.currency, lang), days),
-            callback_data: CB.PLAN_STANDARD,
-          },
-        ],
-        [
-          {
-            text: msgs.planPro(formatAmount(pro.amount, pro.currency, lang), days),
-            callback_data: CB.PLAN_PRO,
-          },
-        ],
+        [{ text: msgs.planStandardLabel, callback_data: CB.PLAN_STANDARD }],
+        [{ text: msgs.planProLabel, callback_data: CB.PLAN_PRO }],
         [
           { text: msgs.menuLanguage, callback_data: CB.ACTION_LANGUAGE },
           { text: msgs.menuHelp, callback_data: CB.ACTION_HELP },
         ],
       ],
     };
+  }
+
+  private async durationSelectionKeyboard(
+    resolved: ResolvedTelegramUser,
+    planCode: PlanCode,
+  ): Promise<InlineKeyboardMarkup> {
+    const msgs = this.i18n(resolved);
+    const lang = this.langCode(resolved);
+    const prices = await this.paymentConfigService.listActivePlanPrices(planCode);
+    const rows: InlineKeyboardMarkup['inline_keyboard'] = [];
+
+    for (const quote of prices) {
+      const formatted = formatAmount(quote.amount, quote.currency, lang);
+      const days = billingPeriodDays(quote.billingPeriod);
+      const label =
+        days === LICENSE_DURATION_DAYS.YEARLY
+          ? msgs.duration365Days(formatted)
+          : msgs.duration30Days(formatted);
+
+      rows.push([
+        {
+          text: label,
+          callback_data: CB.duration(quote.planCode, quote.billingPeriod),
+        },
+      ]);
+    }
+
+    rows.push([{ text: msgs.menuRetry, callback_data: CB.ACTION_RETRY }]);
+
+    return { inline_keyboard: rows };
   }
 
   private activeLicenseKeyboard(resolved: ResolvedTelegramUser): InlineKeyboardMarkup {

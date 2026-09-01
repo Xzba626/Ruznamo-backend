@@ -61,11 +61,12 @@ All user-facing bot strings via `getTelegramI18n(language)`. Admin pairing messa
 
 ### Payment UX
 
-1. Choose plan: **Standard** or **Pro** (30-day / `MONTHLY` billing period)
-2. Bot shows payment instructions + amount from DB prices
-3. Order created with `awaitingReceipt: true` immediately (**no «Оплатил» button**)
-4. User sends photo/document → receipt submitted → localized confirmation
-5. Admin receives **actual attachment** + Russian review caption + inline buttons
+1. Choose plan: **Standard** or **Pro**
+2. Choose duration: **30 days** (`MONTHLY`) or **365 days** (`YEARLY`) — prices from DB only
+3. Bot shows payment instructions + DB-driven amount
+4. Order created with `awaitingReceipt: true` immediately (**no «Оплатил» button**)
+5. User sends photo/document → receipt submitted → localized confirmation
+6. Admin receives **actual attachment** + Russian review caption + inline buttons
 
 ### Admin callbacks
 
@@ -145,7 +146,7 @@ webhook auth
 ## 5. Tests & build
 
 ```
-npm test  → 109/109 PASS
+npm test  → 110/110 PASS
 npm run build → PASS
 ```
 
@@ -153,37 +154,97 @@ New/updated coverage: i18n TJ/RU, payment callback parsing, support photo relay,
 
 ---
 
-## 6. Deployment requirements
+## 6. Production DB pricing (verified)
 
-1. **`prisma migrate deploy`** on Neon — adds `TelegramAccount.language`
-2. **Seed or manual** — ensure PRO plan prices exist (30 TJS monthly in seed)
-3. **Redeploy backend** after migration
-4. **Webhook secret sync** — ensure `TELEGRAM_WEBHOOK_SECRET` matches Telegram registration (see prior audit)
+After `prisma db seed` on Neon:
 
-**Not done:** commit, push, deploy (per user instruction).
+| Plan | 30 days (MONTHLY) | 365 days (YEARLY) |
+|------|-------------------|-------------------|
+| STANDARD | 15 TJS | 150 TJS |
+| PRO | 30 TJS | 300 TJS |
+
+Duration buttons appear only for combinations with active `PlanPrice` rows.
 
 ---
 
-## 7. Runtime limitations
+## 7. PRODUCTION RELEASE (2026-09-01)
 
-- Plan selection UI currently offers **30-day (MONTHLY)** tariffs only; yearly (365-day) can be added via extra menu without schema change
+### Migration
+
+| Item | Result |
+|------|--------|
+| Migration | `20260901120000_telegram_account_language` |
+| Command | `prisma migrate deploy` |
+| Result | **Applied successfully** before backend deploy |
+| Strategy | Additive `TelegramAccount.language` nullable enum |
+
+### Pre-deploy gates
+
+| Gate | Result |
+|------|--------|
+| `npm test` | **110/110 PASS** |
+| `npm run build` | **PASS** |
+| Secrets in git | None (.env not tracked) |
+
+### Telegram runtime audit (post-migration, pre-deploy of duration commit)
+
+| Check | Result |
+|-------|--------|
+| `getMe.ok` | true |
+| `@Ruznamo_bot` | confirmed |
+| Webhook URL | correct production URL |
+| `last_error_message` | **null** |
+| `pending_update_count` | 0 |
+| Probe without secret | 401 (expected) |
+| Probe with secret | **200** |
+| `telegramBotUsername` in app config | `Ruznamo_bot` |
+
+### Deploy
+
+| Item | Value |
+|------|-------|
+| Branch | `main` |
+| Commit | *(see release commit after push)* |
+| Push | authorized in this BLOCK |
+
+### Production E2E (Telegram)
+
+| Test | Status |
+|------|--------|
+| Language TJ/RU selection + persistence | ⏳ Manual |
+| Plan → duration → payment instructions | ⏳ Manual |
+| Photo receipt → admin attachment | ⏳ Manual |
+| PDF/document receipt | ⏳ Manual |
+| Admin approve → one license + key delivery | ⏳ Manual |
+| Reject flow | ⏳ Manual |
+| Support media outside payment | ⏳ Manual |
+| Duplicate approve idempotency | ⏳ Manual |
+| Web Admin approve regression | ⏳ Manual |
+
+Automated agent cannot complete real Telegram UI interactions in this session.
+
+---
+
+## 8. Runtime limitations
+
 - Admin review messages remain **Russian** (admin UX)
-- PRO prices require DB seed/migration on production if not yet present
-- Real Telegram E2E (language, receipt, approve, license delivery) not run in this session
+- `TELEGRAM_BOT_USERNAME` should be set on Vercel for deep links (app config already normalizes)
 
 ---
 
-## 8. Recommended production E2E
+## 9. Recommended production E2E checklist
 
-1. `/start` → choose 🇷🇺 → plan Standard → pay instructions
-2. Send receipt photo → admin gets attachment + buttons
-3. ✅ Approve → user receives RU license message
-4. Repeat with TJ user
-5. Send photo without order → admin support attachment
-6. Web Admin approve on another order → same single-license semantics
+1. `/start` → 🇹🇯 / 🇷🇺 → language persists on restart
+2. Standard → 30 days → instructions show 15 TJS
+3. Pro → 365 days → instructions show 300 TJS
+4. Send receipt photo → admin attachment + buttons
+5. ✅ Approve → exactly one license, localized key to user
+6. ❌ Reject on separate order → no license
+7. Photo without active order → support relay to admin
+8. Web Admin approve → same `PaymentApprovalService` semantics
 
 ---
 
-## 9. Final verdict
+## 10. Final verdict
 
-**B** — Implementation and automated tests complete. Migration + production deploy + live Telegram verification required for **A**.
+**B** — Migration applied, webhook healthy, code/tests/build green, backend release pushed. **Real Telegram E2E not automated** — operator checklist required for **A**.

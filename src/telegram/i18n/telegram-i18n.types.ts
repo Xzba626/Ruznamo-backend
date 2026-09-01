@@ -6,6 +6,12 @@ export interface TelegramI18n {
   welcomeNoLicense: (name?: string) => string;
   welcomeActiveLicense: (expiresAt: string) => string;
   choosePlan: string;
+  planStandardLabel: string;
+  planProLabel: string;
+  chooseDuration: (planName: string) => string;
+  duration30Days: (price: string) => string;
+  duration365Days: (price: string) => string;
+  durationUnavailable: string;
   planStandard: (price: string, days: number) => string;
   planPro: (price: string, days: number) => string;
   paymentInstructions: (

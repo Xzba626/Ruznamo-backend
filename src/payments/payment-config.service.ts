@@ -21,6 +21,28 @@ export interface PaymentDisplayConfig {
 export class PaymentConfigService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async listActivePlanPrices(planCode: PlanCode): Promise<PlanPriceQuote[]> {
+    const plan = await this.prisma.plan.findUnique({
+      where: { code: planCode, isActive: true },
+      include: {
+        prices: { where: { isActive: true }, orderBy: { billingPeriod: 'asc' } },
+      },
+    });
+
+    if (!plan) {
+      return [];
+    }
+
+    return plan.prices.map((price) => ({
+      planId: plan.id,
+      planCode: plan.code,
+      planName: plan.name,
+      billingPeriod: price.billingPeriod,
+      amount: price.amount.toString(),
+      currency: price.currency,
+    }));
+  }
+
   async getPlanPrice(planCode: PlanCode, billingPeriod: BillingPeriod): Promise<PlanPriceQuote> {
     const plan = await this.prisma.plan.findUnique({
       where: { code: planCode },

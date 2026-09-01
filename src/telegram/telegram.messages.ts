@@ -19,7 +19,24 @@ export const CB = {
   ACTION_GET_KEY: 'action:get_key',
   approve: (orderId: string) => `payment:approve:${orderId}`,
   reject: (orderId: string) => `payment:reject:${orderId}`,
+  duration: (planCode: string, billingPeriod: string) => `duration:${planCode}:${billingPeriod}`,
 } as const;
+
+export function parseDurationCallback(
+  data: string,
+): { planCode: 'STANDARD' | 'PRO'; billingPeriod: 'MONTHLY' | 'YEARLY' } | null {
+  if (!data.startsWith('duration:')) {
+    return null;
+  }
+  const [, planCode, billingPeriod] = data.split(':');
+  if (
+    (planCode !== 'STANDARD' && planCode !== 'PRO') ||
+    (billingPeriod !== 'MONTHLY' && billingPeriod !== 'YEARLY')
+  ) {
+    return null;
+  }
+  return { planCode, billingPeriod };
+}
 
 export function parsePaymentCallback(
   data: string,

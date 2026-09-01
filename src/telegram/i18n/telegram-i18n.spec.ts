@@ -1,5 +1,5 @@
 import { TelegramLanguage } from '@prisma/client';
-import { parsePaymentCallback } from '../telegram.messages';
+import { parseDurationCallback, parsePaymentCallback } from '../telegram.messages';
 import { getTelegramI18n } from './index';
 
 describe('telegram i18n', () => {
@@ -26,6 +26,15 @@ describe('parsePaymentCallback', () => {
     expect(parsePaymentCallback('approve:ord_1')).toEqual({
       action: 'approve',
       orderId: 'ord_1',
+    });
+  });
+});
+
+describe('parseDurationCallback', () => {
+  it('parses duration callback', () => {
+    expect(parseDurationCallback('duration:STANDARD:YEARLY')).toEqual({
+      planCode: 'STANDARD',
+      billingPeriod: 'YEARLY',
     });
   });
 });

@@ -10,6 +10,12 @@ export const tj: TelegramI18n = {
   welcomeActiveLicense: (expiresAt) =>
     `Салом!\n\nОбунаи шумо фаъол аст то: ${expiresAt}\n\nШумо метавонед калиди худро дубора бинед ё маълумоти обунаро санҷед.`,
   choosePlan: 'Тарифро интихоб кунед:',
+  planStandardLabel: 'Standard',
+  planProLabel: 'Pro',
+  chooseDuration: (planName) => `Муддатро барои ${planName} интихоб кунед:`,
+  duration30Days: (price) => `30 рӯз — ${price}`,
+  duration365Days: (price) => `365 рӯз — ${price}`,
+  durationUnavailable: 'Ин муддат ҳозир дастрас нест. Лутфан муддати дигарро интихоб кунед.',
   planStandard: (price, days) => `Standard\n${days} рӯз — ${price}`,
   planPro: (price, days) => `Pro\n${days} рӯз — ${price}`,
   paymentInstructions: (planName, amount, days, card, recipient, extra) =>

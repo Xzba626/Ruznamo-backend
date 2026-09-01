@@ -10,6 +10,12 @@ export const ru: TelegramI18n = {
   welcomeActiveLicense: (expiresAt) =>
     `Здравствуйте!\n\nВаша подписка активна до: ${expiresAt}\n\nВы можете снова посмотреть ключ или данные подписки.`,
   choosePlan: 'Выберите тариф:',
+  planStandardLabel: 'Standard',
+  planProLabel: 'Pro',
+  chooseDuration: (planName) => `Выберите срок для ${planName}:`,
+  duration30Days: (price) => `30 дней — ${price}`,
+  duration365Days: (price) => `365 дней — ${price}`,
+  durationUnavailable: 'Этот срок сейчас недоступен. Выберите другой.',
   planStandard: (price, days) => `Standard\n${days} дней — ${price}`,
   planPro: (price, days) => `Pro\n${days} дней — ${price}`,
   paymentInstructions: (planName, amount, days, card, recipient, extra) =>
