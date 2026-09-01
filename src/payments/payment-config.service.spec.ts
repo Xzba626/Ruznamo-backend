@@ -14,7 +14,7 @@ describe('PaymentConfigService plan availability', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('returns only active purchasable plans with prices', async () => {
+  it('returns only DB-active plans with at least one active price', async () => {
     prisma.plan.findMany.mockResolvedValue([
       {
         id: 'plan_std',
@@ -29,18 +29,33 @@ describe('PaymentConfigService plan availability', () => {
           },
         ],
       },
+      {
+        id: 'plan_pro',
+        code: PlanCode.PRO,
+        name: 'Pro',
+        nameTj: 'Pro',
+        prices: [],
+      },
     ]);
 
     const plans = await service.listPurchaseAvailablePlans();
 
+    expect(prisma.plan.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { isActive: true } }),
+    );
     expect(plans).toHaveLength(1);
     expect(plans[0].code).toBe(PlanCode.STANDARD);
   });
 
-  it('reports Standard ON / Pro OFF correctly', async () => {
+  it('reports Standard ON / Pro OFF from DB state', async () => {
     prisma.plan.findUnique.mockImplementation(async ({ where }: { where: { code: PlanCode; isActive?: boolean } }) => {
-      if (where.code === PlanCode.STANDARD) {
-        return { id: 'plan_std', code: PlanCode.STANDARD, isActive: true, prices: [{ billingPeriod: BillingPeriod.MONTHLY }] };
+      if (where.code === PlanCode.STANDARD && where.isActive === true) {
+        return {
+          id: 'plan_std',
+          code: PlanCode.STANDARD,
+          isActive: true,
+          prices: [{ billingPeriod: BillingPeriod.MONTHLY }],
+        };
       }
       return null;
     });
@@ -49,11 +64,20 @@ describe('PaymentConfigService plan availability', () => {
     await expect(service.isPlanAvailableForPurchase(PlanCode.PRO)).resolves.toBe(false);
   });
 
-  it('rejects purchase price lookup for disabled plan', async () => {
-    prisma.plan.findUnique.mockResolvedValue(null);
+  it('rejects purchase when plan is active but billing period price is missing', async () => {
+    prisma.plan.findUnique.mockResolvedValue({
+      id: 'plan_pro',
+      code: PlanCode.PRO,
+      isActive: true,
+      prices: [],
+    });
 
     await expect(
       service.getPlanPriceForPurchase(PlanCode.PRO, BillingPeriod.YEARLY),
     ).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(
+      service.isPlanPeriodAvailableForPurchase(PlanCode.PRO, BillingPeriod.YEARLY),
+    ).resolves.toBe(false);
   });
 });

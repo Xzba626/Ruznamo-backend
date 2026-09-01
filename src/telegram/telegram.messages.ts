@@ -1,5 +1,5 @@
 import { PlanCode } from '@prisma/client';
-import { isPurchasablePlanCode } from '../payments/plan-availability.util';
+import { parsePlanCode } from '../payments/plan-code.util';
 
 /** Admin pairing messages stay Russian (admin panel language). */
 export const TG_ADMIN = {
@@ -32,8 +32,8 @@ export function parsePlanCallback(data: string): PlanCode | null {
   if (!data.startsWith('plan:')) {
     return null;
   }
-  const planCode = data.slice('plan:'.length).trim() as PlanCode;
-  return isPurchasablePlanCode(planCode) ? planCode : null;
+  const planCode = parsePlanCode(data.slice('plan:'.length));
+  return planCode;
 }
 
 export function parseDurationCallback(
@@ -42,14 +42,15 @@ export function parseDurationCallback(
   if (!data.startsWith('duration:')) {
     return null;
   }
-  const [, planCode, billingPeriod] = data.split(':');
+  const [, planCodeRaw, billingPeriod] = data.split(':');
+  const planCode = parsePlanCode(planCodeRaw ?? '');
   if (
-    !isPurchasablePlanCode(planCode as PlanCode) ||
+    !planCode ||
     (billingPeriod !== 'MONTHLY' && billingPeriod !== 'YEARLY')
   ) {
     return null;
   }
-  return { planCode: planCode as PlanCode, billingPeriod };
+  return { planCode, billingPeriod };
 }
 
 export function parsePaymentMethodCallback(data: string): { methodId: string } | null {

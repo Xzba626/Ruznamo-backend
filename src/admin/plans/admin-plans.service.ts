@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditActorType, PlanCode } from '@prisma/client';
 import { AuditService } from '../../audit/audit.service';
-import { isPurchasablePlanCode } from '../../payments/plan-availability.util';
+import { parsePlanCode } from '../../payments/plan-code.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateAdminPlanDto } from './dto/update-admin-plan.dto';
 
@@ -14,7 +14,6 @@ export class AdminPlansService {
 
   async listPlans() {
     const plans = await this.prisma.plan.findMany({
-      where: { code: { in: [PlanCode.STANDARD, PlanCode.PRO] } },
       include: {
         prices: { orderBy: { billingPeriod: 'asc' } },
         _count: { select: { licenses: true, orders: true } },
@@ -42,9 +41,9 @@ export class AdminPlansService {
   }
 
   async updatePlan(adminId: string, code: string, dto: UpdateAdminPlanDto) {
-    const planCode = code.toUpperCase() as PlanCode;
-    if (!isPurchasablePlanCode(planCode)) {
-      throw new BadRequestException('Unknown or non-purchasable plan');
+    const planCode = parsePlanCode(code);
+    if (!planCode) {
+      throw new BadRequestException('Unknown plan');
     }
 
     const existing = await this.prisma.plan.findUnique({

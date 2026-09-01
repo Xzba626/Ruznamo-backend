@@ -618,12 +618,17 @@ export class TelegramUpdateProcessor {
     const durationSelection = parseDurationCallback(data);
     if (durationSelection) {
       try {
-        const available = await this.paymentConfigService.isPlanAvailableForPurchase(
+        const periodAvailable = await this.paymentConfigService.isPlanPeriodAvailableForPurchase(
           durationSelection.planCode,
+          durationSelection.billingPeriod as BillingPeriod,
         );
-        if (!available) {
-          await this.sendUserMessage(chatId, resolved, msgs.planUnavailable);
-          await this.botApi.answerCallbackQuery(query.id, msgs.planUnavailable);
+        if (!periodAvailable) {
+          const planAvailable = await this.paymentConfigService.isPlanAvailableForPurchase(
+            durationSelection.planCode,
+          );
+          const message = planAvailable ? msgs.durationUnavailable : msgs.planUnavailable;
+          await this.sendUserMessage(chatId, resolved, message);
+          await this.botApi.answerCallbackQuery(query.id, message);
           return;
         }
         await this.startOrderFlow(
@@ -633,7 +638,7 @@ export class TelegramUpdateProcessor {
           durationSelection.billingPeriod as BillingPeriod,
         );
       } catch {
-        await this.sendUserMessage(chatId, resolved, msgs.planUnavailable);
+        await this.sendUserMessage(chatId, resolved, msgs.durationUnavailable);
       }
       await this.botApi.answerCallbackQuery(query.id);
       return;

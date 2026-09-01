@@ -11,13 +11,25 @@
 | Layer | Before |
 |-------|--------|
 | **Schema** | `Plan` model with `isActive` already existed |
+| **PlanCode** | Prisma enum `STANDARD \| PRO \| PRO_PLUS` — not an open catalog |
+| **BillingPeriod** | `MONTHLY \| YEARLY` via `PlanPrice` rows |
 | **Seed** | STANDARD and PRO both `isActive: true` |
 | **PaymentConfigService** | `listActivePlanPrices()` filtered by `isActive`; `getPlanPrice()` did **not** check availability |
 | **Telegram** | Hardcoded `[Standard]` + `[Pro]` buttons in `planSelectionKeyboard()` |
 | **Admin Panel** | No tariffs UI; no API to toggle plans |
 | **Android** | `GET /api/v1/app/config` — no plan purchase UI; license key activation only |
 
-**Actual source of truth:** `Plan.isActive` in PostgreSQL, but **not enforced end-to-end** until this block.
+**Actual source of truth:** `Plan.isActive` + `PlanPrice.isActive` in PostgreSQL.
+
+**Honest limitation:** new arbitrary tariff names require `PlanCode` enum/schema change. This block = enable/disable **existing** defined plans.
+
+### Prisma models (audit)
+
+- `Plan`: `code`, `isActive`, `sortOrder`, `name`
+- `PlanPrice`: `(planId, billingPeriod)` unique → `amount`, `isActive`
+- `Order`: snapshots `planId`, `billingPeriod`, `amount`, `currency`
+
+Purchasable = `Plan.isActive=true` AND `PlanPrice.isActive=true` for the requested period.
 
 ---
 
@@ -41,7 +53,7 @@ UPDATE "Plan" SET "isActive" = false WHERE "code" = 'PRO';
 
 | Endpoint | Permission | Purpose |
 |----------|------------|---------|
-| `GET /api/v1/admin/plans` | `plans:read` | List STANDARD/PRO with prices, license/order counts |
+| `GET /api/v1/admin/plans` | `plans:read` | List all Plan rows with prices, license/order counts |
 | `PATCH /api/v1/admin/plans/:code` | `plans:update` | Toggle `isActive`, update prices |
 
 **Audit events:**
@@ -51,10 +63,11 @@ UPDATE "Plan" SET "isActive" = false WHERE "code" = 'PRO';
 
 **Services:**
 
-- `PaymentConfigService.listPurchaseAvailablePlans()` — active STANDARD/PRO with active prices
-- `PaymentConfigService.isPlanAvailableForPurchase()`
-- `PaymentConfigService.getPlanPriceForPurchase()` — throws if disabled
-- `OrderService.findOrCreatePendingOrder()` — blocks **new** orders for disabled plans; reuses existing PENDING
+- `PaymentConfigService.listPurchaseAvailablePlans()` — `Plan.isActive=true` with ≥1 active `PlanPrice` (no hardcoded plan whitelist)
+- `PaymentConfigService.isPlanAvailableForPurchase()` — plan-level
+- `PaymentConfigService.isPlanPeriodAvailableForPurchase()` — plan + billing period
+- `PaymentConfigService.getPlanPriceForPurchase()` — throws if plan/period not commercially available
+- `OrderService.findOrCreatePendingOrder()` — blocks **new** orders for unavailable plans; reuses existing PENDING
 
 ---
 
@@ -125,11 +138,11 @@ Orders retain immutable snapshot: `planId`, `billingPeriod`, `amount` at creatio
 
 ## Future new plans (honest assessment)
 
-**Current block (Level A):** enable/disable **existing** `PlanCode` enum values STANDARD | PRO.
+**Current block (Level A):** enable/disable and price **existing** `PlanCode` enum values.
 
-**Level B (future):** fully dynamic catalog would require moving beyond strict `PlanCode` enum — not done in this block to avoid risky domain rewrite.
+**Level B (future):** fully dynamic catalog requires moving beyond `PlanCode` enum — not done in this block.
 
-`PRO_PLUS` exists in schema but is excluded from purchasable set (`plan-availability.util.ts`).
+Within Level A: enabling `PRO` in admin + active prices → Telegram shows Pro **without code changes**. Adding a **new** enum member still requires schema + seed + deploy.
 
 ---
 
