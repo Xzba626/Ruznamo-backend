@@ -98,6 +98,18 @@ export function labelSystemHealth(value: string): string {
   return systemHealthLabels[value] ?? value;
 }
 
+const serviceStatusLabels: Record<string, string> = {
+  healthy: 'Работает',
+  warning: 'Есть предупреждение',
+  error: 'Недоступно',
+  not_configured: 'Не настроено',
+  info: 'Информация',
+};
+
+export function labelServiceStatus(status: string): string {
+  return serviceStatusLabels[status] ?? status;
+}
+
 export function labelUserCategory(category: string): string {
   return userCategoryLabels[category] ?? UNKNOWN_STATUS_LABEL;
 }
@@ -126,6 +138,10 @@ export function labelDeviceActive(isActive: boolean): string {
 
 export function labelAdminActive(isActive: boolean): string {
   return isActive ? 'Активен' : 'Неактивен';
+}
+
+export function labelPlanPurchaseAvailability(isActive: boolean): string {
+  return isActive ? 'Доступен для покупки' : 'Отключён';
 }
 
 export function labelTelegramConnected(isVerified: boolean): string {

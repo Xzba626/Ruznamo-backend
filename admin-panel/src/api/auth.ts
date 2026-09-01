@@ -30,3 +30,10 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
   tokenStore.clear();
 }
+
+export async function updateProfile(displayName: string) {
+  return apiRequest<import('./types').AdminProfile>('/api/v1/admin/auth/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ displayName }),
+  });
+}

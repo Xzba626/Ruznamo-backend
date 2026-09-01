@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InlineKeyboardMarkup } from './telegram.types';
+import { InlineKeyboardMarkup, ReplyKeyboardMarkup, TelegramReplyMarkup } from './telegram.types';
 
 @Injectable()
 export class TelegramBotApiService {
@@ -33,20 +33,27 @@ export class TelegramBotApiService {
     return json.ok ? (json.result ?? null) : null;
   }
 
-  sendMessage(chatId: number | bigint, text: string, replyMarkup?: InlineKeyboardMarkup): Promise<void> {
+  sendMessage(
+    chatId: number | bigint,
+    text: string,
+    replyMarkup?: TelegramReplyMarkup,
+    options?: { parseMode?: 'Markdown' | 'HTML' | 'none' },
+  ): Promise<void> {
+    const parseMode = options?.parseMode ?? 'Markdown';
     return this.call('sendMessage', {
       chat_id: Number(chatId),
       text,
-      parse_mode: 'Markdown',
+      ...(parseMode !== 'none' ? { parse_mode: parseMode } : {}),
       reply_markup: replyMarkup,
     }).then(() => undefined);
   }
 
-  sendPlainMessage(chatId: number | bigint, text: string): Promise<void> {
-    return this.call('sendMessage', {
-      chat_id: Number(chatId),
-      text,
-    }).then(() => undefined);
+  sendPlainMessage(
+    chatId: number | bigint,
+    text: string,
+    replyMarkup?: ReplyKeyboardMarkup,
+  ): Promise<void> {
+    return this.sendMessage(chatId, text, replyMarkup, { parseMode: 'none' });
   }
 
   sendPhoto(
@@ -97,5 +104,14 @@ export class TelegramBotApiService {
       message_id: messageId,
       reply_markup: replyMarkup,
     }).then(() => undefined);
+  }
+
+  async setMyCommands(): Promise<void> {
+    await this.call('setMyCommands', {
+      commands: [
+        { command: 'start', description: 'Главное меню / Менюи асосӣ' },
+        { command: 'help', description: 'Помощь / Кӯмак' },
+      ],
+    });
   }
 }

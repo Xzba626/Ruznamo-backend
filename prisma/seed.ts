@@ -26,6 +26,8 @@ const PERMISSIONS = [
   { code: 'dashboard:read', name: 'Read dashboard' },
   { code: 'config:read', name: 'Read configuration' },
   { code: 'config:update', name: 'Update configuration' },
+  { code: 'plans:read', name: 'Read subscription plans' },
+  { code: 'plans:update', name: 'Update subscription plans' },
   { code: 'audit:read', name: 'Read audit logs' },
 ] as const;
 
@@ -47,6 +49,8 @@ const ROLE_PERMISSIONS: Record<AdminRoleCode, string[]> = {
     'devices:read',
     'dashboard:read',
     'config:read',
+    'plans:read',
+    'plans:update',
     'audit:read',
   ],
   SUPPORT: [
@@ -145,14 +149,14 @@ async function seedStandardPlan() {
     update: {
       name: 'Pro',
       nameTj: 'Pro',
-      isActive: true,
+      isActive: false,
       sortOrder: 2,
     },
     create: {
       code: PlanCode.PRO,
       name: 'Pro',
       nameTj: 'Pro',
-      isActive: true,
+      isActive: false,
       sortOrder: 2,
     },
   });

@@ -119,4 +119,16 @@ describe('AdminAuthService', () => {
       'Invalid username or password',
     );
   });
+
+  it('updates display name', async () => {
+    prisma.adminUser.findUnique.mockResolvedValue(adminRecord);
+    prisma.adminUser.update.mockResolvedValue({ ...adminRecord, displayName: 'Новое имя' });
+
+    const result = await service.updateProfile('adm_1', { displayName: 'Новое имя' }, {});
+
+    expect(result.displayName).toBe('Новое имя');
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'admin.profile.updated' }),
+    );
+  });
 });

@@ -10,6 +10,7 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  setAdmin: (admin: AdminProfile) => void;
   hasPermission: (permission: string) => boolean;
 }
 
@@ -56,7 +57,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ admin, loading, login, logout, refreshProfile, hasPermission }),
+    () => ({
+      admin,
+      loading,
+      login,
+      logout,
+      refreshProfile,
+      setAdmin,
+      hasPermission,
+    }),
     [admin, loading, login, logout, refreshProfile, hasPermission],
   );
 

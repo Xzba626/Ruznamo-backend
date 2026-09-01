@@ -105,6 +105,11 @@ enum TelegramLanguage {
   RU
 }
 
+enum PaymentMethodType {
+  PHONE
+  CARD
+}
+
 // ---------------------------------------------------------------------------
 // Users & identity
 // ---------------------------------------------------------------------------
@@ -328,11 +333,17 @@ model Order {
   rejectionReason String?
   expiresAt       DateTime?     @db.Timestamptz(3)
   idempotencyKey  String?       @unique
+  paymentMethodId        String?
+  paymentMethodName      String?
+  paymentMethodType      PaymentMethodType?
+  paymentMethodValue     String?
+  paymentMethodRecipient String?
   createdAt       DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  plan       Plan       @relation(fields: [planId], references: [id], onDelete: Restrict)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan          Plan           @relation(fields: [planId], references: [id], onDelete: Restrict)
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
   approvedBy AdminUser? @relation("OrderApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
   receipts   Receipt[]
   license    License?
@@ -341,6 +352,33 @@ model Order {
   @@index([userId, status])
   @@index([status])
   @@index([createdAt])
+}
+
+model PaymentMethod {
+  id            String            @id @default(cuid())
+  name          String
+  type          PaymentMethodType
+  paymentValue  String
+  recipientName String
+  isActive      Boolean           @default(true)
+  sortOrder     Int               @default(0)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
+
+  orders Order[]
+
+  @@index([isActive, sortOrder])
+}
+
+model TelegramBotSession {
+  telegramUserId BigInt   @id
+  flow           String
+  step           String?
+  payload        Json?
+  expiresAt      DateTime @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([expiresAt])
 }
 
 model Receipt {

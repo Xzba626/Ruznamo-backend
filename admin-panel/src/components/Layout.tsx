@@ -12,6 +12,8 @@ const nav = [
   { to: '/orders', label: strings.nav.orders, permission: 'orders:read' },
   { to: '/telegram', label: strings.nav.telegram },
   { to: '/audit', label: strings.nav.audit, permission: 'audit:read' },
+  { to: '/analytics', label: strings.nav.analytics, permission: 'dashboard:read' },
+  { to: '/plans', label: strings.nav.plans, permission: 'plans:read' },
   { to: '/system', label: strings.nav.system },
   { to: '/profile', label: strings.nav.profile },
 ];

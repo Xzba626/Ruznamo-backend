@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { BillingPeriod, PlanCode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { isPurchasablePlanCode } from './plan-availability.util';
 
 export interface PlanPriceQuote {
   planId: string;
@@ -9,6 +10,14 @@ export interface PlanPriceQuote {
   billingPeriod: BillingPeriod;
   amount: string;
   currency: string;
+}
+
+export interface PurchasePlanView {
+  id: string;
+  code: PlanCode;
+  name: string;
+  nameTj: string | null;
+  prices: PlanPriceQuote[];
 }
 
 export interface PaymentDisplayConfig {
@@ -20,6 +29,49 @@ export interface PaymentDisplayConfig {
 @Injectable()
 export class PaymentConfigService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async listPurchaseAvailablePlans(): Promise<PurchasePlanView[]> {
+    const plans = await this.prisma.plan.findMany({
+      where: {
+        isActive: true,
+        code: { in: [...[PlanCode.STANDARD, PlanCode.PRO]] },
+      },
+      include: {
+        prices: { where: { isActive: true }, orderBy: { billingPeriod: 'asc' } },
+      },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return plans
+      .filter((plan) => plan.prices.length > 0)
+      .map((plan) => ({
+        id: plan.id,
+        code: plan.code,
+        name: plan.name,
+        nameTj: plan.nameTj,
+        prices: plan.prices.map((price) => ({
+          planId: plan.id,
+          planCode: plan.code,
+          planName: plan.name,
+          billingPeriod: price.billingPeriod,
+          amount: price.amount.toString(),
+          currency: price.currency,
+        })),
+      }));
+  }
+
+  async isPlanAvailableForPurchase(planCode: PlanCode): Promise<boolean> {
+    if (!isPurchasablePlanCode(planCode)) {
+      return false;
+    }
+
+    const plan = await this.prisma.plan.findUnique({
+      where: { code: planCode, isActive: true },
+      include: { prices: { where: { isActive: true }, take: 1 } },
+    });
+
+    return Boolean(plan && plan.prices.length > 0);
+  }
 
   async listActivePlanPrices(planCode: PlanCode): Promise<PlanPriceQuote[]> {
     const plan = await this.prisma.plan.findUnique({
@@ -43,6 +95,17 @@ export class PaymentConfigService {
     }));
   }
 
+  async getPlanPriceForPurchase(
+    planCode: PlanCode,
+    billingPeriod: BillingPeriod,
+  ): Promise<PlanPriceQuote> {
+    if (!(await this.isPlanAvailableForPurchase(planCode))) {
+      throw new BadRequestException('Plan is not available for purchase');
+    }
+
+    return this.getPlanPrice(planCode, billingPeriod);
+  }
+
   async getPlanPrice(planCode: PlanCode, billingPeriod: BillingPeriod): Promise<PlanPriceQuote> {
     const plan = await this.prisma.plan.findUnique({
       where: { code: planCode },
@@ -52,7 +115,7 @@ export class PaymentConfigService {
     });
 
     if (!plan || plan.prices.length === 0) {
-      throw new Error(`${planCode} plan price is not configured for ${billingPeriod}`);
+      throw new NotFoundException(`${planCode} plan price is not configured for ${billingPeriod}`);
     }
 
     const price = plan.prices[0];

@@ -34,11 +34,26 @@ export function fetchAudit(page = 1) {
 
 export function fetchSystemStatus() {
   return apiRequest<{
-    api: string;
-    database: string;
-    readiness: string;
-    version: string;
-    environment: string;
+    checkedAt: string;
+    backend: { status: string; version: string; buildId: string | null; environment: string };
+    database: { status: string; reachable: boolean; migrationCount: number; legacyState: string };
+    readiness: { status: string; legacyState: string };
+    android: {
+      status: string;
+      configuredLatestVersion: string | null;
+      minimumSupportedVersion: string | null;
+      forceUpdate: boolean;
+      note: string;
+      deviceVersionDistribution: Array<{ appVersion: string; count: number }>;
+    };
+    telegram: {
+      status: string;
+      enabled: boolean;
+      misconfigured: boolean;
+      botUsername: string | null;
+      webhook: { status: string; lastError: string | null; pendingUpdateCount?: number; url?: string | null };
+    };
+    adminPanel: { status: string; note: string };
   }>('/api/v1/admin/system/status');
 }
 
@@ -64,6 +79,30 @@ export function fetchOrders(page = 1, search = '') {
   return apiRequest<Paginated<Record<string, unknown>>>(`/api/v1/admin/orders?${q}`);
 }
 
+export function fetchOrder(orderId: string) {
+  return apiRequest<Record<string, unknown>>(`/api/v1/admin/orders/${orderId}`);
+}
+
+export function fetchAnalyticsOverview() {
+  return apiRequest<{
+    definitions: Record<string, string>;
+    totals: {
+      devices: number;
+      activeDevices: number;
+      trialUsers: number;
+      activeLicenses: number;
+      paidUsers: number;
+      users: number;
+    };
+    trends30d: { newInstallations: number; licenseActivations: number; orders: number };
+    ordersByStatus: Array<{ status: string; count: number }>;
+    planDistribution: Array<{ planCode: string; planName: string; count: number }>;
+    categoryDistribution: Array<{ category: string; count: number; percentage: number }>;
+    appVersionDistribution: Array<{ appVersion: string; count: number }>;
+    generatedAt: string;
+  }>('/api/v1/admin/analytics/overview');
+}
+
 export function approveOrder(orderId: string) {
   return apiRequest<{ orderId: string; status: string }>(`/api/v1/admin/orders/${orderId}/approve`, {
     method: 'PATCH',
@@ -82,5 +121,40 @@ export function revokeLicense(licenseId: string) {
   return apiRequest(`/api/v1/admin/licenses/${licenseId}/revoke`, {
     method: 'PATCH',
     body: JSON.stringify({}),
+  });
+}
+
+export type AdminPlan = {
+  id: string;
+  code: string;
+  name: string;
+  nameTj: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  licenseCount: number;
+  orderCount: number;
+  prices: Array<{
+    id: string;
+    billingPeriod: 'MONTHLY' | 'YEARLY';
+    amount: string;
+    currency: string;
+    isActive: boolean;
+  }>;
+};
+
+export function fetchPlans() {
+  return apiRequest<AdminPlan[]>('/api/v1/admin/plans');
+}
+
+export function updatePlan(
+  code: string,
+  body: {
+    isActive?: boolean;
+    prices?: Array<{ billingPeriod: 'MONTHLY' | 'YEARLY'; amount: string }>;
+  },
+) {
+  return apiRequest<AdminPlan[]>(`/api/v1/admin/plans/${code}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
   });
 }

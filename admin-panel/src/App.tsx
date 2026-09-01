@@ -10,6 +10,8 @@ import { DevicesPage } from './pages/DevicesPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { TelegramPage } from './pages/TelegramPage';
 import { AuditPage } from './pages/AuditPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
+import { PlansPage } from './pages/PlansPage';
 import { SystemPage } from './pages/SystemPage';
 import { ProfilePage } from './pages/ProfilePage';
 
@@ -33,6 +35,8 @@ export function App() {
             <Route path="orders" element={<OrdersPage />} />
             <Route path="telegram" element={<TelegramPage />} />
             <Route path="audit" element={<AuditPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="plans" element={<PlansPage />} />
             <Route path="system" element={<SystemPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>

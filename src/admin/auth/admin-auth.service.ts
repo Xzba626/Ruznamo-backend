@@ -196,6 +196,55 @@ export class AdminAuthService {
     return this.toProfile(admin, roles, permissions);
   }
 
+  async updateProfile(
+    adminId: string,
+    input: { displayName?: string },
+    meta: RequestMeta,
+  ): Promise<AdminProfile> {
+    if (input.displayName !== undefined && input.displayName.trim().length === 0) {
+      throw new BadRequestException('Display name cannot be empty');
+    }
+
+    const admin = await this.prisma.adminUser.findUnique({
+      where: { id: adminId },
+      include: this.adminInclude(),
+    });
+
+    if (!admin || !admin.isActive) {
+      throw new UnauthorizedException('Admin account not found');
+    }
+
+    const data: { displayName?: string } = {};
+    if (input.displayName !== undefined) {
+      data.displayName = input.displayName.trim();
+    }
+
+    if (Object.keys(data).length === 0) {
+      const { roles, permissions } = this.extractRolesAndPermissions(admin);
+      return this.toProfile(admin, roles, permissions);
+    }
+
+    const updated = await this.prisma.adminUser.update({
+      where: { id: adminId },
+      data,
+      include: this.adminInclude(),
+    });
+
+    await this.auditService.log({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminId,
+      action: 'admin.profile.updated',
+      entityType: 'AdminUser',
+      entityId: adminId,
+      metadata: { fields: Object.keys(data) },
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    const { roles, permissions } = this.extractRolesAndPermissions(updated);
+    return this.toProfile(updated, roles, permissions);
+  }
+
   async changePassword(
     adminId: string,
     currentPassword: string,

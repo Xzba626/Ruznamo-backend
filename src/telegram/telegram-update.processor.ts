@@ -14,23 +14,35 @@ import {
   extractAdminLinkCodeFromStart,
   normalizeAdminLinkCode,
 } from '../admin/telegram/admin-link-code.util';
+import { PaymentMethodService } from '../payments/payment-method.service';
 import { OrderService } from '../payments/order.service';
 import { PaymentApprovalService } from '../payments/payment-approval.service';
 import { PaymentConfigService } from '../payments/payment-config.service';
+import type { PurchasePlanView } from '../payments/payment-config.service';
 import { ResolvedTelegramUser, TelegramAccountService } from '../payments/telegram-account.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
 import { billingPeriodDays, getTelegramI18n, LICENSE_DURATION_DAYS } from './i18n';
 import { TelegramSupportRelayService } from './telegram-support-relay.service';
+import { TelegramAdminPaymentMethodsService } from './telegram-admin-payment-methods.service';
+import { maskLicenseKeyPrefix, resolveOrderTermDays } from './license-term.util';
+import {
+  adminMainReplyKeyboard,
+  inlineMainMenuButton,
+  isReplyMenuText,
+  userMainReplyKeyboard,
+} from './telegram-markup';
 import {
   CB,
   formatAmount,
   formatDateLocalized,
   parseDurationCallback,
   parsePaymentCallback,
+  parsePaymentMethodCallback,
+  parsePlanCallback,
   TG_ADMIN,
 } from './telegram.messages';
-import { InlineKeyboardMarkup, TelegramUpdate } from './telegram.types';
+import { InlineKeyboardMarkup, TelegramReplyMarkup, TelegramUpdate } from './telegram.types';
 
 @Injectable()
 export class TelegramUpdateProcessor {
@@ -44,6 +56,8 @@ export class TelegramUpdateProcessor {
     private readonly orderService: OrderService,
     private readonly paymentApprovalService: PaymentApprovalService,
     private readonly paymentConfigService: PaymentConfigService,
+    private readonly paymentMethodService: PaymentMethodService,
+    private readonly adminPaymentMethodsService: TelegramAdminPaymentMethodsService,
     private readonly adminTelegramService: AdminTelegramService,
     private readonly supportRelay: TelegramSupportRelayService,
     private readonly auditService: AuditService,
@@ -85,6 +99,31 @@ export class TelegramUpdateProcessor {
 
   private langCode(user: ResolvedTelegramUser): 'TJ' | 'RU' {
     return user.language === TelegramLanguage.RU ? 'RU' : 'TJ';
+  }
+
+  private planDisplayName(
+    plan: Pick<PurchasePlanView, 'name' | 'nameTj'>,
+    resolved: ResolvedTelegramUser,
+  ): string {
+    if (resolved.language === TelegramLanguage.TJ && plan.nameTj) {
+      return plan.nameTj;
+    }
+    return plan.name;
+  }
+
+  private async sendUserMessage(
+    chatId: bigint,
+    resolved: ResolvedTelegramUser,
+    text: string,
+    inline?: InlineKeyboardMarkup,
+  ): Promise<void> {
+    const reply = userMainReplyKeyboard(this.i18n(resolved));
+    if (inline) {
+      await this.botApi.sendMessage(chatId, text, inline);
+      await this.botApi.sendPlainMessage(chatId, this.i18n(resolved).replyMainMenu, reply);
+      return;
+    }
+    await this.botApi.sendPlainMessage(chatId, text, reply);
   }
 
   private async handleMessage(update: TelegramUpdate): Promise<void> {
@@ -141,7 +180,7 @@ export class TelegramUpdateProcessor {
         firstName: from.first_name,
       });
       const msgs = this.i18n(resolved);
-      await this.botApi.sendMessage(chatId, msgs.help, this.helpKeyboard(resolved));
+      await this.sendUserMessage(chatId, resolved, msgs.help);
       return;
     }
 
@@ -157,6 +196,10 @@ export class TelegramUpdateProcessor {
     }
 
     if (this.isAdmin(telegramId)) {
+      const handled = await this.adminPaymentMethodsService.handleText(telegramId, chatId, text);
+      if (handled) {
+        return;
+      }
       return;
     }
 
@@ -169,9 +212,32 @@ export class TelegramUpdateProcessor {
 
     const msgs = this.i18n(resolved);
 
+    if (isReplyMenuText(text, msgs)) {
+      if (text === msgs.replyBuyLicense) {
+        await this.showBuyFlow(resolved, chatId);
+        return;
+      }
+      if (text === msgs.replyMyLicenses) {
+        await this.showMyLicenses(resolved, chatId);
+        return;
+      }
+      if (text === msgs.replySupport) {
+        await this.sendUserMessage(chatId, resolved, msgs.help);
+        return;
+      }
+      if (text === msgs.replyLanguage) {
+        await this.botApi.sendMessage(chatId, msgs.languageSelect, this.languageKeyboard());
+        return;
+      }
+      if (text === msgs.replyMainMenu) {
+        await this.sendMainMenu(resolved, chatId, from.first_name);
+        return;
+      }
+    }
+
     const awaitingReceipt = await this.orderService.findAwaitingReceiptOrder(resolved.userId);
     if (awaitingReceipt) {
-      await this.botApi.sendMessage(chatId, msgs.askReceipt);
+      await this.sendUserMessage(chatId, resolved, msgs.askReceipt);
       return;
     }
 
@@ -202,9 +268,9 @@ export class TelegramUpdateProcessor {
     });
 
     if (relayResult === 'sent') {
-      await this.botApi.sendMessage(chatId, msgs.supportRelayed);
+      await this.sendUserMessage(chatId, resolved, msgs.supportRelayed);
     } else {
-      await this.botApi.sendMessage(chatId, msgs.supportRelayUnavailable);
+      await this.sendUserMessage(chatId, resolved, msgs.supportRelayUnavailable);
     }
   }
 
@@ -281,8 +347,8 @@ export class TelegramUpdateProcessor {
       return;
     }
 
-    await this.botApi.sendMessage(chatId, msgs.receiptReceived);
     await this.notifyAdminsPaymentReview(result.order.id);
+    await this.sendUserMessage(chatId, resolved, msgs.receiptReceived);
   }
 
   private async tryAdminPairing(
@@ -346,7 +412,7 @@ export class TelegramUpdateProcessor {
     });
 
     if (this.isAdmin(telegramId)) {
-      await this.botApi.sendMessage(chatId, TG_ADMIN.adminWelcome);
+      await this.botApi.sendPlainMessage(chatId, TG_ADMIN.adminWelcome, adminMainReplyKeyboard());
       return;
     }
 
@@ -371,20 +437,72 @@ export class TelegramUpdateProcessor {
         status: LicenseStatus.ACTIVE,
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
-      include: { plan: true },
+      include: { plan: true, order: true },
       orderBy: { expiresAt: 'desc' },
     });
 
     if (activeLicense?.expiresAt) {
-      await this.botApi.sendMessage(
+      await this.sendUserMessage(
         chatId,
+        resolved,
         msgs.welcomeActiveLicense(formatDateLocalized(activeLicense.expiresAt, this.langCode(resolved))),
-        this.activeLicenseKeyboard(resolved),
       );
       return;
     }
 
-    await this.botApi.sendMessage(chatId, msgs.welcomeNoLicense(firstName), await this.planSelectionKeyboard(resolved));
+    await this.showBuyFlow(resolved, chatId, firstName);
+  }
+
+  private async showBuyFlow(
+    resolved: ResolvedTelegramUser,
+    chatId: bigint,
+    firstName?: string,
+  ): Promise<void> {
+    const msgs = this.i18n(resolved);
+    const plans = await this.paymentConfigService.listPurchaseAvailablePlans();
+
+    if (plans.length === 0) {
+      await this.sendUserMessage(chatId, resolved, msgs.purchaseUnavailable);
+      return;
+    }
+
+    await this.sendUserMessage(
+      chatId,
+      resolved,
+      msgs.welcomeNoLicense(firstName),
+      await this.planSelectionKeyboard(resolved, plans),
+    );
+  }
+
+  private async showMyLicenses(resolved: ResolvedTelegramUser, chatId: bigint): Promise<void> {
+    const msgs = this.i18n(resolved);
+    const license = await this.prisma.license.findFirst({
+      where: {
+        userId: resolved.userId,
+        status: LicenseStatus.ACTIVE,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      include: { plan: true, order: true },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    if (!license) {
+      await this.sendUserMessage(chatId, resolved, msgs.noActiveLicense);
+      return;
+    }
+
+    const billingPeriod = license.order?.billingPeriod ?? BillingPeriod.MONTHLY;
+    const days = resolveOrderTermDays(billingPeriod);
+    await this.sendUserMessage(
+      chatId,
+      resolved,
+      `${msgs.myLicensesTitle}\n\n${msgs.subscriptionInfo(
+        license.plan.name,
+        days,
+        license.expiresAt ? formatDateLocalized(license.expiresAt, this.langCode(resolved)) : '—',
+        maskLicenseKeyPrefix(license.keyPrefix),
+      )}`,
+    );
   }
 
   private async handleCallback(update: TelegramUpdate): Promise<void> {
@@ -403,6 +521,16 @@ export class TelegramUpdateProcessor {
         chatId,
         query.message?.message_id,
       );
+      return;
+    }
+
+    const adminHandled = await this.adminPaymentMethodsService.handleCallback(
+      telegramId,
+      chatId,
+      data,
+      query.id,
+    );
+    if (adminHandled) {
       return;
     }
 
@@ -432,21 +560,56 @@ export class TelegramUpdateProcessor {
 
     const msgs = this.i18n(resolved);
 
-    if (data === CB.PLAN_STANDARD) {
-      await this.botApi.sendMessage(
-        chatId,
-        msgs.chooseDuration(msgs.planStandardLabel),
-        await this.durationSelectionKeyboard(resolved, PlanCode.STANDARD),
-      );
-      await this.botApi.answerCallbackQuery(query.id);
+    const paymentMethodSelection = parsePaymentMethodCallback(data);
+    if (paymentMethodSelection) {
+      try {
+        const method = await this.paymentMethodService.getActiveById(paymentMethodSelection.methodId);
+        const order = await this.orderService.getCurrentPendingOrder(resolved.userId);
+        if (!order) {
+          await this.botApi.answerCallbackQuery(query.id, msgs.noAwaitingOrder);
+          return;
+        }
+        await this.orderService.attachPaymentMethodAndAwaitReceipt(order.id, resolved.userId, method);
+        const days = resolveOrderTermDays(order.billingPeriod);
+        const lang = this.langCode(resolved);
+        const text = msgs.paymentInstructions(
+          method.name,
+          order.plan.name,
+          formatAmount(order.amount.toString(), order.currency, lang),
+          days,
+          method.paymentValue,
+          method.recipientName,
+        );
+        await this.botApi.answerCallbackQuery(query.id);
+        await this.sendUserMessage(chatId, resolved, text, inlineMainMenuButton(msgs));
+      } catch {
+        await this.botApi.answerCallbackQuery(query.id, msgs.durationUnavailable);
+      }
       return;
     }
 
-    if (data === CB.PLAN_PRO) {
+    if (data === CB.ACTION_MAIN_MENU) {
+      await this.botApi.answerCallbackQuery(query.id);
+      await this.sendMainMenu(resolved, chatId, query.from.first_name);
+      return;
+    }
+
+    const planCode = parsePlanCallback(data);
+    if (planCode) {
+      const available = await this.paymentConfigService.isPlanAvailableForPurchase(planCode);
+      if (!available) {
+        await this.botApi.answerCallbackQuery(query.id, msgs.planUnavailable);
+        await this.sendUserMessage(chatId, resolved, msgs.planUnavailable);
+        return;
+      }
+
+      const plans = await this.paymentConfigService.listPurchaseAvailablePlans();
+      const plan = plans.find((entry) => entry.code === planCode);
+      const planName = plan ? this.planDisplayName(plan, resolved) : planCode;
       await this.botApi.sendMessage(
         chatId,
-        msgs.chooseDuration(msgs.planProLabel),
-        await this.durationSelectionKeyboard(resolved, PlanCode.PRO),
+        msgs.chooseDuration(planName),
+        await this.durationSelectionKeyboard(resolved, planCode),
       );
       await this.botApi.answerCallbackQuery(query.id);
       return;
@@ -455,14 +618,22 @@ export class TelegramUpdateProcessor {
     const durationSelection = parseDurationCallback(data);
     if (durationSelection) {
       try {
+        const available = await this.paymentConfigService.isPlanAvailableForPurchase(
+          durationSelection.planCode,
+        );
+        if (!available) {
+          await this.sendUserMessage(chatId, resolved, msgs.planUnavailable);
+          await this.botApi.answerCallbackQuery(query.id, msgs.planUnavailable);
+          return;
+        }
         await this.startOrderFlow(
           resolved,
           chatId,
-          durationSelection.planCode as PlanCode,
+          durationSelection.planCode,
           durationSelection.billingPeriod as BillingPeriod,
         );
       } catch {
-        await this.botApi.sendMessage(chatId, msgs.durationUnavailable);
+        await this.sendUserMessage(chatId, resolved, msgs.planUnavailable);
       }
       await this.botApi.answerCallbackQuery(query.id);
       return;
@@ -475,7 +646,7 @@ export class TelegramUpdateProcessor {
     }
 
     if (data === CB.ACTION_RETRY || data === CB.ACTION_GET_KEY) {
-      await this.botApi.sendMessage(chatId, msgs.welcomeNoLicense(), await this.planSelectionKeyboard(resolved));
+      await this.showBuyFlow(resolved, chatId);
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
@@ -483,46 +654,33 @@ export class TelegramUpdateProcessor {
     if (data === CB.ACTION_MY_KEY) {
       const stored = await this.paymentApprovalService.getStoredLicenseKeyForUser(resolved.userId);
       if (stored) {
-        const days = 30;
-        await this.botApi.sendMessage(
+        const billingPeriod = stored.billingPeriod ?? BillingPeriod.MONTHLY;
+        const days = resolveOrderTermDays(billingPeriod);
+        await this.sendUserMessage(
           chatId,
+          resolved,
           msgs.paymentApproved(
-            stored.key,
+            stored.planName ?? 'Standard',
             days,
             formatDateLocalized(stored.expiresAt ?? new Date(), this.langCode(resolved)),
+            stored.key,
           ),
         );
       } else {
-        await this.botApi.sendMessage(chatId, msgs.help, this.helpKeyboard(resolved));
+        await this.sendUserMessage(chatId, resolved, msgs.noActiveLicense);
       }
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
 
     if (data === CB.ACTION_MY_SUB) {
-      const license = await this.prisma.license.findFirst({
-        where: { userId: resolved.userId, status: LicenseStatus.ACTIVE },
-        include: { plan: true },
-        orderBy: { expiresAt: 'desc' },
-      });
-      if (license) {
-        await this.botApi.sendMessage(
-          chatId,
-          msgs.subscriptionInfo(
-            license.plan.name,
-            license.expiresAt ? formatDateLocalized(license.expiresAt, this.langCode(resolved)) : '—',
-            license.keyPrefix,
-          ),
-        );
-      } else {
-        await this.botApi.sendMessage(chatId, msgs.welcomeNoLicense(), await this.planSelectionKeyboard(resolved));
-      }
+      await this.showMyLicenses(resolved, chatId);
       await this.botApi.answerCallbackQuery(query.id);
       return;
     }
 
     if (data === CB.ACTION_HELP) {
-      await this.botApi.sendMessage(chatId, msgs.help, this.helpKeyboard(resolved));
+      await this.sendUserMessage(chatId, resolved, msgs.help);
       await this.botApi.answerCallbackQuery(query.id);
     }
   }
@@ -533,24 +691,55 @@ export class TelegramUpdateProcessor {
     planCode: PlanCode,
     billingPeriod: BillingPeriod,
   ): Promise<void> {
-    const quote = await this.paymentConfigService.getPlanPrice(planCode, billingPeriod);
-    const payment = await this.paymentConfigService.getPaymentDisplayConfig();
+    const quote = await this.paymentConfigService.getPlanPriceForPurchase(planCode, billingPeriod);
     const days = billingPeriodDays(billingPeriod);
     const msgs = this.i18n(resolved);
     const lang = this.langCode(resolved);
 
     await this.orderService.startPaymentFlow(resolved.userId, quote.planId, billingPeriod);
 
-    const text = msgs.paymentInstructions(
+    const summary = msgs.paymentSummary(
       quote.planName,
-      formatAmount(quote.amount, quote.currency, lang),
       days,
-      payment.cardNumber ?? '—',
-      payment.recipientName ?? '—',
-      payment.instructions ?? '',
+      formatAmount(quote.amount, quote.currency, lang),
     );
 
-    await this.botApi.sendMessage(chatId, text);
+    const methods = await this.paymentMethodService.listActive();
+    if (methods.length === 0) {
+      const payment = await this.paymentConfigService.getPaymentDisplayConfig();
+      await this.orderService.attachPaymentMethodAndAwaitReceipt(
+        (await this.orderService.getCurrentPendingOrder(resolved.userId))!.id,
+        resolved.userId,
+        {
+          name: 'Перевод',
+          type: 'CARD' as import('@prisma/client').PaymentMethodType,
+          paymentValue: payment.cardNumber ?? '—',
+          recipientName: payment.recipientName ?? '—',
+        },
+      );
+      const text = msgs.paymentInstructions(
+        'Перевод',
+        quote.planName,
+        formatAmount(quote.amount, quote.currency, lang),
+        days,
+        payment.cardNumber ?? '—',
+        payment.recipientName ?? '—',
+      );
+      await this.sendUserMessage(chatId, resolved, `${summary}\n\n${text}`, inlineMainMenuButton(msgs));
+      return;
+    }
+
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        ...methods.map((method) => [
+          { text: method.name, callback_data: CB.paymentMethod(method.id) },
+        ]),
+        [{ text: msgs.menuBack, callback_data: CB.ACTION_RETRY }],
+        [{ text: msgs.replyMainMenu, callback_data: CB.ACTION_MAIN_MENU }],
+      ],
+    };
+
+    await this.sendUserMessage(chatId, resolved, `${summary}\n\n${msgs.choosePaymentMethod}`, keyboard);
   }
 
   private async notifyAdminsPaymentReview(orderId: string): Promise<void> {
@@ -573,6 +762,7 @@ export class TelegramUpdateProcessor {
       `Тариф: ${order.plan.name}\n` +
       `Срок: ${days} дней\n` +
       `Сумма: ${order.amount} ${order.currency}\n` +
+      `Способ оплаты: ${order.paymentMethodName ?? '—'}\n` +
       `Order: \`${order.id}\`\n` +
       `Время: ${order.createdAt.toISOString()}`;
 
@@ -646,14 +836,29 @@ export class TelegramUpdateProcessor {
         const days = billingPeriodDays(billingPeriod);
 
         if (userChatId) {
+          const resolvedUser = order?.user.telegramAccount
+            ? {
+                userId: order.userId,
+                telegramAccountId: order.user.telegramAccount.id,
+                language: order.user.telegramAccount.language,
+              }
+            : null;
           await this.botApi.sendMessage(
             userChatId,
             userMsgs.paymentApproved(
-              result.licenseKey,
+              order?.plan.name ?? 'Standard',
               days,
               formatDateLocalized(result.expiresAt, userLang === TelegramLanguage.RU ? 'RU' : 'TJ'),
+              result.licenseKey,
             ),
           );
+          if (resolvedUser?.language) {
+            await this.botApi.sendPlainMessage(
+              userChatId,
+              userMsgs.replyMainMenu,
+              userMainReplyKeyboard(userMsgs),
+            );
+          }
           await this.auditService.log({
             actorType: AuditActorType.TELEGRAM_BOT,
             actorId: order?.userId,
@@ -681,8 +886,10 @@ export class TelegramUpdateProcessor {
       const userChatId = order?.user.telegramAccount?.chatId ?? order?.user.telegramAccount?.telegramId;
       if (userChatId && !result.alreadyProcessed) {
         await this.botApi.sendMessage(userChatId, userMsgs.paymentRejected, {
-          inline_keyboard: [[{ text: userMsgs.menuRetry, callback_data: CB.ACTION_RETRY }]],
+          inline_keyboard: [[{ text: userMsgs.replyMainMenu, callback_data: CB.ACTION_MAIN_MENU }]],
         });
+        const reply = userMainReplyKeyboard(userMsgs);
+        await this.botApi.sendPlainMessage(userChatId, userMsgs.replyMainMenu, reply);
       }
       await this.botApi.answerCallbackQuery(
         callbackQueryId,
@@ -712,19 +919,26 @@ export class TelegramUpdateProcessor {
     };
   }
 
-  private async planSelectionKeyboard(resolved: ResolvedTelegramUser): Promise<InlineKeyboardMarkup> {
+  private async planSelectionKeyboard(
+    resolved: ResolvedTelegramUser,
+    plans?: PurchasePlanView[],
+  ): Promise<InlineKeyboardMarkup> {
     const msgs = this.i18n(resolved);
+    const availablePlans = plans ?? (await this.paymentConfigService.listPurchaseAvailablePlans());
 
-    return {
-      inline_keyboard: [
-        [{ text: msgs.planStandardLabel, callback_data: CB.PLAN_STANDARD }],
-        [{ text: msgs.planProLabel, callback_data: CB.PLAN_PRO }],
-        [
-          { text: msgs.menuLanguage, callback_data: CB.ACTION_LANGUAGE },
-          { text: msgs.menuHelp, callback_data: CB.ACTION_HELP },
-        ],
-      ],
-    };
+    const rows: InlineKeyboardMarkup['inline_keyboard'] = availablePlans.map((plan) => [
+      {
+        text: this.planDisplayName(plan, resolved),
+        callback_data: CB.plan(plan.code),
+      },
+    ]);
+
+    rows.push([
+      { text: msgs.menuLanguage, callback_data: CB.ACTION_LANGUAGE },
+      { text: msgs.menuHelp, callback_data: CB.ACTION_HELP },
+    ]);
+
+    return { inline_keyboard: rows };
   }
 
   private async durationSelectionKeyboard(

@@ -40,6 +40,37 @@ describe('AdminOrdersService', () => {
     expect(result.meta.total).toBe(0);
   });
 
+  it('serializes telegram BigInt in list items', async () => {
+    prisma.order.findMany.mockResolvedValue([
+      {
+        id: 'ord_1',
+        status: 'PENDING',
+        billingPeriod: 'MONTHLY',
+        amount: { toString: () => '15.00' },
+        currency: 'TJS',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        user: {
+          id: 'usr_1',
+          displayName: 'Buyer',
+          email: null,
+          telegramAccount: {
+            telegramId: BigInt('999888777'),
+            username: 'buyer',
+            firstName: 'Buyer',
+          },
+        },
+        plan: { code: 'STANDARD', name: 'Standard' },
+        receipts: [{ id: 'rcpt_1', status: 'PENDING' }],
+        license: null,
+      },
+    ]);
+    prisma.order.count.mockResolvedValue(1);
+
+    const result = await service.list({ page: 1, limit: 20 });
+
+    expect(result.items[0].user?.telegramAccount?.telegramId).toBe('999888777');
+  });
+
   it('approve delegates to PaymentApprovalService without exposing license key', async () => {
     paymentApprovalService.approve.mockResolvedValue({
       orderId: 'ord_1',

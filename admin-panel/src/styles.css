@@ -205,6 +205,111 @@ th, td {
   min-width: 12rem;
 }
 
+.system-cards .service-card {
+  border-left: 4px solid #9ca3af;
+}
+
+.service-card.status-healthy { border-left-color: #16a34a; }
+.service-card.status-warning { border-left-color: #d97706; }
+.service-card.status-error { border-left-color: #dc2626; }
+.service-card.status-neutral { border-left-color: #6b7280; }
+
+.card-title { font-weight: 600; margin-bottom: 0.25rem; }
+.card-status { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+.card-meta { font-size: 0.875rem; color: #4b5563; }
+.card-meta.warn { color: #b45309; }
+
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.definition-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.order-detail .detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.plan-cards {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.plan-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.plan-card h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.plan-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.plan-meta dt {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.plan-meta dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.plan-price-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.plan-price-form label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.plan-status-list {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge.muted {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
 @media (max-width: 768px) {
   .app-shell {
     grid-template-columns: 1fr;

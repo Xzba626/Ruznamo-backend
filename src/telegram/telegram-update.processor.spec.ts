@@ -1,4 +1,4 @@
-import { AuditActorType } from '@prisma/client';
+import { AuditActorType, TelegramLanguage } from '@prisma/client';
 import { TelegramUpdateProcessor } from './telegram-update.processor';
 
 describe('TelegramUpdateProcessor pairing and relay', () => {
@@ -17,11 +17,12 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
 
   const botApi = {
     sendMessage: jest.fn(),
+    sendPlainMessage: jest.fn(),
     answerCallbackQuery: jest.fn(),
   };
 
   const telegramAccountService = {
-    resolveTelegramUser: jest.fn().mockResolvedValue({ userId: 'usr_1' }),
+    resolveTelegramUser: jest.fn().mockResolvedValue({ userId: 'usr_1', language: TelegramLanguage.TJ }),
   };
 
   const orderService = {
@@ -46,7 +47,16 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     telegramAccountService as never,
     orderService as never,
     {} as never,
-    {} as never,
+    {
+      listPurchaseAvailablePlans: jest.fn().mockResolvedValue([
+        { id: 'plan_1', code: 'STANDARD', name: 'Standard', nameTj: 'Стандарт', prices: [] },
+      ]),
+      isPlanAvailableForPurchase: jest.fn().mockResolvedValue(true),
+      listActivePlanPrices: jest.fn().mockResolvedValue([]),
+      getPlanPriceForPurchase: jest.fn(),
+    } as never,
+    { listActive: jest.fn().mockResolvedValue([]) } as never,
+    { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
     adminTelegramService as never,
     supportRelay as never,
     auditService as never,
@@ -88,7 +98,7 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     expect(supportRelay.relayFreeText).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Салом, ман савол дорам' }),
     );
-    expect(botApi.sendMessage).toHaveBeenCalled();
+    expect(botApi.sendPlainMessage).toHaveBeenCalled();
   });
 
   it('does not relay /start user flow as free text', async () => {
@@ -141,6 +151,7 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
   const botApi = {
     answerCallbackQuery: jest.fn(),
     sendMessage: jest.fn(),
+    sendPlainMessage: jest.fn(),
   };
 
   const paymentApprovalService = {
@@ -159,6 +170,8 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     { getOrderForAdminReview: jest.fn() } as never,
     paymentApprovalService as never,
     {} as never,
+    { listActive: jest.fn().mockResolvedValue([]) } as never,
+    { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
     { tryCompleteLinkFromBot: jest.fn() } as never,
     { relayFreeText: jest.fn() } as never,
     auditService as never,

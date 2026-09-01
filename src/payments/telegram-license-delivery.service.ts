@@ -22,6 +22,7 @@ export class TelegramLicenseDeliveryService {
     licenseKey: string;
     expiresAt: Date;
     billingPeriod?: 'MONTHLY' | 'YEARLY';
+    planName?: string;
   }): Promise<boolean> {
     const token = this.configService.get<string>('telegram.botToken', '');
     if (!token) {
@@ -43,10 +44,12 @@ export class TelegramLicenseDeliveryService {
     const msgs = getTelegramI18n(account?.language);
     const lang = account?.language === 'RU' ? 'RU' : 'TJ';
     const days = billingPeriodDays(input.billingPeriod ?? 'MONTHLY');
+    const planName = input.planName ?? 'Standard';
     const text = msgs.paymentApproved(
-      input.licenseKey,
+      planName,
       days,
       formatDateLocalized(input.expiresAt, lang),
+      input.licenseKey,
     );
 
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {

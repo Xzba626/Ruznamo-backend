@@ -8,8 +8,10 @@ export const ru: TelegramI18n = {
   welcomeNoLicense: (name) =>
     `Здравствуйте${name ? `, ${name}` : ''}!\n\nДля полного доступа к приложению нужен активный лицензионный ключ.`,
   welcomeActiveLicense: (expiresAt) =>
-    `Здравствуйте!\n\nВаша подписка активна до: ${expiresAt}\n\nВы можете снова посмотреть ключ или данные подписки.`,
+    `Здравствуйте!\n\nВаша подписка активна до: ${expiresAt}`,
   choosePlan: 'Выберите тариф:',
+  planUnavailable: 'Этот тариф сейчас недоступен для покупки.',
+  purchaseUnavailable: 'Сейчас покупка лицензий временно недоступна.',
   planStandardLabel: 'Standard',
   planProLabel: 'Pro',
   chooseDuration: (planName) => `Выберите срок для ${planName}:`,
@@ -18,30 +20,40 @@ export const ru: TelegramI18n = {
   durationUnavailable: 'Этот срок сейчас недоступен. Выберите другой.',
   planStandard: (price, days) => `Standard\n${days} дней — ${price}`,
   planPro: (price, days) => `Pro\n${days} дней — ${price}`,
-  paymentInstructions: (planName, amount, days, card, recipient, extra) =>
-    `Оплата тарифа ${planName}\n\nСрок: ${days} дней\nСумма: ${amount}\n\nРеквизиты:\n\`${card}\`\n\nПолучатель:\n${recipient}\n\n${extra}\n\nОплатите указанную сумму и отправьте сюда фото или файл чека.`,
+  paymentSummary: (planName, days, amount) =>
+    `Тариф: ${planName}\nСрок: ${days} дней\nСумма: ${amount}`,
+  choosePaymentMethod: 'Выберите способ оплаты:',
+  paymentInstructions: (methodName, planName, amount, days, paymentValue, recipient) =>
+    `Способ оплаты: ${methodName}\n\nТариф: ${planName}\nСрок: ${days} дней\nСумма: ${amount}\n\nРеквизиты:\n\`${paymentValue}\`\n\nПолучатель:\n${recipient}\n\nПосле оплаты отправьте сюда фото или PDF чека.`,
   askReceipt: 'Пожалуйста, отправьте фото или файл подтверждения оплаты.',
-  receiptReceived:
-    '✅ Чек получен.\n\nОжидайте проверки администратором.',
+  receiptReceived: '✅ Чек получен.\n\nОжидайте проверки администратором.',
   noAwaitingOrder: 'Сначала выберите тариф, затем отправьте чек об оплате.',
-  paymentApproved: (key, days, expiresAt) =>
-    `✅ Ваша оплата подтверждена.\n\nВаш лицензионный ключ:\n\`${key}\`\n\nСрок действия: ${days} дней (до ${expiresAt})\n\nВведите этот ключ в приложении Ruznamo.`,
+  paymentApproved: (planName, days, expiresAt, key) =>
+    `✅ Оплата подтверждена\n\nТариф: ${planName}\nСрок: ${days} дней\nДействует до: ${expiresAt}\n\nВаш лицензионный ключ:\n\`${key}\`\n\nВведите этот ключ в приложении Ruznamo.`,
   paymentRejected:
     '❌ Платёж не подтверждён.\n\nПожалуйста, проверьте оплату и отправьте новый чек или выберите тариф заново.',
-  subscriptionInfo: (plan, expiresAt, prefix) =>
-    `📋 Ваша подписка\n\nТариф: ${plan}\nДействует до: ${expiresAt}\nПрефикс ключа: ${prefix}...`,
+  myLicensesTitle: '🔑 Мои лицензии',
+  subscriptionInfo: (plan, days, expiresAt, maskedKey) =>
+    `Тариф: ${plan}\nСрок: ${days} дней\nДействует до: ${expiresAt}\nКлюч: ${maskedKey}`,
+  noActiveLicense: 'У вас нет активной лицензии. Нажмите «Купить лицензию».',
   help:
-    '❓ Помощь\n\n1. Выберите тариф\n2. Оплатите\n3. Отправьте чек\n4. Активируйте ключ в приложении',
+    '❓ Помощь\n\n1. Выберите тариф\n2. Выберите способ оплаты\n3. Оплатите\n4. Отправьте чек\n5. Активируйте ключ в приложении',
   supportRelayed: 'Ваше сообщение передано администратору. Пожалуйста, ожидайте.',
   supportRelayUnavailable: 'Поддержка временно недоступна. Попробуйте позже.',
   supportAttachmentRelayed: 'Ваш файл передан администратору. Пожалуйста, ожидайте.',
   unsupportedAttachment: 'Этот тип файла не поддерживается. Отправьте фото или PDF чека.',
+  replyBuyLicense: '🛒 Купить лицензию',
+  replyMyLicenses: '🔑 Мои лицензии',
+  replySupport: '💬 Поддержка',
+  replyLanguage: '🌐 Язык',
+  replyMainMenu: '🏠 Главное меню',
   menuLanguage: '🌐 Язык',
   menuMyKey: '🔑 Мой ключ',
   menuMySub: '📋 Моя подписка',
   menuHelp: '❓ Помощь',
   menuGetKey: '🔑 Получить ключ',
   menuRetry: '🔄 Попробовать снова',
+  menuBack: '↩️ Назад',
   adminUnauthorized: 'Нет доступа.',
   adminApprovedDuplicate: 'Эта заявка уже подтверждена.',
   adminRejectedDuplicate: 'Эта заявка уже отклонена.',

@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -18,6 +19,7 @@ import { AdminAuthService } from './admin-auth.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { AdminLogoutDto, AdminRefreshDto } from './dto/admin-refresh.dto';
 import { AdminChangePasswordDto } from './dto/admin-change-password.dto';
+import { AdminUpdateProfileDto } from './dto/admin-update-profile.dto';
 import { AdminJwtAuthGuard } from '../guards/admin-jwt-auth.guard';
 
 @ApiTags('admin-auth')
@@ -62,6 +64,17 @@ export class AdminAuthController {
   @ApiOperation({ summary: 'Current admin profile' })
   async me(@CurrentAdmin() admin: AdminJwtPayload) {
     return this.adminAuthService.getProfile(admin.sub);
+  }
+
+  @Patch('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update current admin profile (display name)' })
+  async updateMe(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Body() body: AdminUpdateProfileDto,
+    @Req() req: Request,
+  ) {
+    return this.adminAuthService.updateProfile(admin.sub, body, this.meta(req));
   }
 
   @Post('change-password')

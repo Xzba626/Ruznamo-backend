@@ -6,6 +6,7 @@ import {
   labelOrderStatus,
   labelPlan,
   labelPlanCode,
+  labelPlanPurchaseAvailability,
   knownOrderStatuses,
 } from './index';
 import { localizeError } from './errors';
@@ -31,6 +32,11 @@ describe('admin-panel i18n', () => {
     expect(labelPlanCode('PRO')).toBe('Про');
     expect(labelPlanCode('PRO_PLUS')).toBe('Про+');
     expect(labelPlan({ code: 'PRO', name: 'Pro' })).toBe('Про');
+  });
+
+  it('maps plan purchase availability to Russian', () => {
+    expect(labelPlanPurchaseAvailability(true)).toBe('Доступен для покупки');
+    expect(labelPlanPurchaseAvailability(false)).toBe('Отключён');
   });
 
   it('maps audit actions to Russian and unknown events safely', () => {

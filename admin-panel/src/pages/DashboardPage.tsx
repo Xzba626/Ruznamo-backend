@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { fetchDashboardSummary, fetchSystemStatus, fetchTelegramStatus } from '../api/admin';
+import { Link } from 'react-router-dom';
+import { fetchDashboardSummary, fetchPlans, fetchSystemStatus, fetchTelegramStatus } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import {
   formatAuditAction,
   formatDateTime,
+  labelPlanCode,
+  labelPlanPurchaseAvailability,
+  labelServiceStatus,
   labelSystemHealth,
   labelTelegramConnected,
   t,
@@ -29,12 +33,13 @@ export function DashboardPage() {
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof fetchDashboardSummary>> | null>(null);
   const [system, setSystem] = useState<Awaited<ReturnType<typeof fetchSystemStatus>> | null>(null);
   const [telegram, setTelegram] = useState<Awaited<ReturnType<typeof fetchTelegramStatus>> | null>(null);
+  const [plans, setPlans] = useState<Awaited<ReturnType<typeof fetchPlans>>>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.allSettled([fetchDashboardSummary(), fetchSystemStatus(), fetchTelegramStatus()])
-      .then(([summaryResult, systemResult, telegramResult]) => {
+    Promise.allSettled([fetchDashboardSummary(), fetchSystemStatus(), fetchTelegramStatus(), fetchPlans()])
+      .then(([summaryResult, systemResult, telegramResult, plansResult]) => {
         if (summaryResult.status === 'rejected') {
           throw summaryResult.reason;
         }
@@ -44,6 +49,9 @@ export function DashboardPage() {
         }
         if (telegramResult.status === 'fulfilled') {
           setTelegram(telegramResult.value);
+        }
+        if (plansResult.status === 'fulfilled') {
+          setPlans(plansResult.value);
         }
       })
       .catch((err) => setError(getErrorMessage(err, strings.errors.loadDashboard)))
@@ -68,13 +76,26 @@ export function DashboardPage() {
           <div className="value">{labelTelegramConnected(Boolean(telegram?.isVerified))}</div>
         </div>
       </div>
+      {plans.length > 0 && (
+        <section className="section">
+          <h2>{strings.dashboard.plansTitle}</h2>
+          <ul className="plan-status-list">
+            {plans.map((plan) => (
+              <li key={plan.id}>
+                {labelPlanCode(plan.code)} — {labelPlanPurchaseAvailability(plan.isActive)}
+              </li>
+            ))}
+          </ul>
+          <p><Link to="/plans">{strings.dashboard.plansLink}</Link></p>
+        </section>
+      )}
       <section className="section">
         <h2>{strings.dashboard.system}</h2>
         <p>
           {strings.dashboard.systemLine(
-            labelSystemHealth(system?.api ?? ''),
-            labelSystemHealth(system?.database ?? ''),
-            labelSystemHealth(system?.readiness ?? ''),
+            labelServiceStatus(system?.backend?.status ?? ''),
+            labelSystemHealth(system?.database?.legacyState ?? ''),
+            labelSystemHealth(system?.readiness?.legacyState ?? ''),
           )}
         </p>
       </section>

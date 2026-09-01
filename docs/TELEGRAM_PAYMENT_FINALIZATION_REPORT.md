@@ -204,7 +204,7 @@ Duration buttons appear only for combinations with active `PlanPrice` rows.
 | Item | Value |
 |------|-------|
 | Branch | `main` |
-| Commit | *(see release commit after push)* |
+| Commit | `16bedc26d525eab6e36b8eb37262535a85d59bf7` |
 | Push | authorized in this BLOCK |
 
 ### Production E2E (Telegram)
@@ -248,3 +248,86 @@ Automated agent cannot complete real Telegram UI interactions in this session.
 ## 10. Final verdict
 
 **B** — Migration applied, webhook healthy, code/tests/build green, backend release pushed. **Real Telegram E2E not automated** — operator checklist required for **A**.
+
+---
+
+## 11. Navigation + duration + payment methods update (2026-09-01)
+
+### DEAD-END NAVIGATION ROOT CAUSE
+
+Bot used **inline keyboards only**. After approve/reject/license view, old inline buttons became stale or disappeared — user had no persistent actions.
+
+### PERSISTENT MAIN MENU
+
+`ReplyKeyboardMarkup` (persistent, resize) for users:
+
+| RU | TJ |
+|----|-----|
+| 🛒 Купить лицензию | 🛒 Харидани иҷозатнома |
+| 🔑 Мои лицензии | 🔑 Иҷозатномаҳои ман |
+| 💬 Поддержка | 💬 Дастгирӣ |
+| 🌐 Язык | 🌐 Забон |
+
+Inline `🏠 Главное меню` on purchase sub-flows. `/start` and `/help` commands registered.
+
+### PRO 365-DAY BUG ROOT CAUSE
+
+**Primary:** `ACTION_MY_KEY` handler hardcoded `const days = 30` while `expiresAt` in DB was correct for YEARLY orders.
+
+**Not** a stale session between STANDARD/30 and PRO/365 — approval path already used `billingPeriodDays(order.billingPeriod)`.
+
+### DURATION SINGLE SOURCE OF TRUTH
+
+- `LICENSE_DURATION_DAYS` + `billingPeriodDays()` / `resolveOrderTermDays()`
+- All user messages derive days from `Order.billingPeriod` or `License.order.billingPeriod`
+- `paymentApproved(planName, days, expiresAt, key)` — structured message with plan + term + date
+
+### REPEATED PURCHASE STATE RESET
+
+`OrderService.cancelStalePendingPurchases()` cancels orphan `PENDING` orders without receipts before new purchase. `awaitingReceipt` set only **after** payment method selection.
+
+### PAYMENT METHOD ARCHITECTURE
+
+New Prisma models:
+
+- `PaymentMethod` (PHONE | CARD, name, paymentValue, recipientName, isActive, sortOrder)
+- `Order` snapshot fields: `paymentMethodName`, `paymentMethodType`, `paymentMethodValue`, `paymentMethodRecipient`
+- `TelegramBotSession` for admin wizard state
+
+Migration: `20260901180000_payment_methods_and_telegram_nav`
+
+### ADMIN PAYMENT METHOD UX
+
+`ADMIN_TELEGRAM_IDS` only — reply keyboard `💳 Реквизиты` / `📋 Заявки`. Wizard: add/edit/toggle/delete via inline callbacks. Russian admin UI.
+
+### PAYMENT METHOD HISTORY SAFETY
+
+Orders store **snapshot** at selection time. Disabling/deleting method does not mutate historical orders. `safeDelete()` disables when orders reference method.
+
+### USER FLOW (updated)
+
+`plan → duration → summary → payment method → requisites → receipt → admin review → license`
+
+Callback `paymethod:<id>` — ID only, never card/phone in callback_data.
+
+### TEST RESULTS
+
+- **124/124** Jest tests PASS
+- `license-term.util.spec.ts` — MONTHLY=30, YEARLY=365
+- `payment-method.service.spec.ts` — CRUD + safe delete
+- `order.service.spec.ts` — stale pending reset
+
+### REMAINING RUNTIME CHECKS
+
+| Check | Status |
+|-------|--------|
+| Persistent menu after approve/reject | ⏳ Manual |
+| PRO 365 shows 365 days in delivery + My Licenses | ⏳ Manual |
+| Sequential STANDARD/30 → PRO/365 | ⏳ Manual |
+| Admin add payment method via Telegram | ⏳ Manual |
+| User selects method → correct requisites | ⏳ Manual |
+| Migration deploy on Neon | ⏳ Required before production |
+
+### VERDICT (this block)
+
+**B** — Root cause fixed in code, architecture implemented, tests green. **A** requires production migration + Telegram E2E.

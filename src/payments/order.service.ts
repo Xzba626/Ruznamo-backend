@@ -37,6 +37,11 @@ export class OrderService {
       throw new NotFoundException('Plan not found');
     }
 
+    const available = await this.paymentConfig.isPlanAvailableForPurchase(plan.code);
+    if (!available) {
+      throw new BadRequestException('Plan is not available for purchase');
+    }
+
     const quote = await this.paymentConfig.getPlanPrice(plan.code, billingPeriod);
     const order = await this.prisma.order.create({
       data: {
@@ -62,10 +67,62 @@ export class OrderService {
   }
 
   async startPaymentFlow(userId: string, planId: string, billingPeriod: BillingPeriod) {
+    await this.cancelStalePendingPurchases(userId, planId, billingPeriod);
     const order = await this.findOrCreatePendingOrder(userId, planId, billingPeriod);
     return this.prisma.order.update({
       where: { id: order.id },
-      data: { awaitingReceipt: true },
+      data: { awaitingReceipt: false, paymentMethodId: null, paymentMethodName: null, paymentMethodType: null, paymentMethodValue: null, paymentMethodRecipient: null },
+    });
+  }
+
+  async attachPaymentMethodAndAwaitReceipt(
+    orderId: string,
+    userId: string,
+    method: {
+      id?: string;
+      name: string;
+      type: import('@prisma/client').PaymentMethodType;
+      paymentValue: string;
+      recipientName: string;
+    },
+  ) {
+    return this.prisma.order.update({
+      where: { id: orderId, userId },
+      data: {
+        paymentMethodId: method.id ?? null,
+        paymentMethodName: method.name,
+        paymentMethodType: method.type,
+        paymentMethodValue: method.paymentValue,
+        paymentMethodRecipient: method.recipientName,
+        awaitingReceipt: true,
+      },
+    });
+  }
+
+  async getCurrentPendingOrder(userId: string) {
+    return this.prisma.order.findFirst({
+      where: { userId, status: OrderStatus.PENDING },
+      orderBy: { updatedAt: 'desc' },
+      include: { plan: true },
+    });
+  }
+
+  private async cancelStalePendingPurchases(
+    userId: string,
+    keepPlanId: string,
+    keepBillingPeriod: BillingPeriod,
+  ) {
+    await this.prisma.order.updateMany({
+      where: {
+        userId,
+        status: OrderStatus.PENDING,
+        receipts: { none: {} },
+        OR: [{ planId: { not: keepPlanId } }, { billingPeriod: { not: keepBillingPeriod } }],
+      },
+      data: {
+        status: OrderStatus.CANCELLED,
+        awaitingReceipt: false,
+      },
     });
   }
 

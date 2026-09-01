@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { BillingPeriod, OrderStatus, PlanCode } from '@prisma/client';
 import { OrderService } from './order.service';
 import { PaymentConfigService } from './payment-config.service';
@@ -5,7 +6,7 @@ import { AuditService } from '../audit/audit.service';
 
 describe('OrderService', () => {
   const prisma = {
-    order: { findFirst: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    order: { findFirst: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     plan: { findUnique: jest.fn() },
     receipt: { findUnique: jest.fn(), create: jest.fn() },
     $transaction: jest.fn(),
@@ -17,6 +18,7 @@ describe('OrderService', () => {
       amount: '15.00',
       currency: 'TJS',
     }),
+    isPlanAvailableForPurchase: jest.fn().mockResolvedValue(true),
   };
 
   const auditService = { log: jest.fn() };
@@ -36,18 +38,35 @@ describe('OrderService', () => {
 
     expect(order.id).toBe('ord_existing');
     expect(prisma.order.create).not.toHaveBeenCalled();
+    expect(paymentConfig.isPlanAvailableForPurchase).not.toHaveBeenCalled();
   });
 
-  it('starts payment flow and marks awaiting receipt', async () => {
+  it('blocks new order when plan is disabled', async () => {
+    prisma.order.findFirst.mockResolvedValue(null);
+    prisma.plan.findUnique.mockResolvedValue({ id: 'plan_pro', code: PlanCode.PRO });
+    paymentConfig.isPlanAvailableForPurchase.mockResolvedValue(false);
+
+    await expect(
+      service.findOrCreatePendingOrder('usr_1', 'plan_pro', BillingPeriod.YEARLY),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+
+  it('starts payment flow and cancels only other pending purchases', async () => {
+    prisma.order.updateMany.mockResolvedValue({ count: 0 });
     prisma.order.findFirst.mockResolvedValue({ id: 'ord_1', status: OrderStatus.PENDING });
     prisma.plan.findUnique.mockResolvedValue({ id: 'plan_1', code: PlanCode.STANDARD });
-    prisma.order.update.mockResolvedValue({ id: 'ord_1', awaitingReceipt: true });
+    prisma.order.update.mockResolvedValue({ id: 'ord_1', awaitingReceipt: false });
 
     const order = await service.startPaymentFlow('usr_1', 'plan_1', BillingPeriod.MONTHLY);
 
-    expect(order.awaitingReceipt).toBe(true);
-    expect(prisma.order.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { awaitingReceipt: true } }),
+    expect(order.awaitingReceipt).toBe(false);
+    expect(prisma.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [{ planId: { not: 'plan_1' } }, { billingPeriod: { not: BillingPeriod.MONTHLY } }],
+        }),
+      }),
     );
   });
 

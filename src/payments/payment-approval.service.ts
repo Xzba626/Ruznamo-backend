@@ -279,7 +279,14 @@ export class PaymentApprovalService {
     return { orderId: order.id, alreadyProcessed: false };
   }
 
-  async getStoredLicenseKeyForUser(userId: string): Promise<{ key: string; expiresAt: Date | null } | null> {
+  async getStoredLicenseKeyForUser(
+    userId: string,
+  ): Promise<{
+    key: string;
+    expiresAt: Date | null;
+    billingPeriod: import('@prisma/client').BillingPeriod | null;
+    planName: string | null;
+  } | null> {
     const outbox = await this.prisma.notificationOutbox.findFirst({
       where: {
         type: 'telegram_license_key',
@@ -299,6 +306,7 @@ export class PaymentApprovalService {
     const payload = outbox.payload as { licenseKey?: string };
     const license = await this.prisma.license.findFirst({
       where: { userId, status: LicenseStatus.ACTIVE },
+      include: { plan: true, order: true },
       orderBy: { expiresAt: 'desc' },
     });
 
@@ -306,7 +314,12 @@ export class PaymentApprovalService {
       return null;
     }
 
-    return { key: payload.licenseKey, expiresAt: license.expiresAt };
+    return {
+      key: payload.licenseKey,
+      expiresAt: license.expiresAt,
+      billingPeriod: license.order?.billingPeriod ?? null,
+      planName: license.plan.name,
+    };
   }
 
   private async findStoredLicenseKey(licenseId: string, userId: string): Promise<string | null> {
