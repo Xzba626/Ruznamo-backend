@@ -55,7 +55,12 @@ export async function apiRequest<T>(
   const access = tokenStore.getAccess();
   if (access) headers.set('Authorization', `Bearer ${access}`);
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch {
+    throw new ApiClientError(0, 'NETWORK_ERROR', localizeError('NETWORK_ERROR'));
+  }
 
   if (res.status === 401 && retry) {
     if (!refreshPromise) {

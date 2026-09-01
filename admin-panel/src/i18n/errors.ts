@@ -6,6 +6,7 @@ const errorCodeLabels: Record<string, string> = {
   INTERNAL_ERROR: 'Внутренняя ошибка сервера.',
   DEVICE_LIMIT_REACHED: 'Достигнут лимит активных устройств.',
   INVALID_REFRESH_TOKEN: 'Сессия недействительна. Выполните вход повторно.',
+  NETWORK_ERROR: 'Не удалось подключиться к серверу API. Проверьте адрес backend и настройки CORS.',
   REFRESH_TOKEN_EXPIRED: 'Срок действия сессии истёк. Выполните вход повторно.',
   DEVICE_REVOKED: 'Устройство отозвано.',
   LICENSE_INVALID: 'Недействительный лицензионный ключ.',
