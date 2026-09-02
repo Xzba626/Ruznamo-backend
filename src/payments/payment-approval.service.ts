@@ -84,12 +84,19 @@ export class PaymentApprovalService {
 
     const now = new Date();
 
+    const purchaserTelegram = await this.prisma.telegramAccount.findUnique({
+      where: { userId: order.userId },
+      select: { id: true },
+    });
+
     const issued = await this.licenseIssuance.issueLicense({
       planId: order.planId,
       userId: order.userId,
       orderId: order.id,
       issueSource: LicenseIssueSource.TELEGRAM_PAYMENT,
       billingPeriod: order.billingPeriod,
+      purchaserTelegramAccountId: purchaserTelegram?.id ?? null,
+      holderTelegramAccountId: purchaserTelegram?.id ?? null,
       eventReason: 'telegram_payment_approved',
       eventMetadata: { orderId: order.id, actorId: actor.actorId },
       activateNow: true,

@@ -7,7 +7,11 @@ describe('LicensesController', () => {
     getMyLicenses: jest.fn(),
   };
 
-  const controller = new LicensesController(licensesService as unknown as LicensesService);
+  const controller = new LicensesController(
+    licensesService as unknown as LicensesService,
+    { createChallenge: jest.fn() } as never,
+    { createChallenge: jest.fn() } as never,
+  );
 
   const mobileJwt = {
     sub: 'user_mobile',
@@ -40,7 +44,7 @@ describe('LicensesController', () => {
 
     const result = await controller.me(mobileJwt);
 
-    expect(licensesService.getMyLicenses).toHaveBeenCalledWith('user_mobile');
+    expect(licensesService.getMyLicenses).toHaveBeenCalledWith('user_mobile', 'device_1');
     expect(result).toEqual({ items: [] });
   });
 });

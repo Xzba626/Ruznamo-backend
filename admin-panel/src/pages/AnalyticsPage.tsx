@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchAnalyticsOverview } from '../api/admin';
+import { fetchAnalyticsOverview, fetchAnalyticsSales } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import {
   formatDateTime,
@@ -12,15 +12,20 @@ import {
 export function AnalyticsPage() {
   const strings = t();
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchAnalyticsOverview>> | null>(null);
+  const [sales, setSales] = useState<Awaited<ReturnType<typeof fetchAnalyticsSales>> | null>(null);
+  const [salesPeriod, setSalesPeriod] = useState<'today' | '7d' | '30d' | 'month' | 'prev_month'>('30d');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchAnalyticsOverview()
-      .then(setData)
+    Promise.all([fetchAnalyticsOverview(), fetchAnalyticsSales(salesPeriod)])
+      .then(([overview, salesData]) => {
+        setData(overview);
+        setSales(salesData);
+      })
       .catch((err) => setError(getErrorMessage(err, strings.errors.loadAnalytics)))
       .finally(() => setLoading(false));
-  }, [strings.errors.loadAnalytics]);
+  }, [salesPeriod, strings.errors.loadAnalytics]);
 
   if (loading) return <p>{strings.analytics.loading}</p>;
   if (error) return <div className="alert error">{error}</div>;
@@ -38,6 +43,27 @@ export function AnalyticsPage() {
         <div className="card"><div className="label">{strings.analytics.activeLicenses}</div><div className="value">{data.totals.activeLicenses}</div></div>
         <div className="card"><div className="label">{strings.analytics.paidUsers}</div><div className="value">{data.totals.paidUsers}</div></div>
       </div>
+
+      <section className="section">
+        <h2>Продажи лицензий</h2>
+        <div style={{ marginBottom: 12 }}>
+          <select value={salesPeriod} onChange={(e) => setSalesPeriod(e.target.value as typeof salesPeriod)}>
+            <option value="today">Сегодня</option>
+            <option value="7d">7 дней</option>
+            <option value="30d">30 дней</option>
+            <option value="month">Этот месяц</option>
+            <option value="prev_month">Прошлый месяц</option>
+          </select>
+        </div>
+        {sales && (
+          <div className="grid cards">
+            <div className="card"><div className="label">Продано (Telegram)</div><div className="value">{sales.sold.total}</div></div>
+            <div className="card"><div className="label">Выдано вручную</div><div className="value">{sales.manualIssued}</div></div>
+            <div className="card"><div className="label">Выручка</div><div className="value">{sales.revenue.grossApproved} {sales.revenue.currency}</div></div>
+            <div className="card"><div className="label">Активации (не продажи)</div><div className="value">{sales.activity.activations}</div></div>
+          </div>
+        )}
+      </section>
 
       <section className="section">
         <h2>{strings.analytics.trends30d}</h2>

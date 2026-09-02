@@ -82,4 +82,27 @@ export const ru: TelegramI18n = {
   adminUnauthorized: 'Нет доступа.',
   adminApprovedDuplicate: 'Эта заявка уже подтверждена.',
   adminRejectedDuplicate: 'Эта заявка уже отклонена.',
+  linkConfirmPrompt: (plan, expiresAt, maskedKey, deviceLabel) =>
+    `Привязать этот Telegram-аккаунт к лицензии Ruznamo?\n\n` +
+    `Тариф: ${plan}\n` +
+    `Действует до: ${expiresAt}\n` +
+    `Ключ: ${maskedKey}\n` +
+    `Устройство: ${deviceLabel}`,
+  linkConfirmButton: '✅ Привязать',
+  linkCancelButton: '❌ Отмена',
+  linkSuccess: '✅ Telegram-аккаунт привязан к лицензии.',
+  linkAlreadyLinked: 'ℹ️ Этот Telegram-аккаунт уже привязан к лицензии.',
+  linkHolderConflict: '❌ Лицензия уже управляется другим Telegram-аккаунтом. Обратитесь в поддержку.',
+  linkExpired: '❌ Ссылка для привязки истекла или недействительна.',
+  replacementConfirmPrompt: (oldDevice, newDevice) =>
+    `Отключить старое устройство и разрешить новое?\n\n` +
+    `Старое: ${oldDevice}\n` +
+    `Новое: ${newDevice}`,
+  replacementConfirmButton: '✅ Заменить устройство',
+  replacementSuccess: '✅ Устройство заменено. Новое устройство может использовать лицензию.',
+  licenseDevicesTitle: '📱 Устройства',
+  revokeDeviceButton: 'Отключить устройство',
+  revokeDeviceConfirm: 'Подтвердите отключение устройства с этой лицензии.',
+  deviceRevoked: '✅ Устройство отключено.',
+  licenseControlSection: '🔐 Управление лицензией',
 };

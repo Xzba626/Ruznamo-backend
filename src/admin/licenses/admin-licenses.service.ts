@@ -78,6 +78,16 @@ export class AdminLicensesService {
             telegramAccount: true,
           },
         },
+        purchaserTelegramAccount: true,
+        holderTelegramAccount: true,
+        holderHistory: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          include: {
+            fromTelegramAccount: { select: { id: true, username: true, firstName: true } },
+            toTelegramAccount: { select: { id: true, username: true, firstName: true } },
+          },
+        },
         order: {
           include: {
             plan: true,
@@ -107,6 +117,10 @@ export class AdminLicensesService {
       adminNote: license.adminNote,
       plan: license.plan,
       user: license.user,
+      purchaserTelegramAccount: license.purchaserTelegramAccount,
+      holderTelegramAccount: license.holderTelegramAccount,
+      holderLinkedAt: license.holderLinkedAt,
+      holderHistory: license.holderHistory,
       order: license.order,
       issuedByAdmin: license.issuedByAdmin,
       deviceLimit,
@@ -238,5 +252,129 @@ export class AdminLicensesService {
     });
 
     return { id: updated.id, status: updated.status };
+  }
+
+  async revokeDeviceActivation(adminId: string, licenseId: string, deviceId: string) {
+    const license = await this.prisma.license.findUnique({ where: { id: licenseId } });
+    if (!license) {
+      throw new NotFoundException('License not found');
+    }
+
+    const activation = await this.prisma.licenseActivation.findFirst({
+      where: { licenseId, deviceId },
+      include: { device: true },
+    });
+    if (!activation || activation.device.revokedAt) {
+      throw new BadRequestException('Device activation not found or already revoked');
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.deviceInstallation.update({
+        where: { id: deviceId },
+        data: { revokedAt: now },
+      });
+      await tx.licenseEvent.create({
+        data: {
+          licenseId,
+          fromStatus: license.status,
+          toStatus: license.status,
+          reason: 'admin_device_revoked',
+          metadata: { deviceId, adminId },
+        },
+      });
+    });
+
+    await this.auditService.log({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminId,
+      action: 'admin.license.device_revoked',
+      entityType: 'LicenseActivation',
+      entityId: activation.id,
+      metadata: { licenseId, deviceId },
+    });
+
+    return { ok: true };
+  }
+
+  async unlinkHolder(adminId: string, licenseId: string) {
+    const license = await this.prisma.license.findUnique({ where: { id: licenseId } });
+    if (!license) {
+      throw new NotFoundException('License not found');
+    }
+    if (!license.holderTelegramAccountId) {
+      return { ok: true, alreadyUnlinked: true };
+    }
+
+    const fromId = license.holderTelegramAccountId;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.license.update({
+        where: { id: licenseId },
+        data: { holderTelegramAccountId: null, holderLinkedAt: null },
+      });
+      await tx.licenseHolderHistory.create({
+        data: {
+          licenseId,
+          fromTelegramAccountId: fromId,
+          toTelegramAccountId: null,
+          reason: 'admin_holder_unlinked',
+          actorType: AuditActorType.ADMIN,
+          actorId: adminId,
+        },
+      });
+    });
+
+    await this.auditService.log({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminId,
+      action: 'admin.license.holder_unlinked',
+      entityType: 'License',
+      entityId: licenseId,
+    });
+
+    return { ok: true };
+  }
+
+  async assignHolder(adminId: string, licenseId: string, telegramAccountId: string) {
+    const [license, account] = await Promise.all([
+      this.prisma.license.findUnique({ where: { id: licenseId } }),
+      this.prisma.telegramAccount.findUnique({ where: { id: telegramAccountId } }),
+    ]);
+    if (!license) {
+      throw new NotFoundException('License not found');
+    }
+    if (!account) {
+      throw new BadRequestException('Telegram account not found');
+    }
+
+    const fromId = license.holderTelegramAccountId;
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.license.update({
+        where: { id: licenseId },
+        data: { holderTelegramAccountId: telegramAccountId, holderLinkedAt: now },
+      });
+      await tx.licenseHolderHistory.create({
+        data: {
+          licenseId,
+          fromTelegramAccountId: fromId,
+          toTelegramAccountId: telegramAccountId,
+          reason: 'admin_holder_assigned',
+          actorType: AuditActorType.ADMIN,
+          actorId: adminId,
+        },
+      });
+    });
+
+    await this.auditService.log({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminId,
+      action: 'admin.license.holder_assigned',
+      entityType: 'License',
+      entityId: licenseId,
+      metadata: { telegramAccountId },
+    });
+
+    return { ok: true, holderTelegramAccountId: telegramAccountId };
   }
 }

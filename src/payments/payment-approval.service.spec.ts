@@ -8,6 +8,7 @@ describe('PaymentApprovalService', () => {
   const prisma = {
     order: { findUnique: jest.fn(), update: jest.fn() },
     license: { findUnique: jest.fn() },
+    telegramAccount: { findUnique: jest.fn().mockResolvedValue(null) },
     receipt: { updateMany: jest.fn() },
     notificationOutbox: { create: jest.fn(), findFirst: jest.fn() },
     $transaction: jest.fn(),

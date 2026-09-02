@@ -51,4 +51,30 @@ export class AdminLicensesController {
   ) {
     return this.licensesService.revoke(id, admin.sub, body.reason);
   }
+
+  @Post(':id/devices/:deviceId/revoke')
+  @RequirePermissions('licenses:revoke')
+  revokeDevice(
+    @Param('id') id: string,
+    @Param('deviceId') deviceId: string,
+    @CurrentAdmin() admin: AdminJwtPayload,
+  ) {
+    return this.licensesService.revokeDeviceActivation(admin.sub, id, deviceId);
+  }
+
+  @Post(':id/holder/unlink')
+  @RequirePermissions('licenses:revoke')
+  unlinkHolder(@Param('id') id: string, @CurrentAdmin() admin: AdminJwtPayload) {
+    return this.licensesService.unlinkHolder(admin.sub, id);
+  }
+
+  @Post(':id/holder/assign')
+  @RequirePermissions('licenses:revoke')
+  assignHolder(
+    @Param('id') id: string,
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Body() body: { telegramAccountId: string },
+  ) {
+    return this.licensesService.assignHolder(admin.sub, id, body.telegramAccountId);
+  }
 }

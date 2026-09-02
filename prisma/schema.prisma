@@ -130,9 +130,11 @@ model User {
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
 
-  telegramAccount    TelegramAccount?
-  telegramLinkTokens TelegramLinkToken[]
-  devices            DeviceInstallation[]
+  telegramAccount           TelegramAccount?
+  telegramLinkTokens        TelegramLinkToken[]
+  telegramLicenseLinkChallenges TelegramLicenseLinkChallenge[]
+  deviceReplacementChallenges   DeviceReplacementChallenge[]
+  devices                   DeviceInstallation[]
   licenses           License[]
   orders             Order[]
   trialGrant         TrialGrant?
@@ -155,7 +157,11 @@ model TelegramAccount {
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purchasedLicenses  License[]                    @relation("LicensePurchaserTelegram")
+  heldLicenses       License[]                    @relation("LicenseHolderTelegram")
+  holderHistoryFrom  LicenseHolderHistory[]       @relation("HolderHistoryFrom")
+  holderHistoryTo    LicenseHolderHistory[]       @relation("HolderHistoryTo")
 
   @@index([telegramId])
 }
@@ -194,6 +200,9 @@ model DeviceInstallation {
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   activations   LicenseActivation[]
   refreshTokens RefreshToken[]
+  telegramLinkChallenges     TelegramLicenseLinkChallenge[]
+  replacementChallengesNew   DeviceReplacementChallenge[] @relation("ReplacementNewDevice")
+  replacementChallengesOld   DeviceReplacementChallenge[] @relation("ReplacementOldDevice")
 
   @@index([userId])
   @@index([userId, revokedAt])
@@ -272,32 +281,42 @@ model PlanFeature {
 // ---------------------------------------------------------------------------
 
 model License {
-  id              String              @id @default(cuid())
-  planId          String
-  userId          String?
-  orderId         String?             @unique
-  keyHash         String              @unique
-  keyPrefix       String
-  status          LicenseStatus       @default(PENDING)
-  issueSource     LicenseIssueSource?
-  issuedByAdminId String?
-  adminNote       String?
-  customerLabel   String?
-  startsAt        DateTime?           @db.Timestamptz(3)
-  expiresAt       DateTime?           @db.Timestamptz(3)
-  activatedAt     DateTime?           @db.Timestamptz(3)
-  revokedAt       DateTime?           @db.Timestamptz(3)
-  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+  id                         String              @id @default(cuid())
+  planId                     String
+  userId                     String?
+  orderId                    String?             @unique
+  keyHash                    String              @unique
+  keyPrefix                  String
+  status                     LicenseStatus       @default(PENDING)
+  issueSource                LicenseIssueSource?
+  issuedByAdminId            String?
+  adminNote                  String?
+  customerLabel              String?
+  purchaserTelegramAccountId String?
+  holderTelegramAccountId    String?
+  holderLinkedAt             DateTime?           @db.Timestamptz(3)
+  startsAt                   DateTime?           @db.Timestamptz(3)
+  expiresAt                  DateTime?           @db.Timestamptz(3)
+  activatedAt                DateTime?           @db.Timestamptz(3)
+  revokedAt                  DateTime?           @db.Timestamptz(3)
+  createdAt                  DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime            @updatedAt @db.Timestamptz(3)
 
-  plan            Plan                @relation(fields: [planId], references: [id], onDelete: Restrict)
-  user            User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  order           Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  issuedByAdmin   AdminUser?          @relation("LicenseIssuedByAdmin", fields: [issuedByAdminId], references: [id], onDelete: SetNull)
-  activations     LicenseActivation[]
-  events          LicenseEvent[]
+  plan                     Plan                       @relation(fields: [planId], references: [id], onDelete: Restrict)
+  user                     User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  order                    Order?                     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  issuedByAdmin            AdminUser?                 @relation("LicenseIssuedByAdmin", fields: [issuedByAdminId], references: [id], onDelete: SetNull)
+  purchaserTelegramAccount TelegramAccount?           @relation("LicensePurchaserTelegram", fields: [purchaserTelegramAccountId], references: [id], onDelete: SetNull)
+  holderTelegramAccount    TelegramAccount?           @relation("LicenseHolderTelegram", fields: [holderTelegramAccountId], references: [id], onDelete: SetNull)
+  activations              LicenseActivation[]
+  events                   LicenseEvent[]
+  holderHistory            LicenseHolderHistory[]
+  telegramLinkChallenges   TelegramLicenseLinkChallenge[]
+  replacementChallenges    DeviceReplacementChallenge[]
 
   @@index([userId])
+  @@index([purchaserTelegramAccountId])
+  @@index([holderTelegramAccountId])
   @@index([status])
   @@index([expiresAt])
   @@index([keyPrefix])
@@ -327,6 +346,61 @@ model LicenseEvent {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@index([licenseId, createdAt])
+}
+
+model LicenseHolderHistory {
+  id                      String         @id @default(cuid())
+  licenseId               String
+  fromTelegramAccountId   String?
+  toTelegramAccountId     String?
+  reason                  String
+  actorType               AuditActorType
+  actorId                 String?
+  createdAt               DateTime       @default(now()) @db.Timestamptz(3)
+
+  license               License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  fromTelegramAccount   TelegramAccount? @relation("HolderHistoryFrom", fields: [fromTelegramAccountId], references: [id], onDelete: SetNull)
+  toTelegramAccount     TelegramAccount? @relation("HolderHistoryTo", fields: [toTelegramAccountId], references: [id], onDelete: SetNull)
+
+  @@index([licenseId, createdAt])
+}
+
+model TelegramLicenseLinkChallenge {
+  id           String    @id @default(cuid())
+  token        String    @unique
+  licenseId    String
+  deviceId     String
+  mobileUserId String
+  expiresAt    DateTime  @db.Timestamptz(3)
+  consumedAt   DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  license License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  device  DeviceInstallation @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user    User               @relation(fields: [mobileUserId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([licenseId])
+}
+
+model DeviceReplacementChallenge {
+  id           String    @id @default(cuid())
+  token        String    @unique
+  licenseId    String
+  newDeviceId  String
+  oldDeviceId  String
+  mobileUserId String
+  expiresAt    DateTime  @db.Timestamptz(3)
+  consumedAt   DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  license   License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  newDevice DeviceInstallation @relation("ReplacementNewDevice", fields: [newDeviceId], references: [id], onDelete: Cascade)
+  oldDevice DeviceInstallation @relation("ReplacementOldDevice", fields: [oldDeviceId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [mobileUserId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([licenseId])
 }
 
 // ---------------------------------------------------------------------------

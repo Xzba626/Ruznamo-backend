@@ -188,7 +188,7 @@ describe('LicensesService', () => {
     });
 
     await expect(service.activate(mobileJwt, licenseKey, {})).rejects.toMatchObject({
-      response: { code: 'LICENSE_ACTIVATION_LIMIT' },
+      response: { code: 'DEVICE_REPLACEMENT_REQUIRED' },
     });
   });
 

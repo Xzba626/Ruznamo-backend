@@ -103,6 +103,20 @@ export function fetchAnalyticsOverview() {
   }>('/api/v1/admin/analytics/overview');
 }
 
+export function fetchAnalyticsSales(period: 'today' | '7d' | '30d' | 'month' | 'prev_month' = '30d') {
+  return apiRequest<{
+    period: string;
+    sold: { total: number; byPlan: Array<{ planCode: string; planName: string; count: number }>; byBillingPeriod: { MONTHLY: number; YEARLY: number } };
+    manualIssued: number;
+    unknownLegacy: number;
+    revenue: { grossApproved: string; currency: string };
+    activity: { activations: number; activeLicenses: number };
+    sourceBreakdown: { telegramPayment: number; adminManual: number; unknownLegacy: number };
+    definitions: Record<string, string>;
+    generatedAt: string;
+  }>(`/api/v1/admin/analytics/sales?period=${period}`);
+}
+
 export function approveOrder(orderId: string) {
   return apiRequest<{ orderId: string; status: string }>(`/api/v1/admin/orders/${orderId}/approve`, {
     method: 'PATCH',

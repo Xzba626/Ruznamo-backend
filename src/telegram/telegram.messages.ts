@@ -31,6 +31,12 @@ export const CB = {
   reject: (orderId: string) => `payment:reject:${orderId}`,
   duration: (planCode: string, billingPeriod: string) => `duration:${planCode}:${billingPeriod}`,
   paymentMethod: (methodId: string) => `paymethod:${methodId}`,
+  linkConfirm: (token: string) => `link:confirm:${token}`,
+  linkCancel: (token: string) => `link:cancel:${token}`,
+  replConfirm: (token: string) => `repl:confirm:${token}`,
+  replCancel: (token: string) => `repl:cancel:${token}`,
+  licenseDevices: (licenseId: string) => `licdev:${licenseId}`,
+  revokeDevice: (licenseId: string, deviceId: string) => `licrev:${licenseId}:${deviceId}`,
 } as const;
 
 export function parsePlanCallback(data: string): PlanCode | null {

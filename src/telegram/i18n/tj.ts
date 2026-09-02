@@ -82,4 +82,27 @@ export const tj: TelegramI18n = {
   adminUnauthorized: 'Иҷозати дастрасӣ нест.',
   adminApprovedDuplicate: 'Ин ариза аллакай тасдиқ шудааст.',
   adminRejectedDuplicate: 'Ин ариза аллакай рад шудааст.',
+  linkConfirmPrompt: (plan, expiresAt, maskedKey, deviceLabel) =>
+    `Ин ҳисоби Telegram-ро ба иҷозатномаи Ruznamo пайваст кунед?\n\n` +
+    `Тариф: ${plan}\n` +
+    `То: ${expiresAt}\n` +
+    `Калид: ${maskedKey}\n` +
+    `Дастгоҳ: ${deviceLabel}`,
+  linkConfirmButton: '✅ Пайваст кардан',
+  linkCancelButton: '❌ Бекор',
+  linkSuccess: '✅ Ҳисоби Telegram ба иҷозатнома пайваст шуд.',
+  linkAlreadyLinked: 'ℹ️ Ин ҳисоби Telegram аллакай пайваст аст.',
+  linkHolderConflict: '❌ Иҷозатнома аз тарафи Telegram-и дигар идора мешавад. Ба дастгирӣ муроҷиат кунед.',
+  linkExpired: '❌ Пайванди пайвасткунӣ нодуруст ё анҷом ёфтааст.',
+  replacementConfirmPrompt: (oldDevice, newDevice) =>
+    `Дастгоҳи кӯҳнаро хомӯш карда, наверо иҷозат диҳед?\n\n` +
+    `Кӯҳна: ${oldDevice}\n` +
+    `Нав: ${newDevice}`,
+  replacementConfirmButton: '✅ Иваз кардани дастгоҳ',
+  replacementSuccess: '✅ Дастгоҳ иваз шуд. Дастгоҳи нав метавонад иҷозатномаро истифода барад.',
+  licenseDevicesTitle: '📱 Дастгоҳҳо',
+  revokeDeviceButton: 'Хомӯш кардани дастгоҳ',
+  revokeDeviceConfirm: 'Хомӯш кардани дастгоҳро аз ин иҷозатнома тасдиқ кунед.',
+  deviceRevoked: '✅ Дастгоҳ хомӯш карда шуд.',
+  licenseControlSection: '🔐 Идораи иҷозатнома',
 };

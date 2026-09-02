@@ -84,8 +84,13 @@ export class LicensesService {
 
       if (activeActivationCount >= maxDevices) {
         throw new ForbiddenException({
-          code: 'LICENSE_ACTIVATION_LIMIT',
-          message: 'License activation limit reached',
+          code: 'DEVICE_REPLACEMENT_REQUIRED',
+          message: 'License activation limit reached; device replacement required',
+          details: {
+            activeCount: activeActivationCount,
+            maxDevices,
+            telegramLinkRequired: !license.holderTelegramAccountId,
+          },
         });
       }
 
@@ -175,7 +180,7 @@ export class LicensesService {
     };
   }
 
-  async getMyLicenses(userId: string) {
+  async getMyLicenses(userId: string, currentDeviceId?: string) {
     const activations = await this.prisma.licenseActivation.findMany({
       where: {
         device: { userId, revokedAt: null },
@@ -184,7 +189,16 @@ export class LicensesService {
       include: {
         license: {
           include: {
-            plan: { select: { code: true, name: true } },
+            plan: {
+              select: {
+                code: true,
+                name: true,
+                features: { select: { key: true, value: true } },
+              },
+            },
+            holderTelegramAccount: {
+              select: { username: true, firstName: true },
+            },
             activations: {
               include: {
                 device: {
@@ -192,6 +206,8 @@ export class LicensesService {
                     id: true,
                     installationId: true,
                     deviceName: true,
+                    deviceManufacturer: true,
+                    deviceModel: true,
                     revokedAt: true,
                   },
                 },
@@ -218,23 +234,43 @@ export class LicensesService {
     }
 
     return {
-      items: [...licenseMap.values()].map((license) => ({
-        id: license.id,
-        status: license.status,
-        keyPrefix: license.keyPrefix,
-        plan: license.plan,
-        startsAt: license.startsAt,
-        expiresAt: license.expiresAt,
-        activatedAt: license.activatedAt,
-        activations: license.activations.map((activation) => ({
-          id: activation.id,
-          deviceId: activation.deviceId,
-          installationId: activation.device.installationId,
-          deviceName: activation.device.deviceName,
-          deviceStatus: activation.device.revokedAt ? 'REVOKED' : 'ACTIVE',
-          createdAt: activation.createdAt,
-        })),
-      })),
+      items: [...licenseMap.values()].map((license) => {
+        const activeActivations = license.activations.filter((a) => !a.device.revokedAt);
+        const maxDevices = this.readMaxDevices(license.plan.features ?? []);
+        const holder = license.holderTelegramAccount;
+
+        return {
+          id: license.id,
+          status: license.status,
+          keyPrefix: license.keyPrefix,
+          plan: { code: license.plan.code, name: license.plan.name },
+          issueSource: license.issueSource,
+          startsAt: license.startsAt,
+          expiresAt: license.expiresAt,
+          activatedAt: license.activatedAt,
+          deviceUsage: {
+            active: activeActivations.length,
+            max: maxDevices,
+          },
+          telegram: {
+            linked: Boolean(license.holderTelegramAccountId),
+            holderDisplayName: holder?.firstName ?? null,
+            holderUsername: holder?.username ? `@${holder.username.replace(/^@/, '')}` : null,
+            linkedAt: license.holderLinkedAt,
+          },
+          activations: license.activations.map((activation) => ({
+            id: activation.id,
+            deviceId: activation.deviceId,
+            installationId: activation.device.installationId,
+            deviceName: activation.device.deviceName,
+            deviceManufacturer: activation.device.deviceManufacturer,
+            deviceModel: activation.device.deviceModel,
+            deviceStatus: activation.device.revokedAt ? 'REVOKED' : 'ACTIVE',
+            isCurrentDevice: currentDeviceId != null && activation.deviceId === currentDeviceId,
+            createdAt: activation.createdAt,
+          })),
+        };
+      }),
     };
   }
 

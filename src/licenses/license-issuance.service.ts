@@ -17,6 +17,8 @@ export interface IssueLicenseInput {
   issuedByAdminId?: string | null;
   adminNote?: string | null;
   customerLabel?: string | null;
+  purchaserTelegramAccountId?: string | null;
+  holderTelegramAccountId?: string | null;
   eventReason: string;
   eventMetadata?: Record<string, unknown>;
   /** When true, license is immediately ACTIVE with startsAt/expiresAt (payment/manual delivery). */
@@ -70,6 +72,8 @@ export class LicenseIssuanceService {
     const expiresAt = this.calculateExpiresAt(now, input.billingPeriod);
     const activateNow = input.activateNow !== false;
     let racedDuplicate = false;
+    const holderLinkedAt =
+      input.holderTelegramAccountId != null ? now : null;
 
     const license = await this.prisma.$transaction(async (tx) => {
       let created;
@@ -85,6 +89,9 @@ export class LicenseIssuanceService {
             issuedByAdminId: input.issuedByAdminId ?? null,
             adminNote: input.adminNote ?? null,
             customerLabel: input.customerLabel ?? null,
+            purchaserTelegramAccountId: input.purchaserTelegramAccountId ?? null,
+            holderTelegramAccountId: input.holderTelegramAccountId ?? null,
+            holderLinkedAt,
             status: activateNow ? LicenseStatus.ACTIVE : LicenseStatus.PENDING,
             startsAt: activateNow ? now : null,
             expiresAt,

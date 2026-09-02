@@ -203,3 +203,26 @@ Targeted fixes for three proven gaps. **HEAD:** `3f1a570` on `origin/main`.
 
 **A verdict** only after real Telegram: Menu opens commands, support round-trip, exit support → no relay.
 
+---
+
+## License identity & linking block (2026-09-02)
+
+Migration `20260902140000_license_telegram_identity` applied.
+
+### Test suite
+
+| Baseline | After block |
+|----------|-------------|
+| 157 PASS | +4 (link token util, sales analytics) |
+
+### Feature verdicts
+
+| Feature | CODE | TEST | DEPLOYED | RUNTIME | EVIDENCE |
+|---------|------|------|----------|---------|----------|
+| **TELEGRAM LICENSE LINK** | YES | YES | pending | **B** | Challenge API + bot confirm flow; E2E pending |
+| **LICENSE HOLDER** | YES | YES | pending | **B** | purchaser/holder FK + backfill TELEGRAM_PAYMENT |
+| **DEVICE REPLACEMENT** | YES | partial | pending | **B** | Challenge + holder confirm; 24h cooldown |
+| **ADMIN CONTROL** | YES | partial | pending | **B** | revoke device, unlink/assign holder APIs |
+| **SALES ANALYTICS** | YES | YES | pending | **B** | GET `/admin/analytics/sales`; admin UI section |
+| **TEST DATA CLEANUP** | YES | dry-run | N/A | **B** | 6 CONFIRMED TEST rows (1 user, 4 devices); `--apply` needs human OK |
+

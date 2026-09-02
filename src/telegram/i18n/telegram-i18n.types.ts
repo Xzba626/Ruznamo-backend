@@ -76,4 +76,19 @@ export interface TelegramI18n {
   adminUnauthorized: string;
   adminApprovedDuplicate: string;
   adminRejectedDuplicate: string;
+  linkConfirmPrompt: (plan: string, expiresAt: string, maskedKey: string, deviceLabel: string) => string;
+  linkConfirmButton: string;
+  linkCancelButton: string;
+  linkSuccess: string;
+  linkAlreadyLinked: string;
+  linkHolderConflict: string;
+  linkExpired: string;
+  replacementConfirmPrompt: (oldDevice: string, newDevice: string) => string;
+  replacementConfirmButton: string;
+  replacementSuccess: string;
+  licenseDevicesTitle: string;
+  revokeDeviceButton: string;
+  revokeDeviceConfirm: string;
+  deviceRevoked: string;
+  licenseControlSection: string;
 }
