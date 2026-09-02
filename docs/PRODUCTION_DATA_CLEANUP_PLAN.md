@@ -1,8 +1,10 @@
 # Production Data Cleanup Plan
 
 **Status:** DRY-RUN ONLY — **no production mutation executed**  
-**Generated:** 2026-09-01  
+**Generated:** 2026-09-01 | **Revised:** 2026-09-02  
 **Repository:** `D:\Ruznamo-Backend`
+
+> **Important:** `0 CONFIRMED TEST rows` in the deterministic cleanup script does **not** mean production is clean. Forensic heuristics (`forensic-data-audit.ts`) may still flag likely-test devices/users. Human review in Admin (Пользователи, Устройства, Лицензии, Аудит) is required before any `--apply`.
 
 ---
 
@@ -78,31 +80,29 @@ All steps run inside a **single Prisma transaction**.
 
 ---
 
-## Dry-Run Output (local attempt)
+## Dry-Run Output (production, 2026-09-01)
 
-**Note:** Production Neon was **unreachable** from the audit environment at execution time (`Can't reach database server`). Counts below must be refreshed on a machine with live `DATABASE_URL` before any `--apply`.
-
-Expected dry-run command output shape:
+Deterministic cleanup script (`cleanup-confirmed-test-data.ts`):
 
 ```json
 {
   "mode": "DRY_RUN",
-  "counts": {
-    "users": 0,
-    "devices": 0,
-    "telegramAccounts": 0,
-    "orders": 0,
-    "licenses": 0,
-    "activations": 0,
-    "trials": 0,
-    "auditLogs": 0,
-    "total": 0
-  },
-  "warning": "DRY_RUN only. Pass --apply after human review."
+  "counts": { "users": 0, "devices": 0, "total": 0 },
+  "warning": "Nothing matched — no mutation."
 }
 ```
 
-**Action required:** Re-run dry-run from environment with DB access and paste actual counts into this document before approval.
+**Interpretation:** Narrow email/name/installation-prefix rules did not auto-select rows. **Production may still contain obvious test data** that does not match these patterns.
+
+Forensic heuristics (read-only, same day) flagged for **manual review** (not auto-delete):
+
+| Category | Count | Examples |
+|----------|------:|----------|
+| Likely test devices | 4 | `Test Android`, `Local Test`, `Production Test`; fixture UUID installation IDs |
+| Likely test users | 1 | `displayName: TestUser` |
+| Audit logs with "test" pattern | 0 | — |
+
+**Action required:** Owner reviews Admin lists, supplies explicit IDs for a future targeted cleanup script run. Do not use `--apply` until IDs are confirmed.
 
 ---
 
@@ -139,4 +139,4 @@ Before `--apply`, confirm:
 - [ ] Backup/snapshot taken (Neon branch or export)
 - [ ] SUPERADMIN authorizes mutation
 
-**Verdict: TEST DATA CLEANUP — C** (plan + script ready; production dry-run and `--apply` not executed)
+**Verdict: TEST DATA CLEANUP — B / NEEDS HUMAN CLASSIFICATION** (scripts ready; deterministic dry-run empty; heuristics + visual review pending)

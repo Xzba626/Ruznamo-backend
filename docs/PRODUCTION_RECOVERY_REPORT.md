@@ -1,7 +1,18 @@
-# Production Recovery Report — Final
+# Production Recovery Report — Revised
 
-**Date:** 2026-09-01  
-**Recovery pass:** autonomous (authorized migrate deploy, commit, push)
+**Date:** 2026-09-02 (revised after human review)  
+**Recovery pass:** autonomous migrate deploy + verification  
+**HEAD:** `6e0209c` on `origin/main`
+
+---
+
+## Verdict philosophy
+
+**A** = code + tests + deployed + **you opened, clicked, and saw the correct result**.  
+**B** = implementation or infrastructure verified, but **human runtime QA still pending**.  
+**C** = broken or blocked.
+
+Synthetic probes (HTTP 200, Prisma query OK, dry-run scripts) **do not** upgrade an area to A.
 
 ---
 
@@ -9,142 +20,148 @@
 
 | Item | Value |
 |------|-------|
-| LOCAL SHA | `590491f` |
-| REMOTE SHA | `590491f` |
-| BACKEND URL | `https://ruznamo-backend-o4xk.vercel.app` |
-| ADMIN URL | `https://admin-panel-ten-tau-90.vercel.app` |
-| ADMIN BUNDLE (pre-push) | `index-DaWxVcoI.js` matched local build |
+| **Backend** | `https://ruznamo-backend-o4xk.vercel.app` |
+| **Admin** | `https://admin-panel-ten-tau-90.vercel.app` |
+| **Admin bundle** | `index-C_yK8i38.js` |
 
 ---
 
-## Production schema
+## Confirmed fix: schema drift (production blocker)
 
-**FEATURE:** Production schema alignment  
-**PREVIOUS PROBLEM:** P2022 `Order.paymentMethodId does not exist`  
-**ROOT CAUSE:** Code deployed before `prisma migrate deploy`  
-**ACTION TAKEN:** Applied migrations safely (additive only):
+**Chain (evidence, not assumption):**
 
-- `20260901180000_payment_methods_and_telegram_nav`
-- `20260901200000_pro_plan_commercial_disable`
+```text
+P2022 Order.paymentMethodId missing
+  → schema drift (code ahead of Neon)
+  → prisma migrate deploy (2 additive migrations)
+  → Order.findMany succeeds again
+  → /health/ready database up
+```
 
-**CODE:** YES | **TEST:** YES | **DEPLOYED:** YES (DB) | **RUNTIME VERIFIED:** YES (`migrate status` = up to date; forensic audit runs)
+**CODE:** YES | **TEST:** YES | **DEPLOYED:** YES | **RUNTIME VERIFIED:** YES
 
-**Commercial state verified:**
-
-- STANDARD: available (`isActive=true`, prices MONTHLY/YEARLY)
-- PRO: disabled (`isActive=false` via migration SQL)
-
-**Also applied:** `scripts/ensure-plans-permissions.ts --apply` → `plans:read`, `plans:update` in production Permission/Role tables.
+**Commercial DB state:** STANDARD `isActive=true`, PRO `isActive=false`.
 
 ---
 
-## Backend health
+## Current status by area
 
-**FEATURE:** Health endpoints  
-**RESULT:** GET `/health` 200, GET `/health/ready` 200, database `up`  
-**RUNTIME VERIFIED:** YES
-
----
-
-## Telegram webhook
-
-**FEATURE:** Webhook security + processing  
-**PREVIOUS PROBLEM:** `last_error_message: 500 Internal Server Error`  
-**ROOT CAUSE:** Schema drift on Order queries during real updates  
-**EVIDENCE:**
-
-- Without secret → 401 ✓
-- With secret → 200 ✓
-- `@Ruznamo_bot` registered to correct URL
-
-**RUNTIME VERIFIED:** PARTIAL — webhook 401/200 probes OK; synthetic `/start` update returned HTTP 200 (`scripts/probe-telegram-start.ts`). `getWebhookInfo.last_error_message` still shows pre-migration 500 (stale until Telegram delivers a successful user update). User-visible reply requires live Telegram client.
+| Area | Verdict | What is proven | What is NOT proven yet |
+|------|---------|----------------|------------------------|
+| **Production consistency** | **A** | Schema aligned; health OK; Order queries work | — |
+| **Telegram** | **B** | Webhook 401/200; synthetic `/start` → HTTP 200 | Real user sees reply in chat |
+| **Payment Orders** | **B** | API no longer 500 (`probe-admin-orders-list`) | Admin UI after login |
+| **Plan management** | **B** | DB: Standard ON, Pro OFF | Admin toggle persistence + Telegram reflection |
+| **Payment flow** | **B** | Architecture deployed; legacy AppConfig fallback works | Multi-method UX (`PaymentMethod` rows = 0) |
+| **License / device link** | **B** | Existing journeys in forensic audit | New activation E2E |
+| **Test data cleanup** | **B — NEEDS HUMAN CLASSIFICATION** | Dry-run script safe; 0 *deterministic* matches | Production visually still has suspicious rows |
+| **Admin profile** | **B** | `displayName` PATCH exists in code | Save → F5 persistence |
+| **Admin system** | **B** | Backend reads real device versions | System page after login |
+| **Analytics** | **B** | Code + tests | Page after login |
+| **Security** | **B** | Webhook secret enforced | Full admin authz walkthrough |
 
 ---
 
-## Payment Orders (Admin)
+## Test data cleanup — corrected assessment
 
-**FEATURE:** GET `/api/v1/admin/orders`  
-**PREVIOUS PROBLEM:** HTTP 500 (schema drift)  
-**ROOT CAUSE:** Missing `Order.paymentMethodId` column  
-**FIX:** Migration deploy + list/detail now include `paymentMethodName`  
-**CODE:** YES | **TEST:** YES | **DEPLOYED:** YES (`590491f`) | **RUNTIME VERIFIED:** `scripts/probe-admin-orders-list.ts` → 5 orders, no query error; admin bundle `index-C_yK8i38.js` live
+**Previous (too optimistic):** `TEST DATA CLEANUP = A` because dry-run returned 0 CONFIRMED TEST rows.
 
----
+**Correct reading:**
 
-## Plan management
+- `0 deterministic matches` means the **cleanup script's narrow rules** did not auto-classify rows.
+- It does **NOT** mean production is clean.
+- Forensic heuristics (read-only, `scripts/forensic-data-audit.ts`) already flagged **likely** test data, e.g.:
+  - **4 devices** with names like `Test Android`, `Local Test`, `Production Test` and fixture installation IDs
+  - **1 user** `displayName: TestUser`
+  - **121** audit log rows (not auto-deletable without human review)
 
-**FEATURE:** Admin Тарифы + Telegram dynamic plans  
-**CODE:** YES | **TEST:** YES | **DEPLOYED:** admin bundle includes `/plans`  
-**RUNTIME VERIFIED:** PARTIAL — DB state correct; admin UI login blocked (no password)
+**Next step:** After admin login, review **Пользователи**, **Устройства**, **Лицензии**, **Журнал аудита**. Mark known test rows by ID. Then run targeted cleanup with explicit IDs — not broad age/inactivity deletes.
 
-**Domain note:** `PlanCode` enum — only STANDARD/PRO/PRO_PLUS; not arbitrary new tariff names without schema change.
-
----
-
-## Test data cleanup
-
-**FEATURE:** Safe cleanup tooling  
-**DRY-RUN:** 0 CONFIRMED TEST rows matched deterministic criteria  
-**APPLY:** not run (nothing to delete)
+**Verdict:** **B / NEEDS HUMAN CLASSIFICATION**
 
 ---
 
-## Production data inventory (post-migrate)
+## Payment flow — corrected assessment
 
-| Table | Count |
-|-------|------:|
-| User | 11 |
-| TelegramAccount | 4 |
-| DeviceInstallation | 7 |
-| License | 2 |
-| LicenseActivation | 2 |
-| Order | 5 |
-| Receipt | 4 |
-| TrialGrant | 7 |
-| AuditLog | 121 |
+| Layer | Status |
+|-------|--------|
+| `PaymentMethod` table + Telegram `💳 Реквизиты` wizard | Deployed in code |
+| Production `PaymentMethod` rows | **0** |
+| Current buyer experience | **Legacy fallback** — `AppConfig` card/recipient when no active methods |
+| Multi-method UX (Душанбе Сити, Alif, …) | **Not configured** until admin creates requisites |
 
-Device app versions: 5× `1.0.0`, 2× `1.0.1` (System page should show distribution, not hardcoded single version).
+This is not a bug; it is **missing production configuration**. Status:
+
+> New multi-payment-method architecture is deployed; production configuration is not filled in.
 
 ---
 
-## Payment methods (requisites)
+## Manual QA checklist (human — before next code block)
 
-**PaymentMethod rows in production:** 0  
-**Fallback:** When no active `PaymentMethod` exists, Telegram purchase flow uses legacy `AppConfig` card/recipient (`telegram-update.processor.ts` `startOrderFlow`).  
-**Recommendation:** Admin adds requisites via Telegram menu `💳 Реквизиты` (ADMIN_TELEGRAM_IDS) for multi-method UX.
+Do these in order. Tick only when you **see** the result.
+
+| # | Check | Expected |
+|---|-------|----------|
+| 1 | **Админ → Заявки на оплату** | Opens; no red server/database error |
+| 2 | **Telegram `/start`** | Bot replies in chat; language or persistent main menu |
+| 3 | **Купить лицензию** | Only **Standard**; Pro absent |
+| 4 | **Админ → Тарифы** | Standard = Доступен; Pro = Отключён |
+| 5 | **Админ → Система** | Real device version distribution (not hardcoded single `1.0.0`) |
+| 6 | **Админ → Профиль** | Change display name → save → F5 → name persists |
+
+### After Telegram responds — configure requisites
+
+Admin Telegram → **💳 Реквизиты** → create at least one method (e.g. Душанбе Сити, phone type).
+
+### Full payment E2E (raises Telegram / Payment / License to A)
+
+```text
+/start → Standard → 30 or 365 → payment method → requisites → receipt
+→ admin receives attachment → ✅ Подтвердить → key to user → Мои лицензии
+```
+
+Also test rejection path and support text/photo/document.
+
+### Admin screen-by-screen (no new backend features first)
+
+```text
+Заявки → Тарифы → Telegram → Профиль → Система → Аналитика
+→ Пользователи → Устройства → Лицензии → Аудит
+```
+
+While reviewing Users/Devices/Licenses/Audit: note test row IDs for safe cleanup.
 
 ---
 
-## Hard blockers remaining
+## Infrastructure summary (operator view)
 
-1. **Admin browser QA** — login page loads (Russian UI); password not available in audit session (1 `AdminUser` in DB).
-2. **Full Telegram purchase E2E** — webhook processing verified; human must confirm visible bot UI + receipt/approve cycle.
-3. **Android activation E2E** — existing production journeys verified in DB (`licenseJourneys` in forensic audit); no new device test run.
-
----
-
-## Final verdicts
-
-| Area | Verdict |
-|------|---------|
-| PRODUCTION CONSISTENCY | **B** → **A** after user confirms Admin Orders page loads |
-| TELEGRAM | **B** (webhook OK; user-visible E2E pending) |
-| PAYMENT FLOW | **B** |
-| PAYMENT ORDERS | **B** → **A** after admin login verification |
-| PLAN MANAGEMENT | **B** |
-| LICENSE/DEVICE LINK | **B** |
-| TEST DATA CLEANUP | **A** (nothing confirmed to delete) |
-| ADMIN PROFILE | **B** |
-| ADMIN SYSTEM | **B** |
-| ANALYTICS | **B** |
-| SECURITY | **B** |
+| Component | Status |
+|-----------|--------|
+| Backend infrastructure | Stabilized |
+| Telegram transport / webhook | Technically healthy; real user test needed |
+| Admin Orders API | Fixed; UI needs login QA |
+| Plans | DB correct; UI toggle needs QA |
+| Payments | Architecture present; requisites not configured |
+| Test data | Not clean — needs human classification |
+| License / device chain | Confirmed on existing data; new activation E2E pending |
 
 ---
 
-## Operator smoke checklist (5 min)
+## What not to do yet
 
-1. Admin login → Заявки на оплату → **no red error**
-2. Telegram `/start` → language or main menu
-3. Buy → **only Standard** shown
-4. System → device versions show 1.0.0 and 1.0.1 distribution
-5. Тарифы → Pro **Отключён**, Standard **Доступен**
+- Do **not** add new backend features before manual QA above.
+- Do **not** run broad production deletes.
+- Do **not** treat `0 dry-run matches` as "production cleaned".
+
+---
+
+## Evidence references
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/production-db-drift.ts` | Schema + migration state |
+| `scripts/probe-admin-orders-list.ts` | Order list query post-migrate |
+| `scripts/probe-telegram-start.ts` | Synthetic `/start` webhook |
+| `scripts/telegram-runtime-audit.ts` | getMe, webhook info, secret probe |
+| `scripts/forensic-data-audit.ts` | Inventory + likely-test heuristics |
+| `scripts/cleanup-confirmed-test-data.ts` | Dry-run cleanup (deterministic rules only) |
