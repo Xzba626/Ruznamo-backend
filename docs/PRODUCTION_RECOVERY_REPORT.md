@@ -165,6 +165,8 @@ While reviewing Users/Devices/Licenses/Audit: note test row IDs for safe cleanup
 | `scripts/telegram-runtime-audit.ts` | getMe, webhook info, secret probe |
 | `scripts/forensic-data-audit.ts` | Inventory + likely-test heuristics |
 | `scripts/cleanup-confirmed-test-data.ts` | Dry-run cleanup (deterministic rules only) |
+| `scripts/probe-telegram-auth-production.ts` | Prod challenge + schema tables |
+| `scripts/probe-telegram-auth-extended.ts` | Prod webhook auth_ + wrong OTP + webhook health |
 
 ---
 
@@ -225,4 +227,71 @@ Migration `20260902140000_license_telegram_identity` applied.
 | **ADMIN CONTROL** | YES | partial | pending | **B** | revoke device, unlink/assign holder APIs |
 | **SALES ANALYTICS** | YES | YES | pending | **B** | GET `/admin/analytics/sales`; admin UI section |
 | **TEST DATA CLEANUP** | YES | dry-run | N/A | **B** | 6 CONFIRMED TEST rows (1 user, 4 devices); `--apply` needs human OK |
+
+---
+
+## Telegram authentication & recovery block (2026-09-02)
+
+Migration `20260902160000_telegram_auth_recovery` applied to Neon **before** code deploy (additive, backward-compatible).
+
+**HEAD (deployed):** `09fca16` on `origin/main`  
+**Tests:** 167/167 PASS | **Build:** PASS
+
+### Pre-deploy security (code review)
+
+| Control | Status | Evidence |
+|---------|--------|----------|
+| Opaque `auth_` token → `tokenHash` only in DB | YES | `TelegramAuthService.createChallenge` |
+| OTP stored as SHA-256 hash, 5 min TTL | YES | `hashOtp`, `OTP_TTL_MS` |
+| Max 5 OTP attempts → challenge consumed | YES | `telegram-auth.service.spec.ts` |
+| Challenge 15 min TTL, single-use on verify | YES | `consumedAt` on success |
+| Recovery grant 10 min, bound to device + mobile user | YES | `assertValidGrant` |
+| Holder-only license ops (not purchaser) | YES | `holderTelegramAccountId` filter + unit test |
+| Android never sends `telegramId` | YES | verify DTO = `{ challengeId, code }` only |
+| Key reveal requires grant + session + holder | YES | `assertValidGrant` + `assertLicenseHeldByGrant` |
+| No OTP/key in logs | YES | repo grep; audit metadata excludes plaintext key |
+| Auth does not create Order/License/sale | YES | no commerce writes in auth/recovery services |
+
+**IDOR model (confirmed):** `recoveryGrantId` alone is **insufficient**. Authorization requires valid JWT/mobile session **and** grant `mobileUserId` + `deviceId` match **and** unexpired grant **and** holder owns license. Fake grant probe → 404.
+
+### Production probes (2026-09-02)
+
+| Probe | Result |
+|-------|--------|
+| `prisma migrate status` | 12 migrations, schema up to date |
+| DB tables | `TelegramAuthChallenge`, `TelegramRecoveryGrant` present |
+| `GET /health` | 200 |
+| `GET /health/ready` | 200, database up |
+| `GET /api/v1/app/config?platform=ANDROID` | 200 (note: path is `/api/v1/app/config`, not `/app/config`) |
+| `POST /api/v1/auth/telegram/challenge` | **201**, deepLink `Ruznamo_bot` + `auth_` prefix |
+| Webhook `/start auth_*` | **200**, Telegram bound, OTP hash issued in DB |
+| Wrong OTP verify | **400** `AUTH_OTP_INVALID` |
+| Fake grant list (other device) | **404** |
+| Telegram `getWebhookInfo` | OK, `last_error_message: null`, pending 0 |
+
+Scripts: `scripts/probe-telegram-auth-production.ts`, `scripts/probe-telegram-auth-extended.ts`
+
+### Feature verdicts
+
+| Feature | CODE | TEST | DEPLOYED | RUNTIME VERIFIED | EVIDENCE |
+|---------|------|------|----------|------------------|----------|
+| **TELEGRAM AUTH ENGINE** | YES | YES | **YES** | **B+** | Prod challenge 201; webhook binds sender |
+| **OTP ISSUE** | YES | YES | **YES** | **B+** | DB `otpHash` set after auth_ start; Telegram webhook healthy |
+| **OTP VERIFY (correct)** | YES | YES | **YES** | **B** | Wrong OTP prod-tested; correct OTP needs real Telegram read |
+| **RECOVERY GRANT** | YES | YES | **YES** | **B** | Issued on verify (unit); grant expiry/replay in unit tests |
+| **LICENSE LIST (recovery)** | YES | YES | **YES** | **B** | Holder filter in code; prod list pending correct OTP |
+| **KEY REVEAL** | YES | YES | **YES** | **B** | IDOR + audit without key; prod reveal pending OTP E2E |
+| **KEYLESS ACTIVATION** | YES | YES | **YES** | **B** | Device limit preserved; prod activate pending OTP E2E |
+| **REPLACEMENT VIA GRANT** | YES | partial | **YES** | **B** | Reuses `executeReplacement`; prod pending OTP E2E |
+| **KEY FALLBACK (`/licenses/activate`)** | YES | YES | **YES** | **B** | Unchanged; regression in existing suite |
+| **SALES ANALYTICS REGRESSION** | YES | YES | **YES** | **YES** | Auth/recovery creates no Order/License |
+| **SECURITY / IDOR** | YES | YES | **YES** | **B+** | Grant+JWT+device binding; fake grant 404 on prod |
+
+**A verdict** for Telegram auth block only after Huawei E2E: `Telegram → OTP → licenses → reveal key → activate without key → replacement`.
+
+### Next step (explicit gate)
+
+1. ~~Backend commit + push + deploy~~ **DONE** (`09fca16`)
+2. **Android Cursor** — implement UI on stable contract (see Android block spec)
+3. **Huawei runtime E2E** — one holder account, full recovery/login path
 
