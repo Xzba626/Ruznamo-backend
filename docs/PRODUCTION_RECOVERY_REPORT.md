@@ -170,7 +170,7 @@ While reviewing Users/Devices/Licenses/Audit: note test row IDs for safe cleanup
 
 ## Corrective block after e8cf668 (2026-09-02)
 
-Targeted fixes for three proven gaps. **HEAD:** pending push (post-`e8cf668`).
+Targeted fixes for three proven gaps. **HEAD:** `3f1a570` on `origin/main`.
 
 ### Test suite delta
 
