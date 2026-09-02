@@ -156,6 +156,39 @@ export class TelegramUpdateProcessor {
     }
   }
 
+  private async handleAdminSupportReply(
+    message: import('./telegram.types').TelegramMessage,
+    adminTelegramId: bigint,
+    adminChatId: bigint,
+  ): Promise<boolean> {
+    const replyTo = message.reply_to_message;
+    if (!replyTo) {
+      return false;
+    }
+
+    const result = await this.supportRelay.deliverAdminReply({
+      adminTelegramId,
+      adminChatId,
+      replyToMessageId: replyTo.message_id,
+      text: message.text,
+      caption: message.caption,
+      photoFileId: message.photo?.at(-1)?.file_id,
+      documentFileId: message.document?.file_id,
+    });
+
+    if (result === 'not_authorized') {
+      return false;
+    }
+
+    if (result === 'unknown_target') {
+      const adminMsgs = getTelegramI18n(TelegramLanguage.RU);
+      await this.botApi.sendPlainMessage(adminChatId, adminMsgs.adminSupportReplyTargetUnknown);
+      return true;
+    }
+
+    return result === 'delivered' || result === 'empty_content';
+  }
+
   private issueSourceLabel(
     source: import('@prisma/client').LicenseIssueSource | null | undefined,
     msgs: ReturnType<typeof getTelegramI18n>,
@@ -235,6 +268,13 @@ export class TelegramUpdateProcessor {
 
     const telegramId = BigInt(from.id);
     const chatId = BigInt(message.chat.id);
+
+    if (message.reply_to_message && this.isAdmin(telegramId)) {
+      const adminReplyHandled = await this.handleAdminSupportReply(message, telegramId, chatId);
+      if (adminReplyHandled) {
+        return;
+      }
+    }
 
     if (message.photo?.length) {
       await this.handleMediaUpload(
@@ -387,6 +427,7 @@ export class TelegramUpdateProcessor {
       username: from.username,
       orderId: activeOrder?.id,
       orderStatus: activeOrder?.status,
+      sourceUserMessageId: message.message_id,
     });
 
     if (relayResult === 'sent') {
@@ -442,6 +483,7 @@ export class TelegramUpdateProcessor {
       fileType,
       firstName,
       username,
+      sourceUserMessageId: update.message?.message_id,
     });
 
     if (relayResult === 'sent') {

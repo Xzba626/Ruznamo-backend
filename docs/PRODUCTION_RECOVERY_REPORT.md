@@ -165,3 +165,41 @@ While reviewing Users/Devices/Licenses/Audit: note test row IDs for safe cleanup
 | `scripts/telegram-runtime-audit.ts` | getMe, webhook info, secret probe |
 | `scripts/forensic-data-audit.ts` | Inventory + likely-test heuristics |
 | `scripts/cleanup-confirmed-test-data.ts` | Dry-run cleanup (deterministic rules only) |
+
+---
+
+## Corrective block after e8cf668 (2026-09-02)
+
+Targeted fixes for three proven gaps. **HEAD:** pending push (post-`e8cf668`).
+
+### Test suite delta
+
+| Baseline | After corrective | Delta |
+|----------|------------------|-------|
+| e8cf668: **134 PASS** | **153 PASS** | +19 meaningful tests |
+
+**Restored regression (was removed in e8cf668):**
+
+- `PaymentApprovalService` — reject eligible order; approve without receipt
+- `LicenseIssuanceService` — P2002 unique `orderId` race (new owner file)
+
+**New coverage:**
+
+- `TelegramCommandsService` — `setMyCommands` + `setChatMenuButton({ type: "commands" })`
+- `TelegramSupportRelayService` — user→admin mapping; admin→user reply routing (A/B isolation)
+- `TelegramUpdateProcessor` — admin native Reply handling; unknown target message
+- `telegram-no-persistent-keyboard.spec.ts` — no persistent ReplyKeyboardMarkup regression
+
+### Feature verdicts (honest)
+
+| Feature | CODE | TEST | DEPLOYED | RUNTIME VERIFIED | EVIDENCE |
+|---------|------|------|----------|------------------|----------|
+| **MENU BUTTON** | YES | YES | pending | B | `setChatMenuButton` on startup; human Telegram Menu check pending |
+| **SUPPORT USER→ADMIN** | YES | YES | pending | B | Existing relay + DB mapping on send |
+| **SUPPORT ADMIN→USER** | YES | YES | pending | B | Reply-to mapped message; round-trip needs human QA |
+| **SUPPORT ROUTING SAFETY** | YES | YES | pending | B | Unique `(adminChatId, adminMessageId)`; automated A/B tests |
+| **PAYMENT REGRESSION TESTS** | YES | YES | pending | YES (tests) | reject + no-receipt restored |
+| **LICENSE ISSUANCE RACE TEST** | YES | YES | pending | YES (tests) | P2002 + minimal `racedDuplicate` fix |
+
+**A verdict** only after real Telegram: Menu opens commands, support round-trip, exit support → no relay.
+

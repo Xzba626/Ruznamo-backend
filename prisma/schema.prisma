@@ -626,3 +626,18 @@ model TelegramProcessedUpdate {
   updateId  BigInt   @id
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 }
+
+/// Maps admin-chat relay messages to originating user for support reply routing.
+model SupportRelayMapping {
+  id                  String   @id @default(cuid())
+  adminChatId         BigInt
+  adminMessageId      Int
+  userChatId          BigInt
+  userTelegramId      BigInt
+  sourceUserMessageId Int?
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([adminChatId, adminMessageId])
+  @@index([userTelegramId])
+  @@index([createdAt])
+}

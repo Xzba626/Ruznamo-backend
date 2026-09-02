@@ -98,4 +98,35 @@ describe('PaymentApprovalService', () => {
 
     await expect(service.approve('ord_1', actor)).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('rejects eligible under-review order', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'ord_1',
+      status: OrderStatus.UNDER_REVIEW,
+    });
+    prisma.$transaction.mockImplementation(async (cb: (tx: typeof prisma) => Promise<void>) =>
+      cb({
+        order: { update: jest.fn() },
+        receipt: { updateMany: jest.fn() },
+      } as never),
+    );
+
+    const result = await service.reject('ord_1', actor);
+
+    expect(result.alreadyProcessed).toBe(false);
+    expect(licenseIssuance.issueLicense).not.toHaveBeenCalled();
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'payment.rejected' }),
+    );
+  });
+
+  it('throws when approving order without receipt', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      ...order,
+      receipts: [],
+    });
+
+    await expect(service.approve('ord_1', actor)).rejects.toBeInstanceOf(BadRequestException);
+    expect(licenseIssuance.issueLicense).not.toHaveBeenCalled();
+  });
 });

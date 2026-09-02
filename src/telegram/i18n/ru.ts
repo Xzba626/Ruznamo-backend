@@ -62,6 +62,9 @@ export const ru: TelegramI18n = {
   supportRelayed: 'Ваше сообщение передано администратору. Пожалуйста, ожидайте.',
   supportRelayUnavailable: 'Поддержка временно недоступна. Попробуйте позже.',
   supportAttachmentRelayed: 'Ваш файл передан администратору. Пожалуйста, ожидайте.',
+  supportReplyFromAdmin: (body) =>
+    body ? `💬 Ответ службы поддержки:\n\n${body}` : '💬 Ответ службы поддержки',
+  adminSupportReplyTargetUnknown: 'Не удалось определить получателя этого ответа.',
   unsupportedAttachment: 'Этот тип файла не поддерживается. Отправьте фото или PDF чека.',
   replyBuyLicense: '🛒 Купить лицензию',
   replyMyLicenses: '🔑 Мои лицензии',

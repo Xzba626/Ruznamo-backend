@@ -12,10 +12,12 @@ export interface TelegramChat {
 export interface TelegramMessage {
   message_id: number;
   text?: string;
+  caption?: string;
   photo?: Array<{ file_id: string }>;
   document?: { file_id: string; mime_type?: string };
   from?: TelegramUser;
   chat: TelegramChat;
+  reply_to_message?: TelegramMessage;
 }
 
 export interface TelegramCallbackQuery {

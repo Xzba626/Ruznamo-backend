@@ -49,6 +49,7 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
   const supportRelay = {
     relayFreeText: jest.fn().mockResolvedValue('sent'),
     relayMedia: jest.fn().mockResolvedValue('sent'),
+    deliverAdminReply: jest.fn().mockResolvedValue('delivered'),
   };
 
   const auditService = { log: jest.fn() };
@@ -165,6 +166,68 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
 
     expect(supportRelay.relayMedia).toHaveBeenCalled();
     expect(orderService.findAwaitingReceiptOrder).toHaveBeenCalled();
+  });
+
+  it('delivers admin native reply to mapped support message', async () => {
+    await processor.processUpdate({
+      update_id: 6,
+      message: {
+        message_id: 60,
+        text: 'Ответ пользователю',
+        from: { id: 999, first_name: 'Admin' },
+        chat: { id: 999 },
+        reply_to_message: {
+          message_id: 42,
+          chat: { id: 999 },
+        },
+      },
+    });
+
+    expect(supportRelay.deliverAdminReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adminTelegramId: 999n,
+        replyToMessageId: 42,
+        text: 'Ответ пользователю',
+      }),
+    );
+    expect(supportRelay.relayFreeText).not.toHaveBeenCalled();
+  });
+
+  it('does not treat arbitrary admin text as support reply', async () => {
+    await processor.processUpdate({
+      update_id: 7,
+      message: {
+        message_id: 70,
+        text: 'Случайный текст админа',
+        from: { id: 999, first_name: 'Admin' },
+        chat: { id: 999 },
+      },
+    });
+
+    expect(supportRelay.deliverAdminReply).not.toHaveBeenCalled();
+  });
+
+  it('notifies admin when support reply target is unknown', async () => {
+    supportRelay.deliverAdminReply.mockResolvedValueOnce('unknown_target');
+
+    await processor.processUpdate({
+      update_id: 8,
+      message: {
+        message_id: 80,
+        text: 'Ответ на старое сообщение',
+        from: { id: 999, first_name: 'Admin' },
+        chat: { id: 999 },
+        reply_to_message: {
+          message_id: 1,
+          chat: { id: 999 },
+        },
+      },
+    });
+
+    expect(botApi.sendPlainMessage).toHaveBeenCalledWith(
+      999n,
+      expect.stringContaining('получателя'),
+    );
   });
 });
 

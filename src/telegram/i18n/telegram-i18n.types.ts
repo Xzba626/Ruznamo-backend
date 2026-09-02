@@ -57,6 +57,8 @@ export interface TelegramI18n {
   supportRelayed: string;
   supportRelayUnavailable: string;
   supportAttachmentRelayed: string;
+  supportReplyFromAdmin: (body: string) => string;
+  adminSupportReplyTargetUnknown: string;
   unsupportedAttachment: string;
   replyBuyLicense: string;
   replyMyLicenses: string;

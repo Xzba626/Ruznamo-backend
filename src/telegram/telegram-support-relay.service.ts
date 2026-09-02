@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuditActorType } from '@prisma/client';
+import { AuditActorType, TelegramLanguage } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { getTelegramI18n } from './i18n';
 import { TelegramBotApiService } from './telegram-bot-api.service';
 
 const MAX_RELAY_TEXT_LENGTH = 3500;
@@ -14,6 +16,7 @@ export interface SupportRelayInput {
   username?: string;
   orderId?: string;
   orderStatus?: string;
+  sourceUserMessageId?: number;
 }
 
 export interface SupportMediaRelayInput {
@@ -23,7 +26,20 @@ export interface SupportMediaRelayInput {
   fileType: 'photo' | 'document';
   firstName?: string;
   username?: string;
+  sourceUserMessageId?: number;
 }
+
+export interface AdminSupportReplyInput {
+  adminTelegramId: bigint;
+  adminChatId: bigint;
+  replyToMessageId: number;
+  text?: string;
+  caption?: string;
+  photoFileId?: string;
+  documentFileId?: string;
+}
+
+export type AdminSupportReplyResult = 'delivered' | 'unknown_target' | 'empty_content' | 'not_authorized';
 
 @Injectable()
 export class TelegramSupportRelayService {
@@ -33,6 +49,7 @@ export class TelegramSupportRelayService {
     private readonly configService: ConfigService,
     private readonly botApi: TelegramBotApiService,
     private readonly auditService: AuditService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async relayFreeText(input: SupportRelayInput): Promise<'sent' | 'no_admins' | 'failed'> {
@@ -54,8 +71,18 @@ export class TelegramSupportRelayService {
 
     for (const adminId of adminIds) {
       try {
-        await this.botApi.sendPlainMessage(BigInt(adminId), body);
-        sent = true;
+        const adminChatId = BigInt(adminId);
+        const adminMessageId = await this.botApi.sendPlainMessage(adminChatId, body);
+        if (adminMessageId != null) {
+          await this.storeMapping({
+            adminChatId,
+            adminMessageId,
+            userChatId: input.chatId,
+            userTelegramId: input.telegramUserId,
+            sourceUserMessageId: input.sourceUserMessageId,
+          });
+          sent = true;
+        }
       } catch (error) {
         this.logger.warn({ adminId, error }, 'Failed to relay support message to admin');
       }
@@ -104,13 +131,21 @@ export class TelegramSupportRelayService {
 
     for (const adminId of adminIds) {
       try {
-        const chat = BigInt(adminId);
-        if (input.fileType === 'photo') {
-          await this.botApi.sendPhoto(chat, input.fileId, caption);
-        } else {
-          await this.botApi.sendDocument(chat, input.fileId, caption);
+        const adminChatId = BigInt(adminId);
+        const adminMessageId =
+          input.fileType === 'photo'
+            ? await this.botApi.sendPhoto(adminChatId, input.fileId, caption)
+            : await this.botApi.sendDocument(adminChatId, input.fileId, caption);
+        if (adminMessageId != null) {
+          await this.storeMapping({
+            adminChatId,
+            adminMessageId,
+            userChatId: input.chatId,
+            userTelegramId: input.telegramUserId,
+            sourceUserMessageId: input.sourceUserMessageId,
+          });
+          sent = true;
         }
-        sent = true;
       } catch (error) {
         this.logger.warn({ adminId, error }, 'Failed to relay support media to admin');
       }
@@ -129,6 +164,87 @@ export class TelegramSupportRelayService {
     });
 
     return 'sent';
+  }
+
+  async deliverAdminReply(input: AdminSupportReplyInput): Promise<AdminSupportReplyResult> {
+    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+    if (!adminIds.includes(input.adminTelegramId.toString())) {
+      return 'not_authorized';
+    }
+
+    const mapping = await this.prisma.supportRelayMapping.findUnique({
+      where: {
+        adminChatId_adminMessageId: {
+          adminChatId: input.adminChatId,
+          adminMessageId: input.replyToMessageId,
+        },
+      },
+    });
+
+    if (!mapping) {
+      return 'unknown_target';
+    }
+
+    const body = input.text?.trim() || input.caption?.trim() || '';
+    const hasMedia = Boolean(input.photoFileId || input.documentFileId);
+    if (!body && !hasMedia) {
+      return 'empty_content';
+    }
+
+    const userMsgs = await this.resolveUserMessages(mapping.userTelegramId);
+    const prefix = userMsgs.supportReplyFromAdmin('');
+
+    if (input.photoFileId) {
+      const caption = body ? userMsgs.supportReplyFromAdmin(body) : prefix.trim();
+      await this.botApi.sendPhoto(mapping.userChatId, input.photoFileId, caption, undefined);
+    } else if (input.documentFileId) {
+      const caption = body ? userMsgs.supportReplyFromAdmin(body) : prefix.trim();
+      await this.botApi.sendDocument(mapping.userChatId, input.documentFileId, caption, undefined);
+    } else {
+      await this.botApi.sendPlainMessage(mapping.userChatId, userMsgs.supportReplyFromAdmin(body));
+    }
+
+    await this.botApi.removeReplyKeyboard(mapping.userChatId);
+
+    await this.auditService.log({
+      actorType: AuditActorType.TELEGRAM_BOT,
+      actorId: input.adminTelegramId.toString(),
+      action: 'telegram.support.admin_reply.delivered',
+      entityType: 'TelegramMessage',
+      metadata: {
+        userTelegramId: mapping.userTelegramId.toString(),
+        mappingId: mapping.id,
+      },
+    });
+
+    return 'delivered';
+  }
+
+  private async storeMapping(input: {
+    adminChatId: bigint;
+    adminMessageId: number;
+    userChatId: bigint;
+    userTelegramId: bigint;
+    sourceUserMessageId?: number;
+  }): Promise<void> {
+    await this.prisma.supportRelayMapping.create({
+      data: {
+        adminChatId: input.adminChatId,
+        adminMessageId: input.adminMessageId,
+        userChatId: input.userChatId,
+        userTelegramId: input.userTelegramId,
+        sourceUserMessageId: input.sourceUserMessageId ?? null,
+      },
+    });
+  }
+
+  private async resolveUserMessages(userTelegramId: bigint) {
+    const account = await this.prisma.telegramAccount.findUnique({
+      where: { telegramId: userTelegramId },
+      select: { language: true },
+    });
+    const lang = account?.language === TelegramLanguage.RU ? TelegramLanguage.RU : TelegramLanguage.TJ;
+    return getTelegramI18n(lang);
   }
 
   private buildMediaCaption(input: SupportMediaRelayInput): string {

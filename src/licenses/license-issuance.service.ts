@@ -69,6 +69,7 @@ export class LicenseIssuanceService {
     const now = new Date();
     const expiresAt = this.calculateExpiresAt(now, input.billingPeriod);
     const activateNow = input.activateNow !== false;
+    let racedDuplicate = false;
 
     const license = await this.prisma.$transaction(async (tx) => {
       let created;
@@ -94,6 +95,7 @@ export class LicenseIssuanceService {
         if (this.isUniqueViolation(error) && input.orderId) {
           const dup = await tx.license.findUnique({ where: { orderId: input.orderId } });
           if (dup) {
+            racedDuplicate = true;
             return dup;
           }
         }
@@ -112,6 +114,17 @@ export class LicenseIssuanceService {
 
       return created;
     });
+
+    if (racedDuplicate && input.orderId) {
+      const storedKey = await this.findStoredKey(license.id);
+      return {
+        licenseId: license.id,
+        licenseKey: storedKey ?? '[already-delivered]',
+        keyPrefix: license.keyPrefix,
+        expiresAt: license.expiresAt ?? expiresAt,
+        alreadyExisted: true,
+      };
+    }
 
     const alreadyExisted =
       input.orderId != null &&

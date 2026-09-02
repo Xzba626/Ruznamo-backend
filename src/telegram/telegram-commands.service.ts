@@ -54,6 +54,7 @@ export class TelegramCommandsService implements OnModuleInit {
       })),
       { type: 'all_private_chats' },
     );
+    await this.botApi.setChatMenuButton({ type: 'commands' }, { type: 'all_private_chats' });
   }
 
   async registerAdminCommandsForChat(chatId: bigint): Promise<void> {

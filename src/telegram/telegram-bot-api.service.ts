@@ -33,61 +33,64 @@ export class TelegramBotApiService {
     return json.ok ? (json.result ?? null) : null;
   }
 
-  sendMessage(
+  async sendMessage(
     chatId: number | bigint,
     text: string,
     replyMarkup?: TelegramReplyMarkup,
     options?: { parseMode?: 'Markdown' | 'HTML' | 'none' },
-  ): Promise<void> {
+  ): Promise<number | null> {
     const parseMode = options?.parseMode ?? 'Markdown';
-    return this.call('sendMessage', {
+    const result = await this.call<{ message_id: number }>('sendMessage', {
       chat_id: Number(chatId),
       text,
       ...(parseMode !== 'none' ? { parse_mode: parseMode } : {}),
       reply_markup: replyMarkup,
-    }).then(() => undefined);
+    });
+    return result?.message_id ?? null;
   }
 
   sendPlainMessage(
     chatId: number | bigint,
     text: string,
     replyMarkup?: ReplyKeyboardMarkup | ReplyKeyboardRemove,
-  ): Promise<void> {
+  ): Promise<number | null> {
     return this.sendMessage(chatId, text, replyMarkup, { parseMode: 'none' });
   }
 
   removeReplyKeyboard(chatId: number | bigint): Promise<void> {
-    return this.sendPlainMessage(chatId, ' ', { remove_keyboard: true });
+    return this.sendPlainMessage(chatId, ' ', { remove_keyboard: true }).then(() => undefined);
   }
 
-  sendPhoto(
+  async sendPhoto(
     chatId: number | bigint,
     photoFileId: string,
     caption?: string,
     replyMarkup?: InlineKeyboardMarkup,
-  ): Promise<void> {
-    return this.call('sendPhoto', {
+  ): Promise<number | null> {
+    const result = await this.call<{ message_id: number }>('sendPhoto', {
       chat_id: Number(chatId),
       photo: photoFileId,
       caption,
       parse_mode: 'Markdown',
       reply_markup: replyMarkup,
-    }).then(() => undefined);
+    });
+    return result?.message_id ?? null;
   }
 
-  sendDocument(
+  async sendDocument(
     chatId: number | bigint,
     documentFileId: string,
     caption?: string,
     replyMarkup?: InlineKeyboardMarkup,
-  ): Promise<void> {
-    return this.call('sendDocument', {
+  ): Promise<number | null> {
+    const result = await this.call<{ message_id: number }>('sendDocument', {
       chat_id: Number(chatId),
       document: documentFileId,
       caption,
       parse_mode: 'Markdown',
       reply_markup: replyMarkup,
-    }).then(() => undefined);
+    });
+    return result?.message_id ?? null;
   }
 
   answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
@@ -116,6 +119,16 @@ export class TelegramBotApiService {
   ): Promise<void> {
     await this.call('setMyCommands', {
       commands,
+      ...(scope ? { scope } : {}),
+    });
+  }
+
+  async setChatMenuButton(
+    menuButton: { type: 'commands' },
+    scope?: { type: 'default' } | { type: 'all_private_chats' } | { type: 'chat'; chat_id: number },
+  ): Promise<void> {
+    await this.call('setChatMenuButton', {
+      menu_button: menuButton,
       ...(scope ? { scope } : {}),
     });
   }

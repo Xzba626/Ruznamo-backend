@@ -26,7 +26,7 @@ Status values: `NOT STARTED` | `IN PROGRESS` | `CODE DONE` | `DEPLOYED` | `VERIF
 | 32–36 | Admin profile | NEEDS HUMAN QA | displayName save → F5 |
 | 37–42 | System page | NEEDS HUMAN QA | Real versions in DB; page unopened |
 | 43–47 | Analytics + audit | NEEDS HUMAN QA | Code done |
-| 51–53 | Tests + build | VERIFIED | 135 backend; admin build OK |
+| 51–53 | Tests + build | VERIFIED | 153 backend (corrective block); admin build OK |
 | 54 | Commit / push / deploy | VERIFIED | Pushed to main |
 | 55 | Admin screen-by-screen QA | NOT STARTED | Waiting on human login |
 | 56 | Telegram purchase E2E | NOT STARTED | After requisites + /start verified |

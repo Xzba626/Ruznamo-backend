@@ -62,6 +62,9 @@ export const tj: TelegramI18n = {
   supportRelayed: 'Паёми шумо ба маъмур фиристода шуд. Лутфан интизор шавед.',
   supportRelayUnavailable: 'Дастгирии муваққатан дастнорас аст. Лутфан дертар кӯшиш кунед.',
   supportAttachmentRelayed: 'Файли шумо ба маъмур фиристода шуд. Лутфан интизор шавед.',
+  supportReplyFromAdmin: (body) =>
+    body ? `💬 Ҷавоби дастгирӣ:\n\n${body}` : '💬 Ҷавоби дастгирӣ',
+  adminSupportReplyTargetUnknown: 'Гирандаи ин ҷавоб муайян нашуд.',
   unsupportedAttachment: 'Ин намуди файл дастгирӣ намешавад. Лутфан акс ё PDF-и чек фиристед.',
   replyBuyLicense: '🛒 Харидани иҷозатнома',
   replyMyLicenses: '🔑 Иҷозатномаҳои ман',
