@@ -194,12 +194,12 @@ Targeted fixes for three proven gaps. **HEAD:** `3f1a570` on `origin/main`.
 
 | Feature | CODE | TEST | DEPLOYED | RUNTIME VERIFIED | EVIDENCE |
 |---------|------|------|----------|------------------|----------|
-| **MENU BUTTON** | YES | YES | pending | B | `setChatMenuButton` on startup; human Telegram Menu check pending |
-| **SUPPORT USER→ADMIN** | YES | YES | pending | B | Existing relay + DB mapping on send |
-| **SUPPORT ADMIN→USER** | YES | YES | pending | B | Reply-to mapped message; round-trip needs human QA |
-| **SUPPORT ROUTING SAFETY** | YES | YES | pending | B | Unique `(adminChatId, adminMessageId)`; automated A/B tests |
-| **PAYMENT REGRESSION TESTS** | YES | YES | pending | YES (tests) | reject + no-receipt restored |
-| **LICENSE ISSUANCE RACE TEST** | YES | YES | pending | YES (tests) | P2002 + minimal `racedDuplicate` fix |
+| **MENU BUTTON** | YES | YES | YES | **B+** | API: `getChatMenuButton` → `{ type: "commands" }`, 7 commands; human Menu UI pending |
+| **SUPPORT USER→ADMIN** | YES | YES | YES | B | Relay + `SupportRelayMapping` table (migration applied) |
+| **SUPPORT ADMIN→USER** | YES | YES | YES | B | Reply-to mapping; round-trip needs human QA |
+| **SUPPORT ROUTING SAFETY** | YES | YES | YES | B | Unique `(adminChatId, adminMessageId)`; automated A/B tests |
+| **PAYMENT REGRESSION TESTS** | YES | YES | YES | YES (tests) | reject + no-receipt restored |
+| **LICENSE ISSUANCE RACE TEST** | YES | YES | YES | YES (tests) | P2002 + `racedDuplicate` handling |
 
 **A verdict** only after real Telegram: Menu opens commands, support round-trip, exit support → no relay.
 
