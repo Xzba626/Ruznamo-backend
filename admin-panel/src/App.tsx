@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { LocaleProvider } from './context/LocaleContext';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
@@ -13,11 +14,14 @@ import { AuditPage } from './pages/AuditPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { PlansPage } from './pages/PlansPage';
 import { SystemPage } from './pages/SystemPage';
+import { SystemDataPage } from './pages/SystemDataPage';
+import { UpdatesPage } from './pages/UpdatesPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 export function App() {
   return (
-    <AuthProvider>
+    <LocaleProvider>
+      <AuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -37,12 +41,15 @@ export function App() {
             <Route path="audit" element={<AuditPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="plans" element={<PlansPage />} />
+            <Route path="updates" element={<UpdatesPage />} />
             <Route path="system" element={<SystemPage />} />
+            <Route path="system/data" element={<SystemDataPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-    </AuthProvider>
+      </AuthProvider>
+    </LocaleProvider>
   );
 }

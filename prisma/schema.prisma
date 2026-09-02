@@ -140,6 +140,23 @@ enum SupportMessageContentType {
   DOCUMENT
 }
 
+enum SystemSecurityCredentialType {
+  DATA_RESET
+}
+
+enum AppReleaseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  PURGED
+}
+
+enum DataResetScope {
+  TEST_DATA_CLEANUP
+  USER_DATA_RESET
+  FACTORY_RESET
+}
+
 // ---------------------------------------------------------------------------
 // Users & identity
 // ---------------------------------------------------------------------------
@@ -219,6 +236,9 @@ model DeviceInstallation {
   androidOsVersion   String?
   platform           Platform  @default(ANDROID)
   appVersion         String?
+  appVersionName     String?
+  appVersionCode     Int?
+  appLocale          String?
   registrationIp     String?
   lastSeenIp         String?
   lastSeenAt         DateTime  @default(now()) @db.Timestamptz(3)
@@ -648,6 +668,7 @@ model AdminUser {
   approvedOrders        Order[]                  @relation("OrderApprovedBy")
   reviewedReceipts      Receipt[]                @relation("ReceiptReviewedBy")
   issuedLicenses        License[]                @relation("LicenseIssuedByAdmin")
+  appReleases           AppRelease[]
 
   @@index([isActive])
 }
@@ -770,6 +791,41 @@ model AppVersion {
   updatedAt               DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([platform, isActive])
+}
+
+model AppRelease {
+  id                       String           @id @default(cuid())
+  platform                 Platform         @default(ANDROID)
+  versionName              String
+  versionCode              Int
+  packageName              String
+  signingCertificateSha256 String
+  objectKey                String
+  fileSize                 BigInt
+  sha256                   String
+  status                   AppReleaseStatus @default(DRAFT)
+  mandatory                Boolean          @default(false)
+  changelogRu              String?
+  changelogTg              String?
+  createdByAdminId         String?
+  createdAt                DateTime         @default(now()) @db.Timestamptz(3)
+  publishedAt              DateTime?        @db.Timestamptz(3)
+  archivedAt               DateTime?        @db.Timestamptz(3)
+
+  createdBy AdminUser? @relation(fields: [createdByAdminId], references: [id], onDelete: SetNull)
+
+  @@unique([platform, versionCode])
+  @@index([platform, status])
+  @@index([publishedAt])
+}
+
+model SystemSecurityCredential {
+  id                String                       @id @default(cuid())
+  type              SystemSecurityCredentialType @unique
+  passwordHash      String
+  passwordChangedAt DateTime                     @db.Timestamptz(3)
+  createdAt         DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                     @updatedAt @db.Timestamptz(3)
 }
 
 model SystemConfig {

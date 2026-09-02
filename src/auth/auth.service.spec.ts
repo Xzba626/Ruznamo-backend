@@ -53,6 +53,10 @@ describe('AuthService', () => {
   };
 
   const auditService = { log: jest.fn() };
+  const deviceTelemetry = {
+    syncByInstallationId: jest.fn(),
+    touchLastSeen: jest.fn(),
+  };
 
   const service = new AuthService(
     prisma as never,
@@ -60,6 +64,7 @@ describe('AuthService', () => {
     jwtService as never,
     configService as unknown as ConfigService,
     auditService as unknown as AuditService,
+    deviceTelemetry as never,
   );
 
   beforeEach(() => {

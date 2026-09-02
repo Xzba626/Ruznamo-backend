@@ -1,0 +1,341 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { AppReleaseStatus, Platform, Prisma } from '@prisma/client';
+import { ApkInspectorService } from '../../apk/apk-inspector.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { ObjectStorageService } from '../../storage/object-storage.service';
+import { formatAppVersionLabel } from '../../devices/device-metadata.util';
+
+export type UploadedApkFile = {
+  buffer: Buffer;
+  originalname?: string;
+  mimetype?: string;
+  size?: number;
+};
+
+@Injectable()
+export class AdminReleasesService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: ObjectStorageService,
+    private readonly apkInspector: ApkInspectorService,
+  ) {}
+
+  async getOverview(platform: Platform = Platform.ANDROID) {
+    const [latestPublished, releases, activeDevices] = await Promise.all([
+      this.prisma.appRelease.findFirst({
+        where: { platform, status: AppReleaseStatus.PUBLISHED },
+        orderBy: { versionCode: 'desc' },
+      }),
+      this.prisma.appRelease.findMany({
+        where: { platform },
+        orderBy: { versionCode: 'desc' },
+        take: 50,
+      }),
+      this.prisma.deviceInstallation.count({ where: { revokedAt: null, appVersionCode: { not: null } } }),
+    ]);
+
+    const adoption = latestPublished
+      ? await this.countAdoption(latestPublished.versionCode, activeDevices)
+      : { count: 0, percent: 0 };
+
+    return {
+      current: latestPublished
+        ? {
+            ...this.serializeRelease(latestPublished),
+            adoption,
+            downloadUrl: await this.safeDownloadUrl(latestPublished),
+          }
+        : null,
+      history: await Promise.all(
+        releases.map(async (release) => ({
+          ...this.serializeRelease(release),
+          deviceCount: await this.prisma.deviceInstallation.count({
+            where: { revokedAt: null, appVersionCode: release.versionCode },
+          }),
+        })),
+      ),
+    };
+  }
+
+  async uploadDraft(adminId: string, file: UploadedApkFile) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException({ code: 'APK_REQUIRED', message: 'APK file is required' });
+    }
+    if (!this.storage.isConfigured()) {
+      throw new ServiceUnavailableException({
+        code: 'OBJECT_STORAGE_NOT_CONFIGURED',
+        message: 'Configure object storage before uploading APK releases',
+      });
+    }
+
+    const inspected = await this.apkInspector.inspect(file.buffer);
+    const latestPublished = await this.prisma.appRelease.findFirst({
+      where: { platform: Platform.ANDROID, status: AppReleaseStatus.PUBLISHED },
+      orderBy: { versionCode: 'desc' },
+    });
+    if (latestPublished && inspected.versionCode <= latestPublished.versionCode) {
+      throw new BadRequestException({
+        code: 'VERSION_CODE_NOT_INCREASING',
+        message: `versionCode must be greater than ${latestPublished.versionCode}`,
+      });
+    }
+
+    const objectKey = this.storage.buildApkObjectKey(inspected.versionCode, inspected.sha256);
+    await this.storage.putObject(objectKey, file.buffer, 'application/vnd.android.package-archive');
+
+    const release = await this.prisma.appRelease.upsert({
+      where: {
+        platform_versionCode: {
+          platform: Platform.ANDROID,
+          versionCode: inspected.versionCode,
+        },
+      },
+      create: {
+        platform: Platform.ANDROID,
+        versionName: inspected.versionName,
+        versionCode: inspected.versionCode,
+        packageName: inspected.packageName,
+        signingCertificateSha256: inspected.signingCertificateSha256,
+        objectKey,
+        fileSize: BigInt(inspected.fileSize),
+        sha256: inspected.sha256,
+        status: AppReleaseStatus.DRAFT,
+        createdByAdminId: adminId,
+      },
+      update: {
+        versionName: inspected.versionName,
+        packageName: inspected.packageName,
+        signingCertificateSha256: inspected.signingCertificateSha256,
+        objectKey,
+        fileSize: BigInt(inspected.fileSize),
+        sha256: inspected.sha256,
+        status: AppReleaseStatus.DRAFT,
+      },
+    });
+
+    return this.serializeRelease(release);
+  }
+
+  async updateDraft(
+    releaseId: string,
+    data: { changelogRu?: string; changelogTg?: string; mandatory?: boolean },
+  ) {
+    const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
+    if (!release) {
+      throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
+    }
+    if (release.status !== AppReleaseStatus.DRAFT) {
+      throw new BadRequestException({
+        code: 'RELEASE_NOT_DRAFT',
+        message: 'Only draft releases can be edited',
+      });
+    }
+
+    const updated = await this.prisma.appRelease.update({
+      where: { id: releaseId },
+      data: {
+        changelogRu: data.changelogRu,
+        changelogTg: data.changelogTg,
+        mandatory: data.mandatory,
+      },
+    });
+    return this.serializeRelease(updated);
+  }
+
+  async publish(releaseId: string) {
+    const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
+    if (!release) {
+      throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
+    }
+    if (release.status !== AppReleaseStatus.DRAFT) {
+      throw new BadRequestException({
+        code: 'RELEASE_NOT_DRAFT',
+        message: 'Only draft releases can be published',
+      });
+    }
+
+    const head = await this.storage.headObject(release.objectKey);
+    if (!head.exists) {
+      throw new BadRequestException({
+        code: 'APK_FILE_MISSING',
+        message: 'APK binary is missing from object storage',
+      });
+    }
+
+    const now = new Date();
+    const published = await this.prisma.$transaction(async (tx) => {
+      await tx.appRelease.updateMany({
+        where: {
+          platform: release.platform,
+          status: AppReleaseStatus.PUBLISHED,
+          id: { not: release.id },
+        },
+        data: { status: AppReleaseStatus.ARCHIVED, archivedAt: now },
+      });
+
+      return tx.appRelease.update({
+        where: { id: release.id },
+        data: { status: AppReleaseStatus.PUBLISHED, publishedAt: now },
+      });
+    });
+
+    await this.syncLegacyAppVersion(published);
+    return this.serializeRelease(published);
+  }
+
+  async archive(releaseId: string) {
+    const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
+    if (!release) {
+      throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
+    }
+    const updated = await this.prisma.appRelease.update({
+      where: { id: releaseId },
+      data: { status: AppReleaseStatus.ARCHIVED, archivedAt: new Date() },
+    });
+    return this.serializeRelease(updated);
+  }
+
+  async purgeFile(releaseId: string) {
+    const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
+    if (!release) {
+      throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
+    }
+    if (release.status === AppReleaseStatus.PUBLISHED) {
+      throw new BadRequestException({
+        code: 'CANNOT_PURGE_PUBLISHED',
+        message: 'Publish a replacement before purging the current published APK',
+      });
+    }
+
+    if (this.storage.isConfigured()) {
+      await this.storage.deleteObject(release.objectKey).catch(() => undefined);
+    }
+
+    const updated = await this.prisma.appRelease.update({
+      where: { id: releaseId },
+      data: { status: AppReleaseStatus.PURGED },
+    });
+    return this.serializeRelease(updated);
+  }
+
+  async getDownloadUrl(releaseId: string) {
+    const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
+    if (!release) {
+      throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
+    }
+    if (release.status === AppReleaseStatus.PURGED) {
+      throw new BadRequestException({ code: 'APK_PURGED', message: 'APK file has been purged' });
+    }
+    const url = await this.safeDownloadUrl(release);
+    if (!url) {
+      throw new ServiceUnavailableException({
+        code: 'DOWNLOAD_UNAVAILABLE',
+        message: 'Download URL is not available',
+      });
+    }
+    return { url, release: this.serializeRelease(release) };
+  }
+
+  private async safeDownloadUrl(release: { objectKey: string; status: AppReleaseStatus }) {
+    if (release.status === AppReleaseStatus.PURGED || !this.storage.isConfigured()) {
+      return null;
+    }
+    const publicUrl = this.storage.getPublicUrl(release.objectKey);
+    if (publicUrl) {
+      return publicUrl;
+    }
+    return this.storage.getSignedDownloadUrl(release.objectKey, 3600);
+  }
+
+  private async countAdoption(versionCode: number, activeDevices: number) {
+    const count = await this.prisma.deviceInstallation.count({
+      where: { revokedAt: null, appVersionCode: versionCode },
+    });
+    const percent = activeDevices > 0 ? Math.round((count / activeDevices) * 100) : 0;
+    return { count, percent };
+  }
+
+  private serializeRelease(release: {
+    id: string;
+    platform: Platform;
+    versionName: string;
+    versionCode: number;
+    packageName: string;
+    signingCertificateSha256: string;
+    objectKey: string;
+    fileSize: bigint;
+    sha256: string;
+    status: AppReleaseStatus;
+    mandatory: boolean;
+    changelogRu: string | null;
+    changelogTg: string | null;
+    createdAt: Date;
+    publishedAt: Date | null;
+    archivedAt: Date | null;
+  }) {
+    return {
+      id: release.id,
+      platform: release.platform,
+      versionLabel: formatAppVersionLabel({
+        appVersionName: release.versionName,
+        appVersionCode: release.versionCode,
+      }),
+      versionName: release.versionName,
+      versionCode: release.versionCode,
+      packageName: release.packageName,
+      signingCertificateSha256: release.signingCertificateSha256,
+      fileSize: Number(release.fileSize),
+      sha256: release.sha256,
+      status: release.status,
+      mandatory: release.mandatory,
+      changelogRu: release.changelogRu,
+      changelogTg: release.changelogTg,
+      createdAt: release.createdAt.toISOString(),
+      publishedAt: release.publishedAt?.toISOString() ?? null,
+      archivedAt: release.archivedAt?.toISOString() ?? null,
+      filePurged: release.status === AppReleaseStatus.PURGED,
+    };
+  }
+
+  private async syncLegacyAppVersion(release: {
+    platform: Platform;
+    versionName: string;
+    mandatory: boolean;
+    changelogRu: string | null;
+    changelogTg: string | null;
+  }) {
+    const existing = await this.prisma.appVersion.findFirst({
+      where: { platform: release.platform, isActive: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (existing) {
+      await this.prisma.appVersion.update({
+        where: { id: existing.id },
+        data: {
+          latestVersion: release.versionName,
+          minimumSupportedVersion: existing.minimumSupportedVersion,
+          forceUpdate: release.mandatory,
+          releaseNotes: release.changelogRu,
+          releaseNotesTj: release.changelogTg,
+        },
+      });
+      return;
+    }
+    await this.prisma.appVersion.create({
+      data: {
+        platform: release.platform,
+        latestVersion: release.versionName,
+        minimumSupportedVersion: release.versionName,
+        forceUpdate: release.mandatory,
+        releaseNotes: release.changelogRu,
+        releaseNotesTj: release.changelogTg,
+        isActive: true,
+      },
+    });
+  }
+}

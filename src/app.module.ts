@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module';
 import { AppConfigModule } from './app-config/app-config.module';
 import { AdminModule } from './admin/admin.module';
 import { MobileModule } from './mobile/mobile.module';
+import { AppUpdateModule } from './app-update/app-update.module';
 import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
@@ -60,6 +61,7 @@ import { TelegramModule } from './telegram/telegram.module';
     PrismaModule,
     HealthModule,
     AppConfigModule,
+    AppUpdateModule,
     AdminModule,
     MobileModule,
     TelegramModule,

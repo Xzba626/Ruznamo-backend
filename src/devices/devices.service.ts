@@ -8,6 +8,7 @@ import { AuditActorType } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { EntitlementService } from '../entitlements/entitlement.service';
+import { buildDeviceMetadataUpdate } from './device-metadata.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDeviceMetadataDto } from './dto/register-device-metadata.dto';
 
@@ -44,14 +45,15 @@ export class DevicesService {
         });
       }
 
+      const metadata = buildDeviceMetadataUpdate(dto);
       const device = await this.prisma.deviceInstallation.update({
         where: { id: existing.id },
         data: {
-          appVersion: dto.appVersion,
-          deviceName: dto.deviceName,
-          deviceManufacturer: dto.deviceManufacturer,
-          deviceModel: dto.deviceModel,
-          androidOsVersion: dto.androidOsVersion,
+          ...metadata,
+          deviceName: dto.deviceName ?? metadata.deviceName,
+          deviceManufacturer: dto.deviceManufacturer ?? metadata.deviceManufacturer,
+          deviceModel: dto.deviceModel ?? metadata.deviceModel,
+          androidOsVersion: dto.androidOsVersion ?? metadata.androidOsVersion,
           platform: dto.platform,
           lastSeenAt: new Date(),
           lastSeenIp: meta.ipAddress,
@@ -63,13 +65,14 @@ export class DevicesService {
 
     await this.entitlementService.assertDeviceRegistrationAllowed(user.sub);
 
+    const metadata = buildDeviceMetadataUpdate(dto);
     const device = await this.prisma.deviceInstallation.create({
       data: {
         userId: user.sub,
         installationId: dto.installationId,
         platform: dto.platform,
-        appVersion: dto.appVersion,
-        deviceName: dto.deviceName,
+        ...metadata,
+        deviceName: dto.deviceName ?? metadata.deviceName,
         deviceManufacturer: dto.deviceManufacturer,
         deviceModel: dto.deviceModel,
         androidOsVersion: dto.androidOsVersion,

@@ -1,4 +1,5 @@
 import { apiRequest } from './client';
+import { tokenStore } from './client';
 import type { Paginated } from './types';
 
 export function fetchDashboardSummary() {
@@ -192,4 +193,100 @@ export function updatePlan(
     method: 'PATCH',
     body: JSON.stringify(body),
   });
+}
+
+export function fetchResetPasswordStatus() {
+  return apiRequest<{ configured: boolean; passwordChangedAt: string | null }>(
+    '/api/v1/admin/system/data-reset/password-status',
+  );
+}
+
+export function initializeResetPassword(body: { newPassword: string; confirmPassword: string }) {
+  return apiRequest('/api/v1/admin/system/data-reset/password/initialize', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function changeResetPassword(body: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}) {
+  return apiRequest('/api/v1/admin/system/data-reset/password/change', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function dataResetDryRun(scope: string) {
+  return apiRequest<{ counts: Record<string, number> }>('/api/v1/admin/system/data-reset/dry-run', {
+    method: 'POST',
+    body: JSON.stringify({ scope }),
+  });
+}
+
+export function executeDataReset(body: {
+  scope: string;
+  resetPassword: string;
+  confirmationPhrase: string;
+}) {
+  return apiRequest<{ afterCounts: Record<string, number> }>(
+    '/api/v1/admin/system/data-reset/execute',
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export function fetchReleasesOverview() {
+  return apiRequest<{
+    current: {
+      id: string;
+      versionLabel: string;
+      fileSize: number;
+      sha256: string;
+      publishedAt: string | null;
+      adoption: { count: number; percent: number };
+    } | null;
+    history: Array<{
+      id: string;
+      versionLabel: string;
+      status: string;
+      deviceCount?: number;
+      publishedAt: string | null;
+    }>;
+  }>('/api/v1/admin/releases');
+}
+
+export async function uploadReleaseApk(file: File) {
+  const form = new FormData();
+  form.append('apk', file);
+  const token = tokenStore.getAccess();
+  const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
+  const response = await fetch(`${base}/api/v1/admin/releases/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok || !json.success) {
+    throw new Error(json.error?.message ?? 'Upload failed');
+  }
+  return json.data as { id: string };
+}
+
+export function updateReleaseDraft(
+  id: string,
+  body: { changelogRu?: string; changelogTg?: string; mandatory?: boolean },
+) {
+  return apiRequest(`/api/v1/admin/releases/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export function publishRelease(id: string) {
+  return apiRequest(`/api/v1/admin/releases/${id}/publish`, { method: 'POST', body: JSON.stringify({}) });
 }

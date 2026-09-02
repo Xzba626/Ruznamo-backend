@@ -14,6 +14,8 @@ import {
   UserStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { buildDeviceMetadataUpdate } from '../devices/device-metadata.util';
+import { DeviceTelemetryService } from '../devices/device-telemetry.service';
 import { TokenHashService } from '../security/token-hash.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDeviceDto } from './dto/register-device.dto';
@@ -39,6 +41,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly deviceTelemetry: DeviceTelemetryService,
   ) {}
 
   async registerDevice(dto: RegisterDeviceDto, meta: RequestMeta) {
@@ -79,13 +82,15 @@ export class AuthService {
         });
       }
 
+      const metadata = buildDeviceMetadataUpdate(dto);
       const device = await this.prisma.deviceInstallation.update({
         where: { id: existing.id },
         data: {
-          appVersion: dto.appVersion,
-          deviceName: dto.deviceName,
+          ...metadata,
+          deviceName: dto.deviceName ?? metadata.deviceName,
           platform: dto.platform,
           lastSeenAt: new Date(),
+          lastSeenIp: meta.ipAddress,
         },
       });
 
@@ -118,13 +123,19 @@ export class AuthService {
         },
       });
 
+      const metadata = buildDeviceMetadataUpdate(dto);
       const device = await tx.deviceInstallation.create({
         data: {
           userId: user.id,
           installationId: dto.installationId,
           platform: dto.platform ?? Platform.ANDROID,
-          appVersion: dto.appVersion,
-          deviceName: dto.deviceName,
+          ...metadata,
+          deviceName: dto.deviceName ?? metadata.deviceName,
+          deviceManufacturer: dto.deviceManufacturer,
+          deviceModel: dto.deviceModel,
+          androidOsVersion: dto.androidOsVersion,
+          registrationIp: meta.ipAddress,
+          lastSeenIp: meta.ipAddress,
           lastSeenAt: new Date(),
         },
       });
@@ -184,7 +195,15 @@ export class AuthService {
     return this.buildRegisterResponse(result.user, result.device, result.trial, tokens);
   }
 
-  async refresh(refreshToken: string, meta: RequestMeta): Promise<MobileAuthTokens> {
+  async refresh(refreshToken: string, meta: RequestMeta, telemetry?: {
+    appVersion?: string;
+    appVersionName?: string;
+    appVersionCode?: number;
+    appLocale?: string;
+    deviceManufacturer?: string;
+    deviceModel?: string;
+    androidOsVersion?: string;
+  }): Promise<MobileAuthTokens> {
     const tokenHash = this.tokenHashService.hashToken(refreshToken);
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
@@ -221,6 +240,12 @@ export class AuthService {
         code: 'DEVICE_REVOKED',
         message: 'No active device found for this session',
       });
+    }
+
+    if (telemetry) {
+      await this.deviceTelemetry.syncByInstallationId(device.installationId, telemetry, meta.ipAddress);
+    } else {
+      await this.deviceTelemetry.touchLastSeen(device.id, meta.ipAddress);
     }
 
     const tokens = await this.issueTokenPair(

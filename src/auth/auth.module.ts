@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuditModule } from '../audit/audit.module';
+import { DeviceTelemetryModule } from '../devices/device-telemetry.module';
 import { LicensesModule } from '../licenses/licenses.module';
 import { SecurityModule } from '../security/security.module';
 import { AuthController } from './auth.controller';
@@ -24,6 +25,7 @@ import { MobileJwtStrategy } from './strategies/mobile-jwt.strategy';
     }),
     SecurityModule,
     AuditModule,
+    DeviceTelemetryModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, TelegramAuthService, MobileJwtStrategy, MobileJwtAuthGuard],

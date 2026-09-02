@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginateMeta, PaginationQueryDto } from '../common/dto/pagination.dto';
+import { formatAppVersionLabel } from '../../devices/device-metadata.util';
 
 @Injectable()
 export class AdminDevicesService {
@@ -40,8 +41,20 @@ export class AdminDevicesService {
         id: device.id,
         installationId: device.installationId,
         deviceName: device.deviceName,
-        platform: device.platform,
+        deviceManufacturer: device.deviceManufacturer,
+        deviceModel: device.deviceModel,
+        androidOsVersion: device.androidOsVersion,
+        appLocale: device.appLocale,
         appVersion: device.appVersion,
+        appVersionName: device.appVersionName,
+        appVersionCode: device.appVersionCode,
+        appVersionLabel:
+          formatAppVersionLabel(device) ??
+          (device.appVersion ? device.appVersion : null),
+        appVersionUnknown: !formatAppVersionLabel(device) && !device.appVersion,
+        platform: device.platform,
+        registrationIp: device.registrationIp,
+        lastSeenIp: device.lastSeenIp,
         lastSeenAt: device.lastSeenAt,
         revokedAt: device.revokedAt,
         isActive: device.revokedAt === null,

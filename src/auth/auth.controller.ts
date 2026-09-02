@@ -47,7 +47,15 @@ export class AuthController {
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({ summary: 'Rotate mobile refresh token' })
   async refresh(@Body() body: MobileRefreshDto, @Req() req: Request) {
-    const tokens = await this.authService.refresh(body.refreshToken, this.meta(req));
+    const tokens = await this.authService.refresh(body.refreshToken, this.meta(req), {
+      appVersion: body.appVersion,
+      appVersionName: body.appVersionName,
+      appVersionCode: body.appVersionCode,
+      appLocale: body.appLocale,
+      deviceManufacturer: body.deviceManufacturer,
+      deviceModel: body.deviceModel,
+      androidOsVersion: body.androidOsVersion,
+    });
     return { tokens };
   }
 

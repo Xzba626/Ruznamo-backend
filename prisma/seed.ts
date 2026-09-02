@@ -29,6 +29,10 @@ const PERMISSIONS = [
   { code: 'plans:read', name: 'Read subscription plans' },
   { code: 'plans:update', name: 'Update subscription plans' },
   { code: 'audit:read', name: 'Read audit logs' },
+  { code: 'system:read', name: 'Read system settings' },
+  { code: 'system:reset', name: 'Execute data reset' },
+  { code: 'releases:read', name: 'Read app releases' },
+  { code: 'releases:manage', name: 'Manage app releases' },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<AdminRoleCode, string[]> = {
@@ -52,6 +56,9 @@ const ROLE_PERMISSIONS: Record<AdminRoleCode, string[]> = {
     'plans:read',
     'plans:update',
     'audit:read',
+    'system:read',
+    'releases:read',
+    'releases:manage',
   ],
   SUPPORT: [
     'users:read',
@@ -70,7 +77,7 @@ const SYSTEM_CONFIG = [
   {
     key: 'PAYMENT_INSTRUCTIONS_TJ',
     value:
-      'Барои пардохт 15 TJS (моҳ) ё 150 TJS (сол) ба ҳисоби зерин маблағ гузоред ва чеки пардохтро дар ин бот ирсол кунед.',
+      'Барои пардохт 20 TJS (моҳ) ё 250 TJS (сол) ба ҳисоби зерин маблағ гузоред ва чеки пардохтро дар ин бот ирсол кунед.',
   },
   { key: 'MAINTENANCE_MODE', value: 'false' },
   { key: 'MAINTENANCE_MESSAGE_TJ', value: '' },
@@ -234,7 +241,7 @@ async function seedStandardPlan() {
 
   const prices = [
     { billingPeriod: BillingPeriod.MONTHLY, amount: '20.00' },
-    { billingPeriod: BillingPeriod.YEARLY, amount: '150.00' },
+    { billingPeriod: BillingPeriod.YEARLY, amount: '250.00' },
   ] as const;
 
   for (const price of prices) {

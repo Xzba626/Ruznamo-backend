@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { fetchSystemStatus } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import { formatDateTime, labelServiceStatus, labelSystemHealth, t } from '../i18n';
@@ -103,6 +104,10 @@ export function SystemPage() {
           </div>
         )}
         <p className="muted">{status.android.note}</p>
+      </section>
+
+      <section className="section links-row">
+        <NavLink to="/system/data" className="btn-secondary">{strings.system.dataManagement}</NavLink>
       </section>
     </div>
   );

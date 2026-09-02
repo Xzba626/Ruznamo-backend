@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { LicenseIssueSource, LicenseStatus, OrderStatus, Prisma, TrialGrantStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { formatAppVersionLabel } from '../../devices/device-metadata.util';
 
 const ACTIVE_DEVICE_DAYS = 30;
 
@@ -185,7 +186,7 @@ export class AdminAnalyticsService {
       }),
       this.prisma.user.groupBy({ by: ['category'], _count: { _all: true } }),
       this.prisma.deviceInstallation.groupBy({
-        by: ['appVersion'],
+        by: ['appVersionCode', 'appVersionName', 'appVersion'],
         where: { revokedAt: null },
         _count: { _all: true },
       }),
@@ -235,10 +236,19 @@ export class AdminAnalyticsService {
         note: 'PERSONAL is the schema default; may include unset onboarding choices.',
       },
       appVersionDistribution: appVersionDistribution
-        .map((row) => ({
-          appVersion: row.appVersion ?? 'unknown',
-          count: row._count._all,
-        }))
+        .map((row) => {
+          const label =
+            formatAppVersionLabel({
+              appVersionName: row.appVersionName,
+              appVersionCode: row.appVersionCode,
+              appVersion: row.appVersion,
+            }) ?? 'UNKNOWN';
+          return {
+            appVersion: label,
+            versionCode: row.appVersionCode,
+            count: row._count._all,
+          };
+        })
         .sort((a, b) => b.count - a.count),
       generatedAt: now.toISOString(),
     };

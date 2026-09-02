@@ -3,6 +3,9 @@ import { TerminusModule } from '@nestjs/terminus';
 import { AuditModule } from '../audit/audit.module';
 import { LicensesModule } from '../licenses/licenses.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { StorageModule } from '../storage/storage.module';
+import { ApkModule } from '../apk/apk.module';
+import { SecurityModule } from '../security/security.module';
 import { AdminAuthModule } from './auth/admin-auth.module';
 import { AdminAuditController } from './audit/admin-audit.controller';
 import { AdminAuditService } from './audit/admin-audit.service';
@@ -27,9 +30,13 @@ import { AdminPlansController } from './plans/admin-plans.controller';
 import { AdminPlansService } from './plans/admin-plans.service';
 import { AdminUsersController } from './users/admin-users.controller';
 import { AdminUsersService } from './users/admin-users.service';
+import { AdminDataResetController } from './data-reset/admin-data-reset.controller';
+import { AdminDataResetService } from './data-reset/admin-data-reset.service';
+import { AdminReleasesController } from './releases/admin-releases.controller';
+import { AdminReleasesService } from './releases/admin-releases.service';
 
 @Module({
-  imports: [AdminAuthModule, AuditModule, TerminusModule, PaymentsModule, LicensesModule],
+  imports: [AdminAuthModule, AuditModule, TerminusModule, PaymentsModule, LicensesModule, StorageModule, ApkModule, SecurityModule],
   controllers: [
     AdminTelegramController,
     AdminTelegramWebhookController,
@@ -43,6 +50,8 @@ import { AdminUsersService } from './users/admin-users.service';
     AdminAppConfigController,
     AdminAnalyticsController,
     AdminPlansController,
+    AdminDataResetController,
+    AdminReleasesController,
   ],
   providers: [
     AdminTelegramService,
@@ -56,6 +65,8 @@ import { AdminUsersService } from './users/admin-users.service';
     AdminAppConfigService,
     AdminAnalyticsService,
     AdminPlansService,
+    AdminDataResetService,
+    AdminReleasesService,
   ],
   exports: [AdminAuthModule, AdminTelegramService],
 })
