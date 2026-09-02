@@ -13,6 +13,7 @@ import { Request } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { MobileJwtAuthGuard } from '../auth/guards/mobile-jwt-auth.guard';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
+import { requestMeta } from '../common/request-ip.util';
 import { DevicesService } from './devices.service';
 import { RegisterDeviceMetadataDto } from './dto/register-device-metadata.dto';
 import { RevokeDeviceDto } from './dto/revoke-device.dto';
@@ -32,7 +33,7 @@ export class DevicesController {
     @Body() body: RegisterDeviceMetadataDto,
     @Req() req: Request,
   ) {
-    return this.devicesService.register(user, body, this.meta(req));
+    return this.devicesService.register(user, body, requestMeta(req));
   }
 
   @Get()
@@ -49,10 +50,6 @@ export class DevicesController {
     @Body() body: RevokeDeviceDto,
     @Req() req: Request,
   ) {
-    return this.devicesService.revoke(user, body.deviceId, this.meta(req));
-  }
-
-  private meta(req: Request): { ipAddress?: string; userAgent?: string } {
-    return { ipAddress: req.ip, userAgent: req.headers['user-agent'] };
+    return this.devicesService.revoke(user, body.deviceId, requestMeta(req));
   }
 }

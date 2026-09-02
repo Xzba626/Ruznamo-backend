@@ -112,6 +112,8 @@ export const ru = {
     revoke: 'Отозвать',
     revoking: 'Отзыв…',
     confirmRevoke: 'Отозвать эту лицензию?',
+    create: 'Создать лицензию',
+    createSubmit: 'Выдать ключ',
   },
   devices: {
     title: 'Устройства',

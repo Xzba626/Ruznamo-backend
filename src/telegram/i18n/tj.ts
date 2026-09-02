@@ -6,8 +6,8 @@ export const tj: TelegramI18n = {
   languageButtonRu: '🇷🇺 Русский',
   languageChanged: '✅ Забон тағйир дода шуд.',
   welcomeNoLicense: (name) =>
-    `Салом${name ? `, ${name}` : ''}!\n\nБарои истифодаи пурраи барнома калиди фаъол лозим аст.`,
-  welcomeActiveLicense: (expiresAt) => `Салом!\n\nОбунаи шумо фаъол аст то: ${expiresAt}`,
+    `Салом${name ? `, ${name}` : ''}!\n\nМенюи бот (тугма дар назди майдони матн) ё фармонҳоро истифода баред.`,
+  welcomeActiveLicense: (expiresAt) => `Салом!\n\nИҷозатномаҳои фаъол доред. Анҷоми наздиктарин: ${expiresAt}`,
   choosePlan: 'Тарифро интихоб кунед:',
   planUnavailable: 'Ин тариф ҳоло барои харид дастрас нест.',
   purchaseUnavailable: 'Ҳоло харидани иҷозатнома муваққатан дастрас нест.',
@@ -35,9 +35,30 @@ export const tj: TelegramI18n = {
   myLicensesTitle: '🔑 Иҷозатномаҳои ман',
   subscriptionInfo: (plan, days, expiresAt, maskedKey) =>
     `Тариф: ${plan}\nМӯҳлат: ${days} рӯз\nТо: ${expiresAt}\nКалид: ${maskedKey}`,
-  noActiveLicense: 'Иҷозатномаи фаъол нест. «Харидани иҷозатнома»-ро пахш кунед.',
-  help:
-    '❓ Кӯмак\n\n1. Тарифро интихоб кунед\n2. Усули пардохтро интихоб кунед\n3. Пардохт кунед\n4. Чекро фиристед\n5. Калидро дар барнома фаъол созед',
+  licenseListItem: (plan, status, expiresAt, devicesUsed, deviceLimit, source, maskedKey) =>
+    `${plan}\nҲолат: ${status}\nТо: ${expiresAt}\nДастгоҳҳо: ${devicesUsed} аз ${deviceLimit}\nМанбаъ: ${source}\nКалид: ${maskedKey}`,
+  noActiveLicense: 'Ҳоло иҷозатнома нест. /buy ё «Харидани иҷозатнома»-ро пахш кунед.',
+  instructionTitle: '📖 Дастур',
+  instructionBody:
+    '1. «Харидани иҷозатнома» (/buy)-ро пахш кунед.\n' +
+    '2. Тариф ва муддат (30 ё 365 рӯз) интихоб кунед.\n' +
+    '3. Усули пардохт ва маблағи дақиқро интихоб кунед.\n' +
+    '4. Акси ё PDF-и чекро фиристед.\n' +
+    '5. Тасдиқи маъмуриятро интизор шавед.\n' +
+    '6. Калиди иҷозатномаро гиред.\n' +
+    '7. Калидро дар барномаи Ruznamo ворид кунед.\n' +
+    '8. /licenses — ҳамаи иҷозатномаҳои шумо.\n' +
+    '9. Мушкилӣ? — /support.',
+  supportWelcome:
+    'Салом. Савол, мушкилӣ, пешниҳод ё идеяи худро нависед.\n\nПаём ба дастгирии Ruznamo меравад.',
+  supportExit: '❌ Анҷом додани муроҷиат',
+  supportExited: 'Муроҷиат анҷом ёфт. Боз /support-ро истифода баред.',
+  supportDirectContact: 'Ба роҳбарӣ дар Telegram навиштан',
+  supportPhoneLabel: (phone) => `Телефони дастгирӣ: ${phone}`,
+  sourceTelegram: 'Telegram',
+  sourceManual: 'Аз тарафи маъмур',
+  sourceUnknown: 'Номаълум',
+  help: 'Менюи фармонҳои Telegram ё /instruction барои дастури пурра.',
   supportRelayed: 'Паёми шумо ба маъмур фиристода шуд. Лутфан интизор шавед.',
   supportRelayUnavailable: 'Дастгирии муваққатан дастнорас аст. Лутфан дертар кӯшиш кунед.',
   supportAttachmentRelayed: 'Файли шумо ба маъмур фиристода шуд. Лутфан интизор шавед.',
@@ -53,7 +74,8 @@ export const tj: TelegramI18n = {
   menuHelp: '❓ Кӯмак',
   menuGetKey: '🔑 Калид гирифтан',
   menuRetry: '🔄 Аз нав кӯшиш кардан',
-  menuBack: '↩️ Бозгашт',
+  menuBack: '⬅️ Бозгашт',
+  adminWelcome: 'Шумо ҳамчун маъмур ворид шудед. /admin ё менюи фармонҳо.',
   adminUnauthorized: 'Иҷозати дастрасӣ нест.',
   adminApprovedDuplicate: 'Ин ариза аллакай тасдиқ шудааст.',
   adminRejectedDuplicate: 'Ин ариза аллакай рад шудааст.',

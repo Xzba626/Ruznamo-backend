@@ -117,6 +117,27 @@ export function rejectOrder(orderId: string, reason?: string) {
   });
 }
 
+export function createManualLicense(body: {
+  planCode: string;
+  billingPeriod: string;
+  customerLabel?: string;
+  adminNote?: string;
+  linkTelegramUserId?: string;
+}) {
+  return apiRequest<{
+    id: string;
+    licenseKey: string;
+    keyPrefix: string;
+    expiresAt: string;
+    issueSource: string;
+    planCode: string;
+    billingPeriod: string;
+  }>('/api/v1/admin/licenses', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export function revokeLicense(licenseId: string) {
   return apiRequest(`/api/v1/admin/licenses/${licenseId}/revoke`, {
     method: 'PATCH',

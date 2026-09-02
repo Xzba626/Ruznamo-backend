@@ -5,6 +5,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { TelegramAdminPaymentMethodsService } from './telegram-admin-payment-methods.service';
 import { TelegramBotSessionService } from './telegram-bot-session.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
+import { TelegramCommandsService } from './telegram-commands.service';
 import { TelegramSupportRelayService } from './telegram-support-relay.service';
 import { TelegramUpdateProcessor } from './telegram-update.processor';
 import { TelegramWebhookController } from './telegram-webhook.controller';
@@ -15,6 +16,7 @@ import { TelegramWebhookController } from './telegram-webhook.controller';
   providers: [
     TelegramBotApiService,
     TelegramBotSessionService,
+    TelegramCommandsService,
     TelegramAdminPaymentMethodsService,
     TelegramSupportRelayService,
     TelegramUpdateProcessor,

@@ -49,8 +49,12 @@ export class DevicesService {
         data: {
           appVersion: dto.appVersion,
           deviceName: dto.deviceName,
+          deviceManufacturer: dto.deviceManufacturer,
+          deviceModel: dto.deviceModel,
+          androidOsVersion: dto.androidOsVersion,
           platform: dto.platform,
           lastSeenAt: new Date(),
+          lastSeenIp: meta.ipAddress,
         },
       });
 
@@ -66,6 +70,11 @@ export class DevicesService {
         platform: dto.platform,
         appVersion: dto.appVersion,
         deviceName: dto.deviceName,
+        deviceManufacturer: dto.deviceManufacturer,
+        deviceModel: dto.deviceModel,
+        androidOsVersion: dto.androidOsVersion,
+        registrationIp: meta.ipAddress,
+        lastSeenIp: meta.ipAddress,
         lastSeenAt: new Date(),
       },
     });

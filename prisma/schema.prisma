@@ -41,6 +41,12 @@ enum LicenseStatus {
   SUSPENDED
 }
 
+enum LicenseIssueSource {
+  TELEGRAM_PAYMENT
+  ADMIN_MANUAL
+  UNKNOWN_LEGACY
+}
+
 enum PlanCode {
   STANDARD
   PRO
@@ -169,16 +175,21 @@ model TelegramLinkToken {
 }
 
 model DeviceInstallation {
-  id             String    @id @default(cuid())
-  userId         String
-  installationId String    @unique
-  deviceName     String?
-  platform       Platform  @default(ANDROID)
-  appVersion     String?
-  lastSeenAt     DateTime  @default(now()) @db.Timestamptz(3)
-  revokedAt      DateTime? @db.Timestamptz(3)
-  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  id                 String    @id @default(cuid())
+  userId             String
+  installationId     String    @unique
+  deviceName         String?
+  deviceManufacturer String?
+  deviceModel        String?
+  androidOsVersion   String?
+  platform           Platform  @default(ANDROID)
+  appVersion         String?
+  registrationIp     String?
+  lastSeenIp         String?
+  lastSeenAt         DateTime  @default(now()) @db.Timestamptz(3)
+  revokedAt          DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
 
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   activations   LicenseActivation[]
@@ -261,25 +272,30 @@ model PlanFeature {
 // ---------------------------------------------------------------------------
 
 model License {
-  id          String        @id @default(cuid())
-  planId      String
-  userId      String?
-  orderId     String?       @unique
-  keyHash     String        @unique
-  keyPrefix   String
-  status      LicenseStatus @default(PENDING)
-  startsAt    DateTime?     @db.Timestamptz(3)
-  expiresAt   DateTime?     @db.Timestamptz(3)
-  activatedAt DateTime?     @db.Timestamptz(3)
-  revokedAt   DateTime?     @db.Timestamptz(3)
-  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+  id              String              @id @default(cuid())
+  planId          String
+  userId          String?
+  orderId         String?             @unique
+  keyHash         String              @unique
+  keyPrefix       String
+  status          LicenseStatus       @default(PENDING)
+  issueSource     LicenseIssueSource?
+  issuedByAdminId String?
+  adminNote       String?
+  customerLabel   String?
+  startsAt        DateTime?           @db.Timestamptz(3)
+  expiresAt       DateTime?           @db.Timestamptz(3)
+  activatedAt     DateTime?           @db.Timestamptz(3)
+  revokedAt       DateTime?           @db.Timestamptz(3)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
 
-  plan        Plan                @relation(fields: [planId], references: [id], onDelete: Restrict)
-  user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  order       Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  activations LicenseActivation[]
-  events      LicenseEvent[]
+  plan            Plan                @relation(fields: [planId], references: [id], onDelete: Restrict)
+  user            User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  order           Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  issuedByAdmin   AdminUser?          @relation("LicenseIssuedByAdmin", fields: [issuedByAdminId], references: [id], onDelete: SetNull)
+  activations     LicenseActivation[]
+  events          LicenseEvent[]
 
   @@index([userId])
   @@index([status])
@@ -446,6 +462,7 @@ model AdminUser {
   telegramLinkTokens    AdminTelegramLinkToken[]
   approvedOrders        Order[]                  @relation("OrderApprovedBy")
   reviewedReceipts      Receipt[]                @relation("ReceiptReviewedBy")
+  issuedLicenses        License[]                @relation("LicenseIssuedByAdmin")
 
   @@index([isActive])
 }

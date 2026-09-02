@@ -251,7 +251,7 @@ export class TelegramAdminPaymentMethodsService {
     };
   }
 
-  private async showList(chatId: bigint): Promise<void> {
+  async showList(chatId: bigint): Promise<void> {
     const methods = await this.paymentMethods.listAll();
     if (methods.length === 0) {
       await this.botApi.sendMessage(
@@ -272,7 +272,7 @@ export class TelegramAdminPaymentMethodsService {
     await this.botApi.sendMessage(chatId, `💳 Реквизиты\n\n${lines.join('\n')}`, this.listKeyboard(methods));
   }
 
-  private async showPendingOrders(chatId: bigint): Promise<void> {
+  async showPendingOrders(chatId: bigint): Promise<void> {
     // lightweight summary; detailed review stays in receipt messages
     await this.botApi.sendPlainMessage(
       chatId,

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   AuditActorType,
   BillingPeriod,
+  LicenseIssueSource,
   LicenseStatus,
   OrderStatus,
   OutboxStatus,
@@ -9,7 +10,7 @@ import {
   ReceiptStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
-import { LicenseKeyService } from '../security/license-key.service';
+import { LicenseIssuanceService } from '../licenses/license-issuance.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface PaymentActorContext {
@@ -32,101 +33,70 @@ export interface PaymentRejectionResult {
   alreadyProcessed: boolean;
 }
 
-type ApproveTxResult =
-  | { kind: 'duplicate'; licenseId: string; expiresAt: Date | null; userId: string }
-  | { kind: 'created'; licenseId: string; expiresAt: Date; userId: string; licenseKey: string };
-
 @Injectable()
 export class PaymentApprovalService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly licenseKeyService: LicenseKeyService,
+    private readonly licenseIssuance: LicenseIssuanceService,
     private readonly auditService: AuditService,
   ) {}
 
   async approve(orderId: string, actor: PaymentActorContext): Promise<PaymentApprovalResult> {
-    const rawKey = this.licenseKeyService.generateRawKey();
-    const normalizedKey = this.licenseKeyService.normalizeKey(rawKey);
-    const keyHash = this.licenseKeyService.hashKey(normalizedKey);
-    const keyPrefix = this.licenseKeyService.prefix(normalizedKey);
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { license: true, receipts: true, plan: true },
+    });
 
-    let txResult: ApproveTxResult;
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
 
-    try {
-      txResult = await this.prisma.$transaction(async (tx) => {
-        const order = await tx.order.findUnique({
-          where: { id: orderId },
-          include: { license: true, receipts: true, plan: true },
-        });
+    if (order.license) {
+      const storedKey = await this.findStoredLicenseKey(order.license.id, order.userId);
+      await this.auditService.log({
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        action: 'payment.approve.duplicate',
+        entityType: 'Order',
+        entityId: orderId,
+      });
+      return {
+        orderId,
+        userId: order.userId,
+        licenseId: order.license.id,
+        licenseKey: storedKey ?? '[already-delivered]',
+        expiresAt: order.license.expiresAt ?? new Date(),
+        alreadyProcessed: true,
+      };
+    }
 
-        if (!order) {
-          throw new NotFoundException('Order not found');
-        }
+    if (order.status === OrderStatus.COMPLETED || order.status === OrderStatus.APPROVED) {
+      throw new BadRequestException('Order already completed without license record');
+    }
 
-        if (order.license) {
-          return {
-            kind: 'duplicate' as const,
-            licenseId: order.license.id,
-            expiresAt: order.license.expiresAt,
-            userId: order.userId,
-          };
-        }
+    if (order.status !== OrderStatus.UNDER_REVIEW && order.status !== OrderStatus.RECEIPT_SUBMITTED) {
+      throw new BadRequestException('Order is not eligible for approval');
+    }
 
-        if (order.status === OrderStatus.COMPLETED || order.status === OrderStatus.APPROVED) {
-          throw new BadRequestException('Order already completed without license record');
-        }
+    if (order.receipts.length === 0) {
+      throw new BadRequestException('Receipt is required before approval');
+    }
 
-        if (order.status !== OrderStatus.UNDER_REVIEW && order.status !== OrderStatus.RECEIPT_SUBMITTED) {
-          throw new BadRequestException('Order is not eligible for approval');
-        }
+    const now = new Date();
 
-        if (order.receipts.length === 0) {
-          throw new BadRequestException('Receipt is required before approval');
-        }
+    const issued = await this.licenseIssuance.issueLicense({
+      planId: order.planId,
+      userId: order.userId,
+      orderId: order.id,
+      issueSource: LicenseIssueSource.TELEGRAM_PAYMENT,
+      billingPeriod: order.billingPeriod,
+      eventReason: 'telegram_payment_approved',
+      eventMetadata: { orderId: order.id, actorId: actor.actorId },
+      activateNow: true,
+    });
 
-        const now = new Date();
-        const expiresAt = this.calculateExpiresAt(now, order.billingPeriod);
-
-        let license;
-        try {
-          license = await tx.license.create({
-            data: {
-              planId: order.planId,
-              userId: order.userId,
-              orderId: order.id,
-              keyHash,
-              keyPrefix,
-              status: LicenseStatus.ACTIVE,
-              startsAt: now,
-              expiresAt,
-              activatedAt: now,
-            },
-          });
-        } catch (error) {
-          if (this.isUniqueViolation(error)) {
-            const existing = await tx.license.findUnique({ where: { orderId: order.id } });
-            if (existing) {
-              return {
-                kind: 'duplicate' as const,
-                licenseId: existing.id,
-                expiresAt: existing.expiresAt,
-                userId: order.userId,
-              };
-            }
-          }
-          throw error;
-        }
-
-        await tx.licenseEvent.create({
-          data: {
-            licenseId: license.id,
-            fromStatus: LicenseStatus.PENDING,
-            toStatus: LicenseStatus.ACTIVE,
-            reason: 'telegram_payment_approved',
-            metadata: { orderId: order.id, actorId: actor.actorId },
-          },
-        });
-
+    if (!issued.alreadyExisted) {
+      await this.prisma.$transaction(async (tx) => {
         await tx.order.update({
           where: { id: order.id },
           data: {
@@ -146,83 +116,37 @@ export class PaymentApprovalService {
             type: 'telegram_license_key',
             payload: {
               userId: order.userId,
-              licenseId: license.id,
+              licenseId: issued.licenseId,
               orderId: order.id,
-              licenseKey: normalizedKey,
+              licenseKey: issued.licenseKey,
             },
             status: OutboxStatus.COMPLETED,
             processedAt: now,
           },
         });
-
-        return {
-          kind: 'created' as const,
-          licenseId: license.id,
-          expiresAt,
-          userId: order.userId,
-          licenseKey: normalizedKey,
-        };
       });
-    } catch (error) {
-      if (this.isUniqueViolation(error)) {
-        const order = await this.prisma.order.findUnique({
-          where: { id: orderId },
-          include: { license: true },
-        });
-        if (order?.license) {
-          txResult = {
-            kind: 'duplicate',
-            licenseId: order.license.id,
-            expiresAt: order.license.expiresAt,
-            userId: order.userId,
-          };
-        } else {
-          throw error;
-        }
-      } else {
-        throw error;
-      }
-    }
-
-    if (txResult.kind === 'duplicate') {
-      await this.auditService.log({
-        actorType: actor.actorType,
-        actorId: actor.actorId,
-        action: 'payment.approve.duplicate',
-        entityType: 'Order',
-        entityId: orderId,
-      });
-      const storedKey = await this.findStoredLicenseKey(txResult.licenseId, txResult.userId);
-      return {
-        orderId,
-        userId: txResult.userId,
-        licenseId: txResult.licenseId,
-        licenseKey: storedKey ?? '[already-delivered]',
-        expiresAt: txResult.expiresAt ?? new Date(),
-        alreadyProcessed: true,
-      };
     }
 
     await this.auditService.log({
       actorType: actor.actorType,
       actorId: actor.actorId,
-      action: 'payment.approved',
+      action: issued.alreadyExisted ? 'payment.approve.duplicate' : 'payment.approved',
       entityType: 'Order',
       entityId: orderId,
       metadata: {
-        licenseId: txResult.licenseId,
+        licenseId: issued.licenseId,
         telegramUserId: actor.telegramUserId,
-        keyPrefix,
+        keyPrefix: issued.keyPrefix,
       },
     });
 
     return {
       orderId,
-      userId: txResult.userId,
-      licenseId: txResult.licenseId,
-      licenseKey: txResult.licenseKey,
-      expiresAt: txResult.expiresAt,
-      alreadyProcessed: false,
+      userId: order.userId,
+      licenseId: issued.licenseId,
+      licenseKey: issued.licenseKey,
+      expiresAt: issued.expiresAt,
+      alreadyProcessed: issued.alreadyExisted,
     };
   }
 
@@ -284,7 +208,7 @@ export class PaymentApprovalService {
   ): Promise<{
     key: string;
     expiresAt: Date | null;
-    billingPeriod: import('@prisma/client').BillingPeriod | null;
+    billingPeriod: BillingPeriod | null;
     planName: string | null;
   } | null> {
     const outbox = await this.prisma.notificationOutbox.findFirst({
@@ -343,16 +267,5 @@ export class PaymentApprovalService {
     }
 
     return null;
-  }
-
-  private calculateExpiresAt(start: Date, billingPeriod: BillingPeriod): Date {
-    const expires = new Date(start);
-    const days = billingPeriod === BillingPeriod.YEARLY ? 365 : 30;
-    expires.setDate(expires.getDate() + days);
-    return expires;
-  }
-
-  private isUniqueViolation(error: unknown): boolean {
-    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
   }
 }

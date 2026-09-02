@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
 import { AuditModule } from '../audit/audit.module';
+import { LicensesModule } from '../licenses/licenses.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { AdminAuthModule } from './auth/admin-auth.module';
 import { AdminAuditController } from './audit/admin-audit.controller';
@@ -28,7 +29,7 @@ import { AdminUsersController } from './users/admin-users.controller';
 import { AdminUsersService } from './users/admin-users.service';
 
 @Module({
-  imports: [AdminAuthModule, AuditModule, TerminusModule, PaymentsModule],
+  imports: [AdminAuthModule, AuditModule, TerminusModule, PaymentsModule, LicensesModule],
   controllers: [
     AdminTelegramController,
     AdminTelegramWebhookController,

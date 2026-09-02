@@ -8,9 +8,22 @@ const prisma = new PrismaClient();
 const apply = process.argv.includes('--apply');
 
 const TEST_EMAIL_PATTERNS = ['@example.com', '@test.', 'test@', '+test'];
-const TEST_DISPLAY_PATTERNS = ['test user', 'demo user', 'e2e'];
-const TEST_DEVICE_NAME_PATTERNS = ['emulator', 'test device', 'android emulator'];
+const TEST_DISPLAY_PATTERNS = ['test user', 'demo user', 'e2e', 'testuser'];
+const TEST_DEVICE_NAME_PATTERNS = [
+  'emulator',
+  'test device',
+  'android emulator',
+  'test android',
+  'local test',
+  'production test',
+];
 const TEST_INSTALLATION_PREFIXES = ['test-', 'demo-', 'e2e-'];
+const TEST_INSTALLATION_IDS = [
+  '550e8400-e29b-41d4-a716-446655440000',
+  'a1b2c3d4-e5f6-4789-a012-3456789abcde',
+  'b2c3d4e5-f6a7-4890-b123-456789abcdef',
+  'c3d4e5f6-a7b8-4a01-8234-567890abcdef',
+];
 
 type Selection = {
   users: string[];
@@ -51,6 +64,7 @@ async function findTestDevices(): Promise<string[]> {
         ...TEST_INSTALLATION_PREFIXES.map((prefix) => ({
           installationId: { startsWith: prefix },
         })),
+        ...TEST_INSTALLATION_IDS.map((installationId) => ({ installationId })),
       ],
     },
     select: { id: true, installationId: true, deviceName: true },

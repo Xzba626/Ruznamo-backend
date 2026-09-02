@@ -33,7 +33,8 @@ export interface TelegramUpdate {
 
 export interface InlineKeyboardButton {
   text: string;
-  callback_data: string;
+  callback_data?: string;
+  url?: string;
 }
 
 export interface InlineKeyboardMarkup {
@@ -51,4 +52,8 @@ export interface ReplyKeyboardMarkup {
   is_persistent?: boolean;
 }
 
-export type TelegramReplyMarkup = InlineKeyboardMarkup | ReplyKeyboardMarkup;
+export interface ReplyKeyboardRemove {
+  remove_keyboard: true;
+}
+
+export type TelegramReplyMarkup = InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove;

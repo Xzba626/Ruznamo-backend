@@ -33,7 +33,26 @@ export interface TelegramI18n {
   paymentRejected: string;
   myLicensesTitle: string;
   subscriptionInfo: (plan: string, days: number, expiresAt: string, maskedKey: string) => string;
+  licenseListItem: (
+    plan: string,
+    status: string,
+    expiresAt: string,
+    devicesUsed: number,
+    deviceLimit: number,
+    source: string,
+    maskedKey: string,
+  ) => string;
   noActiveLicense: string;
+  instructionTitle: string;
+  instructionBody: string;
+  supportWelcome: string;
+  supportExit: string;
+  supportExited: string;
+  supportDirectContact: string;
+  supportPhoneLabel: (phone: string) => string;
+  sourceTelegram: string;
+  sourceManual: string;
+  sourceUnknown: string;
   help: string;
   supportRelayed: string;
   supportRelayUnavailable: string;
@@ -51,6 +70,7 @@ export interface TelegramI18n {
   menuGetKey: string;
   menuRetry: string;
   menuBack: string;
+  adminWelcome: string;
   adminUnauthorized: string;
   adminApprovedDuplicate: string;
   adminRejectedDuplicate: string;

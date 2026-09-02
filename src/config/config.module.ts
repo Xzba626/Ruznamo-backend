@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { appConfig, jwtConfig, securityConfig, telegramConfig } from './configuration';
+import { appConfig, jwtConfig, securityConfig, supportConfig, telegramConfig } from './configuration';
 import { envValidationSchema } from './env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, jwtConfig, securityConfig, telegramConfig],
+      load: [appConfig, jwtConfig, securityConfig, supportConfig, telegramConfig],
       validationSchema: envValidationSchema,
       validationOptions: {
         abortEarly: false,

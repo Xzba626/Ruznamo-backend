@@ -41,6 +41,11 @@ export const securityConfig = registerAs('security', () => ({
   throttleLimit: parseEnvInt(process.env.THROTTLE_LIMIT, 100),
 }));
 
+export const supportConfig = registerAs('support', () => ({
+  telegramUsername: (process.env.SUPPORT_TELEGRAM_USERNAME ?? '').trim() || undefined,
+  phoneE164: (process.env.SUPPORT_PHONE_E164 ?? '').trim() || undefined,
+}));
+
 export const telegramConfig = registerAs('telegram', () => {
   const rawToken = readTelegramBotToken();
   const webhookSecret = (process.env.TELEGRAM_WEBHOOK_SECRET ?? '').trim();

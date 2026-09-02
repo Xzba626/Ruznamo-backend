@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { fetchLicenses, revokeLicense } from '../api/admin';
+import { createManualLicense, fetchLicenses, revokeLicense } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import type { Paginated } from '../api/types';
 import { formatDate, labelLicenseStatus, labelPlan, t } from '../i18n';
@@ -19,13 +19,41 @@ type LicenseRow = {
 export function LicensesPage() {
   const strings = t();
   const { hasPermission } = useAuth();
-  const canRevoke = hasPermission('licenses:revoke');
+  const canCreate = hasPermission('licenses:create');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [planCode, setPlanCode] = useState('STANDARD');
+  const [billingPeriod, setBillingPeriod] = useState('MONTHLY');
+  const [customerLabel, setCustomerLabel] = useState('');
+  const [createdKey, setCreatedKey] = useState('');
+  const [creating, setCreating] = useState(false);
   const [data, setData] = useState<Paginated<LicenseRow> | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [revoking, setRevoking] = useState<string | null>(null);
+  const canRevoke = hasPermission('licenses:revoke');
+
+  async function onCreate(e: FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    setError('');
+    setCreatedKey('');
+    try {
+      const res = await createManualLicense({
+        planCode,
+        billingPeriod,
+        customerLabel: customerLabel.trim() || undefined,
+      });
+      setCreatedKey(res.licenseKey);
+      setCreateOpen(false);
+      load();
+    } catch (err) {
+      setError(getErrorMessage(err, strings.errors.loadLicenses));
+    } finally {
+      setCreating(false);
+    }
+  }
 
   function load() {
     setLoading(true);
@@ -60,6 +88,44 @@ export function LicensesPage() {
   return (
     <div>
       <h1>{strings.licenses.title}</h1>
+      {canCreate && (
+        <p>
+          <button type="button" className="btn-primary" onClick={() => setCreateOpen((v) => !v)}>
+            {strings.licenses.create}
+          </button>
+        </p>
+      )}
+      {createOpen && canCreate && (
+        <form className="card" onSubmit={onCreate}>
+          <label>
+            {strings.licenses.colPlan}
+            <select value={planCode} onChange={(e) => setPlanCode(e.target.value)}>
+              <option value="STANDARD">Standard</option>
+              <option value="PRO">Pro</option>
+            </select>
+          </label>
+          <label>
+            Срок
+            <select value={billingPeriod} onChange={(e) => setBillingPeriod(e.target.value)}>
+              <option value="MONTHLY">30 дней</option>
+              <option value="YEARLY">365 дней</option>
+            </select>
+          </label>
+          <label>
+            Клиент (необязательно)
+            <input value={customerLabel} onChange={(e) => setCustomerLabel(e.target.value)} />
+          </label>
+          <button type="submit" className="btn-primary" disabled={creating}>
+            {creating ? strings.common.loading : strings.licenses.createSubmit}
+          </button>
+        </form>
+      )}
+      {createdKey && (
+        <div className="alert success">
+          <p>Ключ создан (скопируйте сейчас):</p>
+          <p className="mono">{createdKey}</p>
+        </div>
+      )}
       <form className="toolbar" onSubmit={onSearch}>
         <input placeholder={strings.licenses.searchPlaceholder} value={search} onChange={(e) => setSearch(e.target.value)} />
         <button type="submit" className="btn-secondary">{strings.common.search}</button>

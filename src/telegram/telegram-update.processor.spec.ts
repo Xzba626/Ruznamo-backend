@@ -19,6 +19,19 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     sendMessage: jest.fn(),
     sendPlainMessage: jest.fn(),
     answerCallbackQuery: jest.fn(),
+    removeReplyKeyboard: jest.fn(),
+  };
+
+  const sessionService = {
+    getSession: jest.fn().mockResolvedValue(null),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn(),
+    clear: jest.fn(),
+  };
+
+  const commandsService = {
+    registerAdminCommandsForChat: jest.fn(),
+    registerDefaultCommands: jest.fn(),
   };
 
   const telegramAccountService = {
@@ -59,11 +72,14 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
     adminTelegramService as never,
     supportRelay as never,
+    sessionService as never,
+    commandsService as never,
     auditService as never,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionService.getSession.mockResolvedValue(null);
   });
 
   it('handles plain admin pairing code before relay', async () => {
@@ -84,7 +100,9 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     expect(botApi.sendMessage).toHaveBeenCalled();
   });
 
-  it('relays unknown free text from regular users', async () => {
+  it('relays free text only in support mode', async () => {
+    sessionService.getSession.mockResolvedValue({ flow: 'support', step: 'active', payload: {} });
+
     await processor.processUpdate({
       update_id: 2,
       message: {
@@ -98,7 +116,7 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     expect(supportRelay.relayFreeText).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Салом, ман савол дорам' }),
     );
-    expect(botApi.sendPlainMessage).toHaveBeenCalled();
+    expect(botApi.sendMessage).toHaveBeenCalled();
   });
 
   it('does not relay /start user flow as free text', async () => {
@@ -118,7 +136,23 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     );
   });
 
-  it('relays support photo when no payment order', async () => {
+  it('ignores free text outside support mode', async () => {
+    await processor.processUpdate({
+      update_id: 5,
+      message: {
+        message_id: 5,
+        text: 'Салом, ман савол дорам',
+        from: { id: 111, first_name: 'User', username: 'user1' },
+        chat: { id: 111 },
+      },
+    });
+
+    expect(supportRelay.relayFreeText).not.toHaveBeenCalled();
+  });
+
+  it('relays support photo in support mode when no payment order', async () => {
+    sessionService.getSession.mockResolvedValue({ flow: 'support', step: 'active', payload: {} });
+
     await processor.processUpdate({
       update_id: 4,
       message: {
@@ -152,6 +186,19 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     answerCallbackQuery: jest.fn(),
     sendMessage: jest.fn(),
     sendPlainMessage: jest.fn(),
+    removeReplyKeyboard: jest.fn(),
+  };
+
+  const sessionService = {
+    getSession: jest.fn().mockResolvedValue(null),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn(),
+    clear: jest.fn(),
+  };
+
+  const commandsService = {
+    registerAdminCommandsForChat: jest.fn(),
+    registerDefaultCommands: jest.fn(),
   };
 
   const paymentApprovalService = {
@@ -174,11 +221,14 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
     { tryCompleteLinkFromBot: jest.fn() } as never,
     { relayFreeText: jest.fn() } as never,
+    sessionService as never,
+    commandsService as never,
     auditService as never,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionService.getSession.mockResolvedValue(null);
   });
 
   it('rejects approve callback from non-admin telegram user', async () => {

@@ -17,4 +17,19 @@ export class RegisterDeviceMetadataDto {
   @IsString()
   @MaxLength(120)
   deviceName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  deviceManufacturer?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  deviceModel?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  androidOsVersion?: string;
 }

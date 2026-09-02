@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InlineKeyboardMarkup, ReplyKeyboardMarkup, TelegramReplyMarkup } from './telegram.types';
+import { InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, TelegramReplyMarkup } from './telegram.types';
 
 @Injectable()
 export class TelegramBotApiService {
@@ -51,9 +51,13 @@ export class TelegramBotApiService {
   sendPlainMessage(
     chatId: number | bigint,
     text: string,
-    replyMarkup?: ReplyKeyboardMarkup,
+    replyMarkup?: ReplyKeyboardMarkup | ReplyKeyboardRemove,
   ): Promise<void> {
     return this.sendMessage(chatId, text, replyMarkup, { parseMode: 'none' });
+  }
+
+  removeReplyKeyboard(chatId: number | bigint): Promise<void> {
+    return this.sendPlainMessage(chatId, ' ', { remove_keyboard: true });
   }
 
   sendPhoto(
@@ -106,12 +110,13 @@ export class TelegramBotApiService {
     }).then(() => undefined);
   }
 
-  async setMyCommands(): Promise<void> {
+  async setMyCommands(
+    commands: Array<{ command: string; description: string }>,
+    scope?: { type: 'all_private_chats' } | { type: 'chat'; chat_id: number },
+  ): Promise<void> {
     await this.call('setMyCommands', {
-      commands: [
-        { command: 'start', description: 'Главное меню / Менюи асосӣ' },
-        { command: 'help', description: 'Помощь / Кӯмак' },
-      ],
+      commands,
+      ...(scope ? { scope } : {}),
     });
   }
 }

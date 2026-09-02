@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
+import { LicensesModule } from '../licenses/licenses.module';
 import { SecurityModule } from '../security/security.module';
 import { OrderService } from './order.service';
 import { PaymentApprovalService } from './payment-approval.service';
@@ -9,7 +10,7 @@ import { PaymentMethodService } from './payment-method.service';
 import { TelegramLicenseDeliveryService } from './telegram-license-delivery.service';
 
 @Module({
-  imports: [AuditModule, SecurityModule],
+  imports: [AuditModule, SecurityModule, LicensesModule],
   providers: [
     PaymentConfigService,
     TelegramAccountService,

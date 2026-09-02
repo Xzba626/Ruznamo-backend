@@ -22,6 +22,11 @@ export const CB = {
   ACTION_HELP: 'action:help',
   ACTION_GET_KEY: 'action:get_key',
   ACTION_MAIN_MENU: 'action:main_menu',
+  ACTION_INSTRUCTION: 'action:instruction',
+  ACTION_SUPPORT: 'action:support',
+  ACTION_SUPPORT_EXIT: 'action:support_exit',
+  ACTION_BACK_PLAN: 'action:back_plan',
+  ACTION_BACK_DURATION: 'action:back_duration',
   approve: (orderId: string) => `payment:approve:${orderId}`,
   reject: (orderId: string) => `payment:reject:${orderId}`,
   duration: (planCode: string, billingPeriod: string) => `duration:${planCode}:${billingPeriod}`,
@@ -92,6 +97,14 @@ export function formatDateLocalized(date: Date, lang: 'TJ' | 'RU'): string {
 
 /** @deprecated Use formatDateLocalized(date, 'TJ') */
 export const formatDateTj = (date: Date): string => formatDateLocalized(date, 'TJ');
+
+export function parseBotCommand(text: string): { command: string; args: string } | null {
+  const match = text.trim().match(/^\/([a-z_]+)(?:@\w+)?(?:\s+(.*))?$/i);
+  if (!match) {
+    return null;
+  }
+  return { command: match[1].toLowerCase(), args: (match[2] ?? '').trim() };
+}
 
 export function formatAmount(amount: string, currency: string, lang: 'TJ' | 'RU'): string {
   if (currency === 'TJS') {
