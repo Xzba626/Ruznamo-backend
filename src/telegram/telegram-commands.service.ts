@@ -10,14 +10,13 @@ export interface BotCommandDef {
 
 export const USER_BOT_COMMANDS: BotCommandDef[] = [
   { command: 'start', descriptionRu: 'Запустить Ruznamo', descriptionTj: 'Оғози Ruznamo' },
-  { command: 'home', descriptionRu: 'Главное меню', descriptionTj: 'Менюи асосӣ' },
   { command: 'stop', descriptionRu: 'Завершить текущую операцию', descriptionTj: 'Қатъ кардани амал' },
   { command: 'instruction', descriptionRu: 'Инструкция', descriptionTj: 'Дастур' },
 ];
 
 export const ADMIN_BOT_COMMANDS: BotCommandDef[] = [
-  ...USER_BOT_COMMANDS,
-  { command: 'admin', descriptionRu: 'Меню администратора', descriptionTj: 'Менюи маъмур' },
+  { command: 'start', descriptionRu: 'Панель администратора', descriptionTj: 'Панели маъмур' },
+  { command: 'stop', descriptionRu: 'Завершить текущую операцию', descriptionTj: 'Қатъ кардани амал' },
 ];
 
 @Injectable()

@@ -79,6 +79,7 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     { createChallenge: jest.fn(), confirmReplacement: jest.fn(), getChallengePreview: jest.fn() } as never,
     { bindTelegramAndIssueOtp: jest.fn() } as never,
     { listOpenConversations: jest.fn().mockResolvedValue([]), getConversationHistory: jest.fn(), closeConversation: jest.fn() } as never,
+    { issueLicense: jest.fn() } as never,
     auditService as never,
   );
 
@@ -294,6 +295,7 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     { createChallenge: jest.fn(), confirmReplacement: jest.fn(), getChallengePreview: jest.fn() } as never,
     { bindTelegramAndIssueOtp: jest.fn() } as never,
     { listOpenConversations: jest.fn().mockResolvedValue([]), getConversationHistory: jest.fn(), closeConversation: jest.fn() } as never,
+    { issueLicense: jest.fn() } as never,
     auditService as never,
   );
 

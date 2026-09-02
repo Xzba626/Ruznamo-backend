@@ -45,11 +45,14 @@ describe('TelegramCommandsService', () => {
     );
   });
 
-  it('registers extended admin commands for admin chat scope', async () => {
+  it('registers admin-only commands for admin chat scope', async () => {
     await service.registerAdminCommandsForChat(12345n);
 
     expect(botApi.setMyCommands).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ command: 'admin' })]),
+      [
+        expect.objectContaining({ command: 'start' }),
+        expect.objectContaining({ command: 'stop' }),
+      ],
       { type: 'chat', chat_id: 12345 },
     );
   });

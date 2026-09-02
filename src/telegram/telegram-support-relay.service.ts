@@ -16,6 +16,7 @@ export interface SupportRelayInput {
   firstName?: string;
   username?: string;
   telegramAccountId?: string;
+  conversationId?: string;
   orderId?: string;
   orderStatus?: string;
   sourceUserMessageId?: number;
@@ -29,6 +30,7 @@ export interface SupportMediaRelayInput {
   firstName?: string;
   username?: string;
   telegramAccountId?: string;
+  conversationId?: string;
   sourceUserMessageId?: number;
 }
 
@@ -60,6 +62,7 @@ export class TelegramSupportRelayService {
     if (input.telegramAccountId) {
       await this.supportConversation.appendUserMessage({
         telegramAccountId: input.telegramAccountId,
+        conversationId: input.conversationId,
         contentType: SupportMessageContentType.TEXT,
         text: input.text,
         telegramMessageId: input.sourceUserMessageId ? BigInt(input.sourceUserMessageId) : undefined,
@@ -129,6 +132,7 @@ export class TelegramSupportRelayService {
     if (input.telegramAccountId) {
       await this.supportConversation.appendUserMessage({
         telegramAccountId: input.telegramAccountId,
+        conversationId: input.conversationId,
         contentType:
           input.fileType === 'photo'
             ? SupportMessageContentType.PHOTO
@@ -245,6 +249,66 @@ export class TelegramSupportRelayService {
     return 'delivered';
   }
 
+  async deliverConversationReply(input: {
+    adminTelegramId: bigint;
+    conversationId: string;
+    targetChatId: bigint;
+    text?: string;
+    caption?: string;
+    photoFileId?: string;
+    documentFileId?: string;
+  }): Promise<'delivered' | 'empty_content' | 'not_authorized'> {
+    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+    if (!adminIds.includes(input.adminTelegramId.toString())) {
+      return 'not_authorized';
+    }
+
+    const body = input.text?.trim() || input.caption?.trim() || '';
+    const hasMedia = Boolean(input.photoFileId || input.documentFileId);
+    if (!body && !hasMedia) {
+      return 'empty_content';
+    }
+
+    const userMsgs = await this.resolveUserMessagesByChat(input.targetChatId);
+    const prefix = userMsgs.supportReplyFromAdmin('');
+
+    if (input.photoFileId) {
+      const caption = body ? userMsgs.supportReplyFromAdmin(body) : prefix.trim();
+      await this.botApi.sendPhoto(input.targetChatId, input.photoFileId, caption, undefined);
+      await this.supportConversation.appendAdminMessage({
+        conversationId: input.conversationId,
+        contentType: SupportMessageContentType.PHOTO,
+        caption: body || undefined,
+        fileId: input.photoFileId,
+      });
+    } else if (input.documentFileId) {
+      const caption = body ? userMsgs.supportReplyFromAdmin(body) : prefix.trim();
+      await this.botApi.sendDocument(input.targetChatId, input.documentFileId, caption, undefined);
+      await this.supportConversation.appendAdminMessage({
+        conversationId: input.conversationId,
+        contentType: SupportMessageContentType.DOCUMENT,
+        caption: body || undefined,
+        fileId: input.documentFileId,
+      });
+    } else {
+      await this.botApi.sendPlainMessage(input.targetChatId, userMsgs.supportReplyFromAdmin(body));
+      await this.supportConversation.appendAdminMessage({
+        conversationId: input.conversationId,
+        text: body,
+      });
+    }
+
+    await this.auditService.log({
+      actorType: AuditActorType.TELEGRAM_BOT,
+      actorId: input.adminTelegramId.toString(),
+      action: 'telegram.support.conversation_reply.delivered',
+      entityType: 'SupportConversation',
+      entityId: input.conversationId,
+    });
+
+    return 'delivered';
+  }
+
   private async storeMapping(input: {
     adminChatId: bigint;
     adminMessageId: number;
@@ -261,6 +325,15 @@ export class TelegramSupportRelayService {
         sourceUserMessageId: input.sourceUserMessageId ?? null,
       },
     });
+  }
+
+  private async resolveUserMessagesByChat(userChatId: bigint) {
+    const account = await this.prisma.telegramAccount.findFirst({
+      where: { telegramId: userChatId },
+      select: { language: true },
+    });
+    const lang = account?.language === TelegramLanguage.RU ? TelegramLanguage.RU : TelegramLanguage.TJ;
+    return getTelegramI18n(lang);
   }
 
   private async resolveUserMessages(userTelegramId: bigint) {

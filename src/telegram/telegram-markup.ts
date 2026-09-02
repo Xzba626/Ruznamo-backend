@@ -23,12 +23,21 @@ export function homeRow(msgs: TelegramI18n): InlineKeyboardMarkup {
   };
 }
 
-export function supportExitKeyboard(msgs: TelegramI18n): InlineKeyboardMarkup {
+export function supportActiveKeyboard(msgs: TelegramI18n): InlineKeyboardMarkup {
   return {
-    inline_keyboard: [
-      [{ text: msgs.supportExit, callback_data: 'action:support_exit' }],
-      [{ text: msgs.replyMainMenu, callback_data: 'action:main_menu' }],
-    ],
+    inline_keyboard: [[{ text: msgs.supportExit, callback_data: 'action:support_exit' }]],
+  };
+}
+
+export function copyCodeButton(label: string, code: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[{ text: label, copy_text: { text: code } }]],
+  };
+}
+
+export function mainMenuOnlyKeyboard(msgs: TelegramI18n): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[{ text: msgs.replyMainMenu, callback_data: 'action:main_menu' }]],
   };
 }
 

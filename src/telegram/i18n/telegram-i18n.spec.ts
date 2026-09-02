@@ -5,7 +5,7 @@ import { getTelegramI18n } from './index';
 describe('telegram i18n', () => {
   it('returns Tajik messages by default', () => {
     const msgs = getTelegramI18n(null);
-    expect(msgs.supportRelayed).toContain('маъмур');
+    expect(msgs.supportRelayed).toContain('Фиристода');
   });
 
   it('returns Russian messages for RU', () => {

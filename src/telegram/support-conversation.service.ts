@@ -5,10 +5,33 @@ import {
   SupportMessageDirection,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { SupportCategoryCode } from './bot-flow.constants';
 
 @Injectable()
 export class SupportConversationService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async createConversation(
+    telegramAccountId: string,
+    category: SupportCategoryCode,
+  ): Promise<{ id: string }> {
+    const existing = await this.prisma.supportConversation.findFirst({
+      where: { telegramAccountId, status: SupportConversationStatus.OPEN },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true },
+    });
+    if (existing) {
+      await this.prisma.supportConversation.update({
+        where: { id: existing.id },
+        data: { category, updatedAt: new Date() },
+      });
+      return existing;
+    }
+    return this.prisma.supportConversation.create({
+      data: { telegramAccountId, status: SupportConversationStatus.OPEN, category },
+      select: { id: true },
+    });
+  }
 
   async getOrCreateOpenConversation(telegramAccountId: string): Promise<{ id: string }> {
     const existing = await this.prisma.supportConversation.findFirst({
@@ -27,13 +50,16 @@ export class SupportConversationService {
 
   async appendUserMessage(input: {
     telegramAccountId: string;
+    conversationId?: string;
     contentType: SupportMessageContentType;
     text?: string;
     caption?: string;
     fileId?: string;
     telegramMessageId?: bigint;
   }): Promise<{ conversationId: string; messageId: string }> {
-    const conversation = await this.getOrCreateOpenConversation(input.telegramAccountId);
+    const conversation = input.conversationId
+      ? { id: input.conversationId }
+      : await this.getOrCreateOpenConversation(input.telegramAccountId);
     const message = await this.prisma.supportMessage.create({
       data: {
         conversationId: conversation.id,
@@ -84,24 +110,36 @@ export class SupportConversationService {
       take: limit,
       include: {
         telegramAccount: {
-          select: { id: true, username: true, firstName: true, telegramId: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            telegramId: true,
+            language: true,
+          },
         },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
+        _count: { select: { messages: true } },
       },
     });
 
     return conversations.map((c) => ({
       id: c.id,
+      ticketLabel: this.ticketLabel(c.id),
+      category: c.category,
       openedAt: c.createdAt,
       updatedAt: c.updatedAt,
       userDisplayName: c.telegramAccount.firstName ?? 'Пользователь',
       username: c.telegramAccount.username ? `@${c.telegramAccount.username.replace(/^@/, '')}` : null,
       telegramUserId: c.telegramAccount.telegramId.toString(),
+      telegramAccountId: c.telegramAccount.id,
+      userChatId: c.telegramAccount.telegramId,
+      userLanguage: c.telegramAccount.language,
       latestPreview: this.previewMessage(c.messages[0]),
-      messageCount: c.messages.length,
+      messageCount: c._count.messages,
     }));
   }
 
@@ -110,7 +148,7 @@ export class SupportConversationService {
       where: { id: conversationId },
       include: {
         telegramAccount: {
-          select: { username: true, firstName: true, telegramId: true },
+          select: { id: true, username: true, firstName: true, telegramId: true, language: true },
         },
         messages: { orderBy: { createdAt: 'asc' } },
       },
@@ -122,6 +160,10 @@ export class SupportConversationService {
       where: { id: conversationId },
       data: { status: SupportConversationStatus.CLOSED, closedAt: new Date() },
     });
+  }
+
+  ticketLabel(conversationId: string): string {
+    return conversationId.slice(-4).toUpperCase();
   }
 
   private previewMessage(

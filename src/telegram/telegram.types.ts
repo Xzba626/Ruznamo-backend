@@ -37,6 +37,7 @@ export interface InlineKeyboardButton {
   text: string;
   callback_data?: string;
   url?: string;
+  copy_text?: { text: string };
 }
 
 export interface InlineKeyboardMarkup {

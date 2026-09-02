@@ -128,7 +128,7 @@ export class TelegramAuthService {
     opaqueToken: string,
     telegramAccountId: string,
     actorTelegramUserId: bigint,
-    deliverOtp: (code: string) => Promise<void>,
+    deliverOtp: (code: string, purpose: TelegramAuthPurpose) => Promise<void>,
   ): Promise<void> {
     const tokenHash = this.tokenHashService.hashToken(opaqueToken);
     const challenge = await this.prisma.telegramAuthChallenge.findUnique({
@@ -200,7 +200,7 @@ export class TelegramAuthService {
       metadata: { purpose: challenge.purpose },
     });
 
-    await deliverOtp(otp);
+    await deliverOtp(otp, challenge.purpose);
   }
 
   async verifyOtp(challengeId: string, code: string, user: MobileJwtPayload) {

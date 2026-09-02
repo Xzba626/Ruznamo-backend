@@ -5,6 +5,9 @@ export const ru: TelegramI18n = {
   languageButtonTj: '🇹🇯 Тоҷикӣ',
   languageButtonRu: '🇷🇺 Русский',
   languageChanged: '✅ Язык изменён.',
+  userStartWelcome:
+    'Добро пожаловать в Ruznamo.\n\n' +
+    'Здесь вы можете приобрести лицензию, восстановить доступ и обратиться в поддержку.',
   welcomeNoLicense: (name) =>
     `Здравствуйте${name ? `, ${name}` : ''}!`,
   welcomeActiveLicense: (expiresAt) =>
@@ -14,6 +17,20 @@ export const ru: TelegramI18n = {
   purchaseUnavailable: 'Сейчас покупка лицензий временно недоступна.',
   planStandardLabel: 'Standard',
   planProLabel: 'Pro',
+  standardTariffCard: () =>
+    `Standard\n\n` +
+    `Полный доступ к Ruznamo для повседневной работы.\n\n` +
+    `✓ Все функции приложения\n` +
+    `✓ Без рекламы\n` +
+    `✓ До 2 активных устройств одновременно\n` +
+    `✓ Личный лицензионный ключ\n` +
+    `✓ Вход и восстановление через Telegram\n` +
+    `✓ Возможность восстановить и скопировать свой ключ\n` +
+    `✓ Безопасная смена устройства\n` +
+    `✓ Поддержка Ruznamo`,
+  standardDurationMonthButton: (price) => `1 месяц · ${price}`,
+  standardDurationYearButton: (price) => `1 год · ${price}`,
+  standardBuyButton: 'Купить Standard',
   chooseDuration: (planName) => `Выберите срок для ${planName}:`,
   duration30Days: (price) => `30 дней — ${price}`,
   duration365Days: (price) => `365 дней — ${price}`,
@@ -25,7 +42,10 @@ export const ru: TelegramI18n = {
   choosePaymentMethod: 'Выберите способ оплаты:',
   paymentInstructions: (methodName, planName, amount, days, paymentValue, recipient) =>
     `Способ оплаты: ${methodName}\n\nТариф: ${planName}\nСрок: ${days} дней\nСумма: ${amount}\n\nРеквизиты:\n\`${paymentValue}\`\n\nПолучатель:\n${recipient}\n\nПосле оплаты отправьте сюда фото или PDF чека.`,
-  askReceipt: 'Пожалуйста, отправьте фото или файл подтверждения оплаты.',
+  askReceipt: 'Сейчас ожидается подтверждение оплаты. Отправьте фотографию или PDF чека.',
+  paymentAwaitingReceiptHint:
+    'Сейчас ожидается подтверждение оплаты. Отправьте фотографию или PDF чека.',
+  invalidInputUseButtons: 'Сейчас нужно выбрать вариант кнопкой ниже.',
   receiptReceived: '✅ Чек получен.\n\nОжидайте проверки администратором.',
   noAwaitingOrder: 'Сначала выберите тариф, затем отправьте чек об оплате.',
   paymentApproved: (planName, days, expiresAt, key) =>
@@ -50,8 +70,32 @@ export const ru: TelegramI18n = {
     '8. «Мои лицензии» (/licenses) — все ваши ключи.\n' +
     '9. При проблемах — /support.',
   supportWelcome:
-    'Опишите ваш вопрос, проблему, предложение или вопрос по сотрудничеству.',
-  supportExit: '❌ Завершить обращение',
+    'Поддержка Ruznamo\n\n' +
+    'Опишите ваш вопрос или проблему.\n' +
+    'Можно отправить текст, фотографию или документ.\n' +
+    'Администратор ответит вам здесь в Telegram.',
+  supportCategoryPrompt: 'Выберите тему обращения:',
+  supportCategoryTechnical: 'Техническая проблема',
+  supportCategoryLicense: 'Лицензия / ключ',
+  supportCategoryPayment: 'Оплата',
+  supportCategoryDevice: 'Устройство',
+  supportCategoryOther: 'Другое',
+  supportCategoryLabel: (category) => {
+    const map: Record<string, string> = {
+      technical: 'Техническая проблема',
+      license: 'Лицензия / ключ',
+      payment: 'Оплата',
+      device: 'Устройство',
+      other: 'Другое',
+    };
+    return map[category] ?? category;
+  },
+  supportMessageSent: '✅ Сообщение передано администратору.\nОжидайте ответа здесь.',
+  supportCloseConfirm: 'Завершить это обращение?',
+  supportCloseConfirmYes: 'Да, завершить',
+  supportCloseConfirmNo: 'Продолжить диалог',
+  supportClosedFinal: 'Обращение завершено. Если понадобится помощь, вы сможете создать новое.',
+  supportExit: '✖️ Завершить обращение',
   supportExited: 'Обращение завершено. Вы можете снова открыть поддержку через /support.',
   supportDirectContact: 'Написать руководству в Telegram',
   supportPhoneLabel: (phone) => `Телефон поддержки: ${phone}`,
@@ -106,11 +150,12 @@ export const ru: TelegramI18n = {
   deviceRevoked: '✅ Устройство отключено.',
   licenseControlSection: '🔐 Управление лицензией',
   telegramAuthOtp: (code) =>
-    `🔐 Подтверждение Ruznamo\n\n` +
-    `Код подтверждения:\n${code}\n\n` +
-    `Введите этот код в приложении Ruznamo.\n\n` +
-    `Код действует 5 минут.\n\n` +
-    `Никому не сообщайте этот код.`,
+    `Код подтверждения:\n\n${code}\n\nКод действует 5 минут.\nНикому его не сообщайте.`,
+  telegramAuthOtpRecovery: (code) =>
+    `Восстановление доступа Ruznamo\n\nКод подтверждения:\n\n${code}\n\nКод действует 5 минут.\nНикому его не сообщайте.`,
+  telegramAuthOtpLink: (code) =>
+    `Привязка Telegram\n\nВы привязываете Telegram к лицензии Standard.\n\nКод подтверждения:\n\n${code}\n\nКод действует 5 минут.\nНикому его не сообщайте.`,
+  telegramAuthCopyCode: '📋 Скопировать код',
   telegramAuthChallengeUsed: '❌ Эта ссылка уже использована или истекла.',
   telegramAuthChallengeExpired: '❌ Эта ссылка уже использована или истекла.',
   telegramAuthNoLicenses:
@@ -118,10 +163,11 @@ export const ru: TelegramI18n = {
   mainMenuTitle: '🏠 Главное меню Ruznamo',
   replyRecoverAccess: '♻️ Восстановить доступ',
   recoverAccessBody:
-    'Для восстановления доступа откройте приложение Ruznamo на Android → «Восстановить доступ» → подтвердите личность через этот Telegram-бот.',
+    'Чтобы безопасно восстановить доступ на конкретном устройстве, откройте Ruznamo → Ключ доступа → Восстановить доступ. После этого вернитесь сюда по кнопке из приложения.',
   replyAdminMenu: '🛠 Меню администратора',
   stopAcknowledged: 'Текущая операция завершена.',
-  adminMenuTitle: '🛠 Меню администратора',
+  adminRootTitle: 'Панель администратора Ruznamo',
+  adminMenuTitle: '🛠 Панель администратора',
   adminMenuOrders: '💳 Заявки на оплату',
   adminMenuRequisites: '💳 Реквизиты',
   adminMenuSupport: '💬 Поддержка',
@@ -130,6 +176,20 @@ export const ru: TelegramI18n = {
   adminSupportInboxTitle: '💬 Открытые обращения',
   adminSupportEmpty: 'Нет открытых обращений.',
   adminSupportConversationTitle: (user) => `Обращение: ${user}`,
-  adminSupportReplyPrompt: 'Введите ответ пользователю или ответьте Reply на сообщение в чате.',
+  adminSupportReplyButton: '✍️ Ответить',
+  adminSupportReplySent: '✅ Ответ отправлен пользователю.',
+  adminSupportReplyCancel: 'Отмена',
+  adminSupportBackToList: '⬅️ К обращениям',
+  adminSupportDetailTitle: (ticket) => `Обращение #${ticket}`,
+  adminSupportInboxCount: (count) => `Открытые обращения: ${count}`,
+  adminSupportInboxRow: (ticket, user, category, preview) =>
+    `#${ticket} · ${user}\n${category}\n«${preview}»`,
+  adminCreateLicenseTitle: 'Создание лицензии',
+  adminCreateLicenseConfirm: (plan, period) =>
+    `${plan}\nСрок: ${period}\nИсточник: ручная выдача\n\nСоздать лицензию?`,
+  adminCreateLicenseSuccess: (plan, expiresAt, key) =>
+    `✅ Лицензия создана\n\n${plan}\nДо: ${expiresAt}\n\nКлюч:\n\`${key}\``,
+  adminCopyKeyButton: '📋 Скопировать ключ',
+  adminSupportReplyPrompt: 'Напишите ответ пользователю.\nМожно отправить текст, фотографию или документ.',
   adminSupportClosed: '✅ Обращение закрыто.',
 };
