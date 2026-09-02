@@ -351,4 +351,99 @@ export class TelegramLicenseLinkService {
     if (prefix.length <= 4) return `${prefix}••••`;
     return `${prefix.toUpperCase()}••••${prefix.slice(-4)}`;
   }
+
+  async linkHolderFromVerifiedChallenge(params: {
+    licenseId: string;
+    holderTelegramAccountId: string;
+    deviceId: string;
+    mobileUserId: string;
+  }): Promise<{ linked: boolean; alreadyLinked: boolean; licenseId: string }> {
+    const license = await this.prisma.license.findUnique({
+      where: { id: params.licenseId },
+      include: {
+        activations: {
+          where: { deviceId: params.deviceId, device: { revokedAt: null } },
+        },
+      },
+    });
+
+    if (!license || license.activations.length === 0) {
+      throw new BadRequestException({
+        code: 'DEVICE_ACTIVATION_MISSING',
+        message: 'Device activation no longer valid for this license',
+      });
+    }
+
+    this.assertLicenseLinkable(license);
+
+    if (license.holderTelegramAccountId === params.holderTelegramAccountId) {
+      return { linked: true, alreadyLinked: true, licenseId: license.id };
+    }
+
+    if (license.holderTelegramAccountId && license.holderTelegramAccountId !== params.holderTelegramAccountId) {
+      throw new ForbiddenException({
+        code: 'LICENSE_HOLDER_CONFLICT',
+        message: 'License is already controlled by another Telegram account',
+      });
+    }
+
+    if (license.issueSource === LicenseIssueSource.TELEGRAM_PAYMENT) {
+      if (
+        license.purchaserTelegramAccountId &&
+        license.purchaserTelegramAccountId !== params.holderTelegramAccountId
+      ) {
+        throw new ForbiddenException({
+          code: 'TELEGRAM_PURCHASE_OWNER_REQUIRED',
+          message: 'This license must be linked by the purchasing Telegram account or via support',
+        });
+      }
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.license.update({
+        where: { id: license.id },
+        data: {
+          holderTelegramAccountId: params.holderTelegramAccountId,
+          holderLinkedAt: now,
+        },
+      });
+
+      await tx.licenseHolderHistory.create({
+        data: {
+          licenseId: license.id,
+          fromTelegramAccountId: license.holderTelegramAccountId,
+          toTelegramAccountId: params.holderTelegramAccountId,
+          reason: 'TELEGRAM_OTP_LINK_ACCOUNT',
+          actorType: AuditActorType.USER,
+          actorId: params.mobileUserId,
+        },
+      });
+
+      await tx.licenseEvent.create({
+        data: {
+          licenseId: license.id,
+          fromStatus: license.status,
+          toStatus: license.status,
+          reason: 'telegram_holder_linked_via_otp',
+          metadata: {
+            telegramAccountId: params.holderTelegramAccountId,
+            deviceId: params.deviceId,
+            mobileUserId: params.mobileUserId,
+          },
+        },
+      });
+    });
+
+    await this.auditService.log({
+      actorType: AuditActorType.USER,
+      actorId: params.mobileUserId,
+      action: 'license.telegram_holder.linked_via_otp',
+      entityType: 'License',
+      entityId: license.id,
+      metadata: { deviceId: params.deviceId },
+    });
+
+    return { linked: true, alreadyLinked: false, licenseId: license.id };
+  }
 }

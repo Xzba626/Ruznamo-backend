@@ -25,11 +25,16 @@ describe('TelegramSupportRelayService', () => {
     },
   };
 
+  const supportConversation = {
+    appendUserMessage: jest.fn().mockResolvedValue({ conversationId: 'conv_1', messageId: 'msg_1' }),
+  };
+
   const service = new TelegramSupportRelayService(
     configService as never,
     botApi as never,
     auditService as never,
     prisma as never,
+    supportConversation as never,
   );
 
   beforeEach(() => {

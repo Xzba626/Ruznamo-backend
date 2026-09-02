@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { EntitlementsModule } from '../entitlements/entitlements.module';
@@ -11,7 +11,7 @@ import { LicensesService } from './licenses.service';
 import { TelegramLicenseLinkService } from './telegram-license-link.service';
 
 @Module({
-  imports: [AuthModule, EntitlementsModule, SecurityModule, AuditModule],
+  imports: [forwardRef(() => AuthModule), EntitlementsModule, SecurityModule, AuditModule],
   controllers: [LicensesController],
   providers: [
     LicensesService,

@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuditActorType, TelegramLanguage } from '@prisma/client';
+import { AuditActorType, SupportMessageContentType, TelegramLanguage } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTelegramI18n } from './i18n';
+import { SupportConversationService } from './support-conversation.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
 
 const MAX_RELAY_TEXT_LENGTH = 3500;
@@ -14,6 +15,7 @@ export interface SupportRelayInput {
   text: string;
   firstName?: string;
   username?: string;
+  telegramAccountId?: string;
   orderId?: string;
   orderStatus?: string;
   sourceUserMessageId?: number;
@@ -26,6 +28,7 @@ export interface SupportMediaRelayInput {
   fileType: 'photo' | 'document';
   firstName?: string;
   username?: string;
+  telegramAccountId?: string;
   sourceUserMessageId?: number;
 }
 
@@ -50,9 +53,19 @@ export class TelegramSupportRelayService {
     private readonly botApi: TelegramBotApiService,
     private readonly auditService: AuditService,
     private readonly prisma: PrismaService,
+    private readonly supportConversation: SupportConversationService,
   ) {}
 
   async relayFreeText(input: SupportRelayInput): Promise<'sent' | 'no_admins' | 'failed'> {
+    if (input.telegramAccountId) {
+      await this.supportConversation.appendUserMessage({
+        telegramAccountId: input.telegramAccountId,
+        contentType: SupportMessageContentType.TEXT,
+        text: input.text,
+        telegramMessageId: input.sourceUserMessageId ? BigInt(input.sourceUserMessageId) : undefined,
+      });
+    }
+
     const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
     if (adminIds.length === 0) {
       this.logger.warn('Support relay skipped: ADMIN_TELEGRAM_IDS is empty');
@@ -113,6 +126,18 @@ export class TelegramSupportRelayService {
   }
 
   async relayMedia(input: SupportMediaRelayInput): Promise<'sent' | 'no_admins' | 'failed'> {
+    if (input.telegramAccountId) {
+      await this.supportConversation.appendUserMessage({
+        telegramAccountId: input.telegramAccountId,
+        contentType:
+          input.fileType === 'photo'
+            ? SupportMessageContentType.PHOTO
+            : SupportMessageContentType.DOCUMENT,
+        fileId: input.fileId,
+        telegramMessageId: input.sourceUserMessageId ? BigInt(input.sourceUserMessageId) : undefined,
+      });
+    }
+
     const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
     if (adminIds.length === 0) {
       this.logger.warn('Support media relay skipped: ADMIN_TELEGRAM_IDS is empty');

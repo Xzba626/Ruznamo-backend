@@ -25,6 +25,8 @@ export const CB = {
   ACTION_INSTRUCTION: 'action:instruction',
   ACTION_SUPPORT: 'action:support',
   ACTION_SUPPORT_EXIT: 'action:support_exit',
+  ACTION_RECOVER: 'action:recover',
+  ACTION_ADMIN_MENU: 'action:admin_menu',
   ACTION_BACK_PLAN: 'action:back_plan',
   ACTION_BACK_DURATION: 'action:back_duration',
   approve: (orderId: string) => `payment:approve:${orderId}`,

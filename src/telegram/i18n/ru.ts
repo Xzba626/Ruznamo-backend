@@ -6,9 +6,9 @@ export const ru: TelegramI18n = {
   languageButtonRu: '🇷🇺 Русский',
   languageChanged: '✅ Язык изменён.',
   welcomeNoLicense: (name) =>
-    `Здравствуйте${name ? `, ${name}` : ''}!\n\nИспользуйте меню (кнопка рядом с полем ввода) или команды бота.`,
+    `Здравствуйте${name ? `, ${name}` : ''}!`,
   welcomeActiveLicense: (expiresAt) =>
-    `Здравствуйте!\n\nУ вас есть активные лицензии. Ближайшее окончание: ${expiresAt}`,
+    `Ближайшее окончание лицензии: ${expiresAt}`,
   choosePlan: 'Выберите тариф:',
   planUnavailable: 'Этот тариф сейчас недоступен для покупки.',
   purchaseUnavailable: 'Сейчас покупка лицензий временно недоступна.',
@@ -50,7 +50,7 @@ export const ru: TelegramI18n = {
     '8. «Мои лицензии» (/licenses) — все ваши ключи.\n' +
     '9. При проблемах — /support.',
   supportWelcome:
-    'Здравствуйте. Опишите ваш вопрос, проблему, предложение или идею для Ruznamo.\n\nСообщение будет передано службе поддержки.',
+    'Опишите ваш вопрос, проблему, предложение или вопрос по сотрудничеству.',
   supportExit: '❌ Завершить обращение',
   supportExited: 'Обращение завершено. Вы можете снова открыть поддержку через /support.',
   supportDirectContact: 'Написать руководству в Telegram',
@@ -115,4 +115,21 @@ export const ru: TelegramI18n = {
   telegramAuthChallengeExpired: '❌ Эта ссылка уже использована или истекла.',
   telegramAuthNoLicenses:
     'К этому Telegram-аккаунту не привязано ни одной лицензии Ruznamo.',
+  mainMenuTitle: '🏠 Главное меню Ruznamo',
+  replyRecoverAccess: '♻️ Восстановить доступ',
+  recoverAccessBody:
+    'Для восстановления доступа откройте приложение Ruznamo на Android → «Восстановить доступ» → подтвердите личность через этот Telegram-бот.',
+  replyAdminMenu: '🛠 Меню администратора',
+  stopAcknowledged: 'Текущая операция завершена.',
+  adminMenuTitle: '🛠 Меню администратора',
+  adminMenuOrders: '💳 Заявки на оплату',
+  adminMenuRequisites: '💳 Реквизиты',
+  adminMenuSupport: '💬 Поддержка',
+  adminMenuLicenses: '🔑 Лицензии',
+  adminMenuCreateLicense: '➕ Создать лицензию',
+  adminSupportInboxTitle: '💬 Открытые обращения',
+  adminSupportEmpty: 'Нет открытых обращений.',
+  adminSupportConversationTitle: (user) => `Обращение: ${user}`,
+  adminSupportReplyPrompt: 'Введите ответ пользователю или ответьте Reply на сообщение в чате.',
+  adminSupportClosed: '✅ Обращение закрыто.',
 };

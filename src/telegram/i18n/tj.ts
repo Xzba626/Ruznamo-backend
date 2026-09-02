@@ -115,4 +115,21 @@ export const tj: TelegramI18n = {
   telegramAuthChallengeExpired: '❌ Ин пайванд аллакай истифода шудааст ё анҷом ёфтааст.',
   telegramAuthNoLicenses:
     'Ба ин ҳисоби Telegram ягон иҷозатномаи Ruznamo пайваст нашудааст.',
+  mainMenuTitle: '🏠 Менюи асосии Ruznamo',
+  replyRecoverAccess: '♻️ Барқарор кардани дастрасӣ',
+  recoverAccessBody:
+    'Барои барқарор кардани дастрасӣ барномаи Ruznamo дар Android → «Барқарор кардани дастрасӣ» → тасдиқи шахсият тавассути ин бот.',
+  replyAdminMenu: '🛠 Менюи маъмур',
+  stopAcknowledged: 'Амали ҷорӣ қатъ шуд.',
+  adminMenuTitle: '🛠 Менюи маъмур',
+  adminMenuOrders: '💳 Дархостҳои пардохт',
+  adminMenuRequisites: '💳 Реквизитҳо',
+  adminMenuSupport: '💬 Дастгирӣ',
+  adminMenuLicenses: '🔑 Иҷозатномаҳо',
+  adminMenuCreateLicense: '➕ Эҷоди иҷозатнома',
+  adminSupportInboxTitle: '💬 Муроҷиатҳои кушода',
+  adminSupportEmpty: 'Муроҷиати кушода нест.',
+  adminSupportConversationTitle: (user) => `Муроҷиат: ${user}`,
+  adminSupportReplyPrompt: 'Ҷавобро ворид кунед ё Reply ба паёми чат.',
+  adminSupportClosed: '✅ Муроҷиат пӯшида шуд.',
 };

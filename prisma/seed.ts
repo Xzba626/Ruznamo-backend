@@ -233,7 +233,7 @@ async function seedStandardPlan() {
   });
 
   const prices = [
-    { billingPeriod: BillingPeriod.MONTHLY, amount: '15.00' },
+    { billingPeriod: BillingPeriod.MONTHLY, amount: '20.00' },
     { billingPeriod: BillingPeriod.YEARLY, amount: '150.00' },
   ] as const;
 
@@ -262,7 +262,7 @@ async function seedStandardPlan() {
 
   const features = [
     { key: 'planning_horizon_days', value: '28', valueType: FeatureValueType.INT },
-    { key: 'max_devices', value: '1', valueType: FeatureValueType.INT },
+    { key: 'max_devices', value: '2', valueType: FeatureValueType.INT },
     { key: 'cloud_sync', value: 'false', valueType: FeatureValueType.BOOL },
     { key: 'advanced_analytics', value: 'false', valueType: FeatureValueType.BOOL },
   ] as const;

@@ -29,6 +29,7 @@ import {
   parseReplacementStartPayload,
 } from '../licenses/license-link-token.util';
 import { TelegramAuthService } from '../auth/telegram-auth.service';
+import { SupportConversationService } from './support-conversation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
 import { billingPeriodDays, getTelegramI18n, LICENSE_DURATION_DAYS } from './i18n';
@@ -83,6 +84,7 @@ export class TelegramUpdateProcessor {
     private readonly telegramLicenseLink: TelegramLicenseLinkService,
     private readonly deviceReplacement: DeviceReplacementService,
     private readonly telegramAuthService: TelegramAuthService,
+    private readonly supportConversation: SupportConversationService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -225,9 +227,20 @@ export class TelegramUpdateProcessor {
     const msgs = this.i18n(resolved);
     switch (command) {
       case 'start':
+        await this.clearTransientNav(telegramId);
+        if (!resolved.language) {
+          await this.botApi.removeReplyKeyboard(chatId);
+          await this.botApi.sendMessage(chatId, getTelegramI18n(null).languageSelect, languageKeyboard(getTelegramI18n(null)));
+          return true;
+        }
+        await this.sendMainMenu(resolved, chatId, telegramId, firstName);
+        return true;
       case 'home':
         await this.clearTransientNav(telegramId);
-        await this.sendMainMenu(resolved, chatId, firstName);
+        await this.sendMainMenu(resolved, chatId, telegramId, firstName);
+        return true;
+      case 'stop':
+        await this.handleStop(resolved, chatId, telegramId);
         return true;
       case 'buy':
         await this.showBuyFlow(resolved, chatId, firstName);
@@ -399,54 +412,39 @@ export class TelegramUpdateProcessor {
       }
       if (text === msgs.replyMainMenu) {
         await this.clearTransientNav(telegramId);
-        await this.sendMainMenu(resolved, chatId, from.first_name);
+        await this.sendMainMenu(resolved, chatId, telegramId, from.first_name);
         return;
       }
     }
 
     const awaitingReceipt = await this.orderService.findAwaitingReceiptOrder(resolved.userId);
+    const inSupport = await this.isInSupportMode(telegramId);
+
+    if (inSupport) {
+      const relayResult = await this.supportRelay.relayFreeText({
+        telegramUserId: telegramId,
+        chatId,
+        text,
+        firstName: from.first_name,
+        username: from.username,
+        telegramAccountId: resolved.telegramAccountId,
+        sourceUserMessageId: message.message_id,
+      });
+
+      if (relayResult === 'sent') {
+        await this.sendUserMessage(chatId, resolved, msgs.supportRelayed);
+      } else {
+        await this.sendUserMessage(chatId, resolved, msgs.supportRelayUnavailable);
+      }
+      return;
+    }
+
     if (awaitingReceipt) {
       await this.sendUserMessage(chatId, resolved, msgs.askReceipt);
       return;
     }
 
-    const inSupport = await this.isInSupportMode(telegramId);
-    if (!inSupport) {
-      return;
-    }
-
-    const activeOrder = await this.prisma.order.findFirst({
-      where: {
-        userId: resolved.userId,
-        status: {
-          in: [OrderStatus.PENDING, OrderStatus.RECEIPT_SUBMITTED, OrderStatus.UNDER_REVIEW],
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    this.logger.log({
-      updateId: update.update_id,
-      telegramUserId: telegramId.toString(),
-      handler: 'support_relay',
-    });
-
-    const relayResult = await this.supportRelay.relayFreeText({
-      telegramUserId: telegramId,
-      chatId,
-      text,
-      firstName: from.first_name,
-      username: from.username,
-      orderId: activeOrder?.id,
-      orderStatus: activeOrder?.status,
-      sourceUserMessageId: message.message_id,
-    });
-
-    if (relayResult === 'sent') {
-      await this.sendUserMessage(chatId, resolved, msgs.supportRelayed);
-    } else {
-      await this.sendUserMessage(chatId, resolved, msgs.supportRelayUnavailable);
-    }
+    return;
   }
 
   private async handleMediaUpload(
@@ -470,40 +468,39 @@ export class TelegramUpdateProcessor {
     });
 
     const msgs = this.i18n(resolved);
+    const inSupport = await this.isInSupportMode(telegramId);
     const order = await this.orderService.findAwaitingReceiptOrder(resolved.userId);
+
+    if (inSupport) {
+      this.logger.log({
+        updateId: update.update_id,
+        telegramUserId: telegramId.toString(),
+        handler: 'support_media_relay',
+      });
+
+      const relayResult = await this.supportRelay.relayMedia({
+        telegramUserId: telegramId,
+        chatId,
+        fileId,
+        fileType,
+        firstName,
+        username,
+        telegramAccountId: resolved.telegramAccountId,
+        sourceUserMessageId: update.message?.message_id,
+      });
+
+      if (relayResult === 'sent') {
+        await this.botApi.sendMessage(chatId, msgs.supportAttachmentRelayed);
+      } else if (relayResult === 'no_admins') {
+        await this.botApi.sendMessage(chatId, msgs.supportRelayUnavailable);
+      } else {
+        await this.botApi.sendMessage(chatId, msgs.unsupportedAttachment);
+      }
+      return;
+    }
 
     if (order) {
       await this.submitReceiptAndNotify(update, resolved, chatId, order.id, fileId, fileType, msgs);
-      return;
-    }
-
-    const inSupport = await this.isInSupportMode(telegramId);
-    if (!inSupport) {
-      return;
-    }
-
-    this.logger.log({
-      updateId: update.update_id,
-      telegramUserId: telegramId.toString(),
-      handler: 'support_media_relay',
-    });
-
-    const relayResult = await this.supportRelay.relayMedia({
-      telegramUserId: telegramId,
-      chatId,
-      fileId,
-      fileType,
-      firstName,
-      username,
-      sourceUserMessageId: update.message?.message_id,
-    });
-
-    if (relayResult === 'sent') {
-      await this.botApi.sendMessage(chatId, msgs.supportAttachmentRelayed);
-    } else if (relayResult === 'no_admins') {
-      await this.botApi.sendMessage(chatId, msgs.supportRelayUnavailable);
-    } else {
-      await this.botApi.sendMessage(chatId, msgs.unsupportedAttachment);
     }
   }
 
@@ -619,15 +616,6 @@ export class TelegramUpdateProcessor {
     if (this.isAdmin(telegramId)) {
       await this.botApi.removeReplyKeyboard(chatId);
       await this.commandsService.registerAdminCommandsForChat(chatId);
-      const resolved = await this.telegramAccountService.resolveTelegramUser({
-        telegramId,
-        chatId,
-        username,
-        firstName,
-      });
-      const msgs = this.i18n(resolved);
-      await this.botApi.sendMessage(chatId, msgs.adminWelcome, homeRow(msgs));
-      return;
     }
 
     if (!resolved.language) {
@@ -636,48 +624,109 @@ export class TelegramUpdateProcessor {
       return;
     }
 
-    await this.sendMainMenu(resolved, chatId, firstName);
+    await this.sendMainMenu(resolved, chatId, telegramId, firstName);
+  }
+
+  private async handleStop(
+    resolved: ResolvedTelegramUser,
+    chatId: bigint,
+    telegramUserId: bigint,
+  ): Promise<void> {
+    const msgs = this.i18n(resolved);
+    await this.exitSupportMode(telegramUserId);
+    await this.sessionService.clear(telegramUserId);
+    await this.sendUserMessage(chatId, resolved, msgs.stopAcknowledged);
+    await this.sendMainMenu(resolved, chatId, telegramUserId);
   }
 
   private async sendMainMenu(
     resolved: ResolvedTelegramUser,
     chatId: bigint,
+    telegramUserId: bigint,
     firstName?: string,
   ): Promise<void> {
     const msgs = this.i18n(resolved);
 
     const activeLicense = await this.prisma.license.findFirst({
       where: {
-        userId: resolved.userId,
-        status: LicenseStatus.ACTIVE,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        AND: [
+          {
+            OR: [
+              { userId: resolved.userId },
+              { holderTelegramAccountId: resolved.telegramAccountId },
+              { purchaserTelegramAccountId: resolved.telegramAccountId },
+            ],
+          },
+          { status: LicenseStatus.ACTIVE },
+          { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        ],
       },
       orderBy: { expiresAt: 'desc' },
     });
 
+    let text = msgs.mainMenuTitle;
     if (activeLicense?.expiresAt) {
-      await this.sendUserMessage(
-        chatId,
-        resolved,
-        msgs.welcomeActiveLicense(formatDateLocalized(activeLicense.expiresAt, this.langCode(resolved))),
-        this.mainMenuKeyboard(msgs),
-      );
-      return;
+      text += `\n\n${msgs.welcomeActiveLicense(formatDateLocalized(activeLicense.expiresAt, this.langCode(resolved)))}`;
+    } else if (firstName) {
+      text += `\n\n${msgs.welcomeNoLicense(firstName)}`;
     }
 
-    await this.showBuyFlow(resolved, chatId, firstName);
+    await this.sendUserMessage(chatId, resolved, text, this.mainMenuKeyboard(msgs, telegramUserId));
   }
 
-  private mainMenuKeyboard(msgs: ReturnType<typeof getTelegramI18n>): InlineKeyboardMarkup {
-    return {
+  private mainMenuKeyboard(
+    msgs: ReturnType<typeof getTelegramI18n>,
+    telegramUserId: bigint,
+  ): InlineKeyboardMarkup {
+    const rows: InlineKeyboardMarkup['inline_keyboard'] = [
+      [{ text: msgs.replyBuyLicense, callback_data: CB.ACTION_GET_KEY }],
+      [{ text: msgs.replyMyLicenses, callback_data: CB.ACTION_MY_SUB }],
+      [{ text: msgs.replyRecoverAccess, callback_data: CB.ACTION_RECOVER }],
+      [{ text: msgs.instructionTitle, callback_data: CB.ACTION_INSTRUCTION }],
+      [{ text: msgs.replySupport, callback_data: CB.ACTION_SUPPORT }],
+      [{ text: msgs.replyLanguage, callback_data: CB.ACTION_LANGUAGE }],
+    ];
+    if (this.isAdmin(telegramUserId)) {
+      rows.push([{ text: msgs.replyAdminMenu, callback_data: CB.ACTION_ADMIN_MENU }]);
+    }
+    return { inline_keyboard: rows };
+  }
+
+  private async showAdminMenu(resolved: ResolvedTelegramUser, chatId: bigint): Promise<void> {
+    const msgs = this.i18n(resolved);
+    await this.sendUserMessage(chatId, resolved, msgs.adminMenuTitle, {
       inline_keyboard: [
-        [{ text: msgs.replyBuyLicense, callback_data: CB.ACTION_GET_KEY }],
-        [{ text: msgs.replyMyLicenses, callback_data: CB.ACTION_MY_SUB }],
-        [{ text: msgs.instructionTitle, callback_data: CB.ACTION_INSTRUCTION }],
-        [{ text: msgs.replySupport, callback_data: CB.ACTION_SUPPORT }],
+        [{ text: msgs.adminMenuOrders, callback_data: 'admin:orders' }],
+        [{ text: msgs.adminMenuRequisites, callback_data: 'admin:pm:list' }],
+        [{ text: msgs.adminMenuSupport, callback_data: 'admin:support:list' }],
+        [{ text: msgs.adminMenuLicenses, callback_data: 'admin:licenses' }],
+        [{ text: msgs.adminMenuCreateLicense, callback_data: 'admin:create_license' }],
         [{ text: msgs.replyLanguage, callback_data: CB.ACTION_LANGUAGE }],
+        [{ text: msgs.replyMainMenu, callback_data: CB.ACTION_MAIN_MENU }],
       ],
-    };
+    });
+  }
+
+  private async showRecoverAccess(resolved: ResolvedTelegramUser, chatId: bigint): Promise<void> {
+    const msgs = this.i18n(resolved);
+    await this.sendUserMessage(chatId, resolved, msgs.recoverAccessBody, navRow(msgs, CB.ACTION_MAIN_MENU));
+  }
+
+  private async showAdminSupportInbox(chatId: bigint): Promise<void> {
+    const items = await this.supportConversation.listOpenConversations();
+    const msgs = getTelegramI18n(TelegramLanguage.RU);
+    if (items.length === 0) {
+      await this.botApi.sendPlainMessage(chatId, msgs.adminSupportEmpty);
+      return;
+    }
+    const rows = items.slice(0, 10).map((item) => [
+      {
+        text: `${item.userDisplayName}${item.username ? ` (${item.username})` : ''}: ${item.latestPreview}`,
+        callback_data: `admin:support:open:${item.id}`,
+      },
+    ]);
+    rows.push([{ text: msgs.replyMainMenu, callback_data: CB.ACTION_MAIN_MENU }]);
+    await this.botApi.sendMessage(chatId, msgs.adminSupportInboxTitle, { inline_keyboard: rows });
   }
 
   private async showInstruction(resolved: ResolvedTelegramUser, chatId: bigint): Promise<void> {
@@ -720,17 +769,6 @@ export class TelegramUpdateProcessor {
     }
 
     await this.sendUserMessage(chatId, resolved, text, { inline_keyboard: rows });
-  }
-
-  private async showAdminMenu(resolved: ResolvedTelegramUser, chatId: bigint): Promise<void> {
-    const msgs = this.i18n(resolved);
-    await this.sendUserMessage(chatId, resolved, msgs.adminWelcome, {
-      inline_keyboard: [
-        [{ text: '💳 Реквизиты', callback_data: 'admin:pm:list' }],
-        [{ text: '📋 Заявки', callback_data: 'admin:orders' }],
-        [{ text: msgs.replyMainMenu, callback_data: CB.ACTION_MAIN_MENU }],
-      ],
-    });
   }
 
   private async showPendingOrders(chatId: bigint): Promise<void> {
@@ -890,7 +928,7 @@ export class TelegramUpdateProcessor {
       const msgs = this.i18n(updated);
       await this.botApi.answerCallbackQuery(query.id);
       await this.botApi.sendMessage(chatId, msgs.languageChanged);
-      await this.sendMainMenu(updated, chatId, query.from.first_name);
+      await this.sendMainMenu(updated, chatId, telegramId, query.from.first_name);
       return;
     }
 
@@ -934,7 +972,73 @@ export class TelegramUpdateProcessor {
     if (data === CB.ACTION_MAIN_MENU) {
       await this.botApi.answerCallbackQuery(query.id);
       await this.clearTransientNav(telegramId);
-      await this.sendMainMenu(resolved, chatId, query.from.first_name);
+      await this.sendMainMenu(resolved, chatId, telegramId, query.from.first_name);
+      return;
+    }
+
+    if (data === CB.ACTION_RECOVER) {
+      await this.botApi.answerCallbackQuery(query.id);
+      await this.showRecoverAccess(resolved, chatId);
+      return;
+    }
+
+    if (data === CB.ACTION_ADMIN_MENU) {
+      await this.botApi.answerCallbackQuery(query.id);
+      if (!this.isAdmin(telegramId)) {
+        await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
+        return;
+      }
+      await this.showAdminMenu(resolved, chatId);
+      return;
+    }
+
+    if (data === 'admin:support:list') {
+      await this.botApi.answerCallbackQuery(query.id);
+      if (!this.isAdmin(telegramId)) {
+        return;
+      }
+      await this.showAdminSupportInbox(chatId);
+      return;
+    }
+
+    if (data.startsWith('admin:support:open:')) {
+      await this.botApi.answerCallbackQuery(query.id);
+      if (!this.isAdmin(telegramId)) {
+        return;
+      }
+      const conversationId = data.slice('admin:support:open:'.length);
+      const conversation = await this.supportConversation.getConversationHistory(conversationId);
+      if (!conversation) {
+        await this.botApi.sendPlainMessage(chatId, msgs.adminSupportEmpty);
+        return;
+      }
+      const userLabel = conversation.telegramAccount.firstName ?? 'Пользователь';
+      const lines = conversation.messages.map((m) => {
+        const prefix = m.direction === 'USER_TO_ADMIN' ? '👤' : '🛠';
+        const body = m.text ?? m.caption ?? `[${m.contentType}]`;
+        return `${prefix} ${body}`;
+      });
+      await this.botApi.sendMessage(
+        chatId,
+        `${msgs.adminSupportConversationTitle(userLabel)}\n\n${lines.join('\n\n')}`,
+        {
+          inline_keyboard: [
+            [{ text: 'Закрыть обращение', callback_data: `admin:support:close:${conversationId}` }],
+            [{ text: msgs.replyMainMenu, callback_data: CB.ACTION_MAIN_MENU }],
+          ],
+        },
+      );
+      return;
+    }
+
+    if (data.startsWith('admin:support:close:')) {
+      await this.botApi.answerCallbackQuery(query.id);
+      if (!this.isAdmin(telegramId)) {
+        return;
+      }
+      const conversationId = data.slice('admin:support:close:'.length);
+      await this.supportConversation.closeConversation(conversationId);
+      await this.botApi.sendPlainMessage(chatId, msgs.adminSupportClosed);
       return;
     }
 

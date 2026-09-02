@@ -1,11 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { TelegramAuthPurpose } from '@prisma/client';
-import { IsEnum, IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class CreateTelegramAuthChallengeDto {
   @ApiProperty({ enum: TelegramAuthPurpose })
   @IsEnum(TelegramAuthPurpose)
   purpose!: TelegramAuthPurpose;
+
+  @ApiProperty({ required: false, description: 'Required when purpose is LINK_ACCOUNT' })
+  @IsOptional()
+  @IsString()
+  licenseId?: string;
 }
 
 export class VerifyTelegramAuthDto {

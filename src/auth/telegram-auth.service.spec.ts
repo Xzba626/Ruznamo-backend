@@ -20,12 +20,14 @@ describe('TelegramAuthService', () => {
     hashToken: jest.fn((t: string) => `hash-${t}`),
   };
   const auditService = { log: jest.fn() };
+  const telegramLicenseLink = { linkHolderFromVerifiedChallenge: jest.fn() };
 
   const service = new TelegramAuthService(
     prisma as never,
     configService as never,
     tokenHashService as never,
     auditService as never,
+    telegramLicenseLink as never,
   );
 
   const mobileUser = {

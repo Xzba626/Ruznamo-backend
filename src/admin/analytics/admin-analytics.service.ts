@@ -104,12 +104,7 @@ export class AdminAnalyticsService {
       period: label,
       from: from.toISOString(),
       to: to.toISOString(),
-      definitions: {
-        sold: 'TELEGRAM_PAYMENT license with completed/approved Order in period',
-        manualIssued: 'ADMIN_MANUAL licenses created in period (not counted as sold)',
-        revenue: 'Sum of approved/completed Order amounts by approvedAt in period',
-        activations: 'LicenseActivation rows created in period (not sales)',
-      },
+      definitions: this.metricDefinitionsRu(),
       sold: {
         total: soldLicenses,
         byPlan: soldByPlan.map((row) => ({
@@ -206,12 +201,7 @@ export class AdminAnalyticsService {
     const totalUsers = categoryDistribution.reduce((sum, row) => sum + row._count._all, 0);
 
     return {
-      definitions: {
-        activeDevice: `lastSeenAt within ${ACTIVE_DEVICE_DAYS} days, not revoked`,
-        activeLicense: 'status ACTIVE and not expired',
-        trial: 'TrialGrant ACTIVE with expiresAt > now',
-        paidUser: 'user with ACTIVE license linked to a completed order',
-      },
+      definitions: this.metricDefinitionsRu(),
       totals: {
         devices: totalDevices,
         activeDevices,
@@ -252,5 +242,58 @@ export class AdminAnalyticsService {
         .sort((a, b) => b.count - a.count),
       generatedAt: now.toISOString(),
     };
+  }
+
+  private metricDefinitionsRu() {
+    return [
+      {
+        key: 'activeDevices',
+        title: 'Активные устройства (30 дн.)',
+        meaning: 'Устройства с lastSeenAt за последние 30 дней и без revokedAt.',
+        formula: 'COUNT(DeviceInstallation WHERE revokedAt IS NULL AND lastSeenAt >= now()-30d)',
+        source: 'DeviceInstallation.lastSeenAt',
+        refresh: 'При каждом запросе страницы',
+      },
+      {
+        key: 'activeLicenses',
+        title: 'Активные лицензии',
+        meaning: 'Лицензии со статусом ACTIVE и неистёкшим expiresAt.',
+        formula: 'COUNT(License WHERE status=ACTIVE AND (expiresAt IS NULL OR expiresAt > now()))',
+        source: 'License.status, License.expiresAt',
+        refresh: 'При каждом запросе',
+      },
+      {
+        key: 'soldLicenses',
+        title: 'Проданные лицензии (Telegram)',
+        meaning: 'Лицензии TELEGRAM_PAYMENT с подтверждённым заказом в выбранном периоде.',
+        formula: 'COUNT(License issueSource=TELEGRAM_PAYMENT + Order APPROVED/COMPLETED)',
+        source: 'License, Order',
+        refresh: 'По выбранному периоду продаж',
+      },
+      {
+        key: 'manualIssued',
+        title: 'Ручные лицензии',
+        meaning: 'Лицензии ADMIN_MANUAL, созданные администратором без Telegram-заказа.',
+        formula: 'COUNT(License issueSource=ADMIN_MANUAL)',
+        source: 'License.issueSource',
+        refresh: 'По выбранному периоду',
+      },
+      {
+        key: 'revenue',
+        title: 'Выручка',
+        meaning: 'Сумма подтверждённых заказов по approvedAt в периоде.',
+        formula: 'SUM(Order.amount WHERE status IN (APPROVED, COMPLETED))',
+        source: 'Order.amount, Order.approvedAt',
+        refresh: 'По выбранному периоду',
+      },
+      {
+        key: 'activations',
+        title: 'Активации устройств',
+        meaning: 'Новые LicenseActivation — это не продажи, а привязка устройства к лицензии.',
+        formula: 'COUNT(LicenseActivation.createdAt in period)',
+        source: 'LicenseActivation',
+        refresh: 'По выбранному периоду',
+      },
+    ];
   }
 }

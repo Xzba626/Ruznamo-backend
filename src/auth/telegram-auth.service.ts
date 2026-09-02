@@ -3,15 +3,18 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuditActorType, TelegramAuthPurpose } from '@prisma/client';
+import { AuditActorType, LicenseStatus, TelegramAuthPurpose } from '@prisma/client';
 import { createHash, randomInt, timingSafeEqual } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from './mobile-jwt.payload';
 import { PrismaService } from '../prisma/prisma.service';
 import { TokenHashService } from '../security/token-hash.service';
 import { buildAuthStartPayload } from '../licenses/license-link-token.util';
+import { TelegramLicenseLinkService } from '../licenses/telegram-license-link.service';
 
 const CHALLENGE_TTL_MS = 15 * 60 * 1000;
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -36,9 +39,15 @@ export class TelegramAuthService {
     private readonly configService: ConfigService,
     private readonly tokenHashService: TokenHashService,
     private readonly auditService: AuditService,
+    @Inject(forwardRef(() => TelegramLicenseLinkService))
+    private readonly telegramLicenseLink: TelegramLicenseLinkService,
   ) {}
 
-  async createChallenge(user: MobileJwtPayload, purpose: TelegramAuthPurpose) {
+  async createChallenge(
+    user: MobileJwtPayload,
+    purpose: TelegramAuthPurpose,
+    licenseId?: string,
+  ) {
     if (!user.deviceId) {
       throw new ForbiddenException({ code: 'DEVICE_REQUIRED', message: 'Active device session required' });
     }
@@ -48,6 +57,36 @@ export class TelegramAuthService {
     });
     if (!device) {
       throw new ForbiddenException({ code: 'DEVICE_REVOKED', message: 'Current device is not active' });
+    }
+
+    if (purpose === TelegramAuthPurpose.LINK_ACCOUNT) {
+      if (!licenseId) {
+        throw new BadRequestException({
+          code: 'LICENSE_ID_REQUIRED',
+          message: 'licenseId is required for LINK_ACCOUNT',
+        });
+      }
+      const activation = await this.prisma.licenseActivation.findFirst({
+        where: {
+          licenseId,
+          deviceId: user.deviceId,
+          device: { userId: user.sub, revokedAt: null },
+        },
+        include: { license: true },
+      });
+      if (!activation) {
+        throw new ForbiddenException({
+          code: 'LICENSE_NOT_ACTIVE_ON_DEVICE',
+          message: 'License is not active on this device',
+        });
+      }
+      if (
+        activation.license.status === LicenseStatus.REVOKED ||
+        activation.license.revokedAt ||
+        (activation.license.expiresAt && activation.license.expiresAt <= new Date())
+      ) {
+        throw new ForbiddenException({ code: 'LICENSE_NOT_LINKABLE', message: 'License cannot be linked' });
+      }
     }
 
     const opaqueToken = this.tokenHashService.generateOpaqueToken();
@@ -60,6 +99,7 @@ export class TelegramAuthService {
         requestingDeviceId: device.id,
         requestingMobileUserId: user.sub,
         purpose,
+        contextLicenseId: purpose === TelegramAuthPurpose.LINK_ACCOUNT ? licenseId : null,
         maxAttempts: MAX_OTP_ATTEMPTS,
         expiresAt,
       },
@@ -280,12 +320,27 @@ export class TelegramAuthService {
 
     const holder = challenge.telegramAccount;
 
+    let linkResult: { linked: boolean; alreadyLinked?: boolean; licenseId?: string } | null = null;
+    if (
+      challenge.purpose === TelegramAuthPurpose.LINK_ACCOUNT &&
+      challenge.contextLicenseId &&
+      challenge.telegramAccountId
+    ) {
+      linkResult = await this.telegramLicenseLink.linkHolderFromVerifiedChallenge({
+        licenseId: challenge.contextLicenseId,
+        holderTelegramAccountId: challenge.telegramAccountId,
+        deviceId: challenge.requestingDeviceId,
+        mobileUserId: challenge.requestingMobileUserId,
+      });
+    }
+
     return {
       recoveryGrantId: grant.id,
       expiresAt: grantExpiresAt,
       purpose: challenge.purpose,
       holderDisplayName: holder?.firstName ?? null,
       holderUsername: holder?.username ? `@${holder.username.replace(/^@/, '')}` : null,
+      link: linkResult,
     };
   }
 

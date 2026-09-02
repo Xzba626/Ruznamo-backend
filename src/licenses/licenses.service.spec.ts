@@ -174,17 +174,17 @@ describe('LicensesService', () => {
     );
   });
 
-  it('rejects STANDARD license activation when one device slot is already used', async () => {
+  it('rejects STANDARD license activation when two device slots are already used', async () => {
     mockTransaction({
       license: {
         ...baseLicense,
         plan: {
           code: PlanCode.STANDARD,
           name: 'Standard',
-          features: [{ key: 'max_devices', value: '1' }],
+          features: [{ key: 'max_devices', value: '2' }],
         },
       },
-      activeActivationCount: 1,
+      activeActivationCount: 2,
     });
 
     await expect(service.activate(mobileJwt, licenseKey, {})).rejects.toMatchObject({

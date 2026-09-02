@@ -47,7 +47,7 @@ describe('AdminAnalyticsService', () => {
     expect(result.totals.devices).toBe(5);
     expect(result.appVersionDistribution[0].appVersion).toBe('1.0.1');
     expect(result).not.toHaveProperty('users');
-    expect(result.definitions.activeDevice).toContain('30');
+    expect(result.definitions[0].title).toContain('Активные устройства');
   });
 
   it('returns sales metrics separating sold vs manual', async () => {
@@ -64,6 +64,6 @@ describe('AdminAnalyticsService', () => {
     expect(result.sold.total).toBe(3);
     expect(result.manualIssued).toBe(1);
     expect(result.revenue.grossApproved).toBe('100');
-    expect(result.definitions.sold).toContain('TELEGRAM_PAYMENT');
+    expect(result.definitions.find((d) => d.key === 'soldLicenses')?.meaning).toContain('TELEGRAM_PAYMENT');
   });
 });

@@ -95,4 +95,20 @@ export interface TelegramI18n {
   telegramAuthChallengeUsed: string;
   telegramAuthChallengeExpired: string;
   telegramAuthNoLicenses: string;
+  mainMenuTitle: string;
+  replyRecoverAccess: string;
+  recoverAccessBody: string;
+  replyAdminMenu: string;
+  stopAcknowledged: string;
+  adminMenuTitle: string;
+  adminMenuOrders: string;
+  adminMenuRequisites: string;
+  adminMenuSupport: string;
+  adminMenuLicenses: string;
+  adminMenuCreateLicense: string;
+  adminSupportInboxTitle: string;
+  adminSupportEmpty: string;
+  adminSupportConversationTitle: (user: string) => string;
+  adminSupportReplyPrompt: string;
+  adminSupportClosed: string;
 }

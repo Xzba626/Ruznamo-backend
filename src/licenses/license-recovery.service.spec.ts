@@ -58,7 +58,7 @@ describe('LicenseRecoveryService', () => {
         activatedAt: new Date(),
         createdAt: new Date(),
         expiresAt: new Date(Date.now() + 86400000),
-        plan: { code: PlanCode.STANDARD, name: 'Standard', features: [{ key: 'max_devices', value: '1' }] },
+        plan: { code: PlanCode.STANDARD, name: 'Standard', features: [{ key: 'max_devices', value: '2' }] },
         activations: [],
       },
       {
@@ -137,7 +137,7 @@ describe('LicenseRecoveryService', () => {
             activatedAt: new Date(),
             startsAt: new Date(),
             keyPrefix: 'ABCD',
-            plan: { code: PlanCode.STANDARD, name: 'Standard', features: [{ key: 'max_devices', value: '1' }] },
+            plan: { code: PlanCode.STANDARD, name: 'Standard', features: [{ key: 'max_devices', value: '2' }] },
           }),
         },
         $executeRaw: jest.fn(),
@@ -148,12 +148,22 @@ describe('LicenseRecoveryService', () => {
           findUnique: jest.fn().mockResolvedValue(null),
           findMany: jest.fn().mockResolvedValue([
             {
-              deviceId: 'device_old',
+              deviceId: 'device_old_1',
               device: {
-                id: 'device_old',
+                id: 'device_old_1',
                 deviceName: 'Huawei',
                 deviceManufacturer: 'Huawei',
                 deviceModel: 'AKA',
+                lastSeenAt: new Date(),
+              },
+            },
+            {
+              deviceId: 'device_old_2',
+              device: {
+                id: 'device_old_2',
+                deviceName: 'Samsung',
+                deviceManufacturer: 'Samsung',
+                deviceModel: 'S21',
                 lastSeenAt: new Date(),
               },
             },

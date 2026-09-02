@@ -147,11 +147,30 @@ export function AnalyticsPage() {
 
       <section className="section">
         <h2>{strings.analytics.definitions}</h2>
-        <ul className="definition-list">
-          {Object.entries(data.definitions).map(([key, value]) => (
-            <li key={key}><strong>{key}</strong>: {value}</li>
-          ))}
-        </ul>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Название</th>
+                <th>Что означает</th>
+                <th>Формула</th>
+                <th>Источник</th>
+                <th>Обновление</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(Array.isArray(data.definitions) ? data.definitions : []).map((row) => (
+                <tr key={row.key}>
+                  <td>{row.title}</td>
+                  <td>{row.meaning}</td>
+                  <td><code>{row.formula}</code></td>
+                  <td>{row.source}</td>
+                  <td>{row.refresh}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

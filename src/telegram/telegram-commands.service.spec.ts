@@ -20,7 +20,7 @@ describe('TelegramCommandsService', () => {
     await service.onModuleInit();
 
     expect(botApi.setMyCommands).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ command: 'buy' })]),
+      expect.arrayContaining([expect.objectContaining({ command: 'start' })]),
       { type: 'all_private_chats' },
     );
     expect(botApi.setChatMenuButton).toHaveBeenCalledWith(

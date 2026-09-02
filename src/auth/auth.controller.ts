@@ -77,7 +77,7 @@ export class AuthController {
     @CurrentUser() user: MobileJwtPayload,
     @Body() body: CreateTelegramAuthChallengeDto,
   ) {
-    return this.telegramAuthService.createChallenge(user, body.purpose);
+    return this.telegramAuthService.createChallenge(user, body.purpose, body.licenseId);
   }
 
   @Post('telegram/verify')
