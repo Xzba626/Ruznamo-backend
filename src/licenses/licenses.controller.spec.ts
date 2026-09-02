@@ -11,6 +11,7 @@ describe('LicensesController', () => {
     licensesService as unknown as LicensesService,
     { createChallenge: jest.fn() } as never,
     { createChallenge: jest.fn() } as never,
+    { listHolderLicenses: jest.fn(), revealLicenseKey: jest.fn(), activateViaTelegram: jest.fn(), replaceDeviceViaGrant: jest.fn() } as never,
   );
 
   const mobileJwt = {

@@ -91,4 +91,8 @@ export interface TelegramI18n {
   revokeDeviceConfirm: string;
   deviceRevoked: string;
   licenseControlSection: string;
+  telegramAuthOtp: (code: string) => string;
+  telegramAuthChallengeUsed: string;
+  telegramAuthChallengeExpired: string;
+  telegramAuthNoLicenses: string;
 }

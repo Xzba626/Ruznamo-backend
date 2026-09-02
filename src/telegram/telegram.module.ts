@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { AdminModule } from '../admin/admin.module';
+import { AuthModule } from '../auth/auth.module';
 import { LicensesModule } from '../licenses/licenses.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { TelegramAdminPaymentMethodsService } from './telegram-admin-payment-methods.service';
@@ -12,7 +13,7 @@ import { TelegramUpdateProcessor } from './telegram-update.processor';
 import { TelegramWebhookController } from './telegram-webhook.controller';
 
 @Module({
-  imports: [AuditModule, PaymentsModule, AdminModule, LicensesModule],
+  imports: [AuditModule, AuthModule, PaymentsModule, AdminModule, LicensesModule],
   controllers: [TelegramWebhookController],
   providers: [
     TelegramBotApiService,

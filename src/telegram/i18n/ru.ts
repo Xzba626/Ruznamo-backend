@@ -105,4 +105,14 @@ export const ru: TelegramI18n = {
   revokeDeviceConfirm: 'Подтвердите отключение устройства с этой лицензии.',
   deviceRevoked: '✅ Устройство отключено.',
   licenseControlSection: '🔐 Управление лицензией',
+  telegramAuthOtp: (code) =>
+    `🔐 Подтверждение Ruznamo\n\n` +
+    `Код подтверждения:\n${code}\n\n` +
+    `Введите этот код в приложении Ruznamo.\n\n` +
+    `Код действует 5 минут.\n\n` +
+    `Никому не сообщайте этот код.`,
+  telegramAuthChallengeUsed: '❌ Эта ссылка уже использована или истекла.',
+  telegramAuthChallengeExpired: '❌ Эта ссылка уже использована или истекла.',
+  telegramAuthNoLicenses:
+    'К этому Telegram-аккаунту не привязано ни одной лицензии Ruznamo.',
 };

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   AuditActorType,
@@ -24,9 +24,11 @@ import { DeviceReplacementService } from '../licenses/device-replacement.service
 import { TelegramLicenseLinkService } from '../licenses/telegram-license-link.service';
 import {
   parseAndroidDeepLink,
+  parseAuthStartPayload,
   parseLicenseLinkStartPayload,
   parseReplacementStartPayload,
 } from '../licenses/license-link-token.util';
+import { TelegramAuthService } from '../auth/telegram-auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
 import { billingPeriodDays, getTelegramI18n, LICENSE_DURATION_DAYS } from './i18n';
@@ -80,6 +82,7 @@ export class TelegramUpdateProcessor {
     private readonly commandsService: TelegramCommandsService,
     private readonly telegramLicenseLink: TelegramLicenseLinkService,
     private readonly deviceReplacement: DeviceReplacementService,
+    private readonly telegramAuthService: TelegramAuthService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -589,6 +592,12 @@ export class TelegramUpdateProcessor {
     const replacementToken = parseReplacementStartPayload(text);
     if (replacementToken) {
       await this.presentReplacementPrompt(replacementToken, telegramId, chatId, username, firstName);
+      return;
+    }
+
+    const authToken = parseAuthStartPayload(text);
+    if (authToken) {
+      await this.handleTelegramAuthStart(authToken, telegramId, chatId, username, firstName);
       return;
     }
 
@@ -1475,6 +1484,62 @@ export class TelegramUpdateProcessor {
     }
 
     await this.showBuyFlow(resolved, chatId, firstName);
+  }
+
+  private async handleTelegramAuthStart(
+    token: string,
+    telegramId: bigint,
+    chatId: bigint,
+    username?: string,
+    firstName?: string,
+  ): Promise<void> {
+    const resolved = await this.telegramAccountService.resolveTelegramUser({
+      telegramId,
+      chatId,
+      username,
+      firstName,
+    });
+    const msgs = this.i18n(resolved);
+
+    const telegramAccount = await this.prisma.telegramAccount.findUnique({
+      where: { userId: resolved.userId },
+    });
+
+    if (!telegramAccount) {
+      await this.sendUserMessage(chatId, resolved, msgs.linkExpired);
+      return;
+    }
+
+    try {
+      await this.telegramAuthService.bindTelegramAndIssueOtp(
+        token,
+        telegramAccount.id,
+        telegramId,
+        async (otp) => {
+          await this.botApi.sendPlainMessage(chatId, msgs.telegramAuthOtp(otp));
+        },
+      );
+    } catch (error) {
+      let code: string | undefined;
+      if (error instanceof HttpException) {
+        const response = error.getResponse();
+        if (typeof response === 'object' && response !== null && 'code' in response) {
+          code = String((response as { code?: string }).code);
+        }
+      }
+
+      if (code === 'AUTH_CHALLENGE_USED') {
+        await this.sendUserMessage(chatId, resolved, msgs.telegramAuthChallengeUsed);
+        return;
+      }
+
+      if (code === 'AUTH_CHALLENGE_EXPIRED' || code === 'AUTH_CHALLENGE_INVALID') {
+        await this.sendUserMessage(chatId, resolved, msgs.telegramAuthChallengeExpired);
+        return;
+      }
+
+      await this.sendUserMessage(chatId, resolved, msgs.linkExpired);
+    }
   }
 
   private async presentLicenseLinkPrompt(

@@ -9,6 +9,7 @@ export function generateOpaqueToken(): string {
 export const TELEGRAM_START_PREFIX = {
   LICENSE_LINK: 'lic_',
   DEVICE_REPLACEMENT: 'repl_',
+  TELEGRAM_AUTH: 'auth_',
   ANDROID_LICENSE: 'android_license',
   ANDROID_SUPPORT: 'android_support',
 } as const;
@@ -19,6 +20,10 @@ export function buildLicenseLinkStartPayload(token: string): string {
 
 export function buildReplacementStartPayload(token: string): string {
   return `${TELEGRAM_START_PREFIX.DEVICE_REPLACEMENT}${token}`;
+}
+
+export function buildAuthStartPayload(token: string): string {
+  return `${TELEGRAM_START_PREFIX.TELEGRAM_AUTH}${token}`;
 }
 
 export function parseLicenseLinkStartPayload(text: string): string | null {
@@ -38,6 +43,16 @@ export function parseReplacementStartPayload(text: string): string | null {
     return null;
   }
   const token = payload.slice(TELEGRAM_START_PREFIX.DEVICE_REPLACEMENT.length);
+  return token.length >= 8 ? token : null;
+}
+
+export function parseAuthStartPayload(text: string): string | null {
+  const parts = text.trim().split(/\s+/);
+  const payload = parts.length > 1 ? parts.slice(1).join(' ') : '';
+  if (!payload.startsWith(TELEGRAM_START_PREFIX.TELEGRAM_AUTH)) {
+    return null;
+  }
+  const token = payload.slice(TELEGRAM_START_PREFIX.TELEGRAM_AUTH.length);
   return token.length >= 8 ? token : null;
 }
 

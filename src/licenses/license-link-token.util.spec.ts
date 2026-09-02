@@ -1,7 +1,9 @@
 import {
+  buildAuthStartPayload,
   buildLicenseLinkStartPayload,
   generateOpaqueToken,
   parseAndroidDeepLink,
+  parseAuthStartPayload,
   parseLicenseLinkStartPayload,
   TELEGRAM_START_PREFIX,
 } from './license-link-token.util';
@@ -18,6 +20,12 @@ describe('license-link-token.util', () => {
     const token = 'abc12345';
     const text = `/start ${buildLicenseLinkStartPayload(token)}`;
     expect(parseLicenseLinkStartPayload(text)).toBe(token);
+  });
+
+  it('parses telegram auth start payload', () => {
+    const token = 'xyz98765';
+    const text = `/start ${buildAuthStartPayload(token)}`;
+    expect(parseAuthStartPayload(text)).toBe(token);
   });
 
   it('parses android deep links', () => {

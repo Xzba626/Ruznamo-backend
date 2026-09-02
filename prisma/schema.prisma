@@ -116,6 +116,13 @@ enum PaymentMethodType {
   CARD
 }
 
+enum TelegramAuthPurpose {
+  LOGIN
+  RECOVERY
+  DEVICE_REPLACEMENT
+  KEY_REVEAL
+}
+
 // ---------------------------------------------------------------------------
 // Users & identity
 // ---------------------------------------------------------------------------
@@ -134,6 +141,8 @@ model User {
   telegramLinkTokens        TelegramLinkToken[]
   telegramLicenseLinkChallenges TelegramLicenseLinkChallenge[]
   deviceReplacementChallenges   DeviceReplacementChallenge[]
+  telegramAuthChallenges        TelegramAuthChallenge[]
+  telegramRecoveryGrants        TelegramRecoveryGrant[]
   devices                   DeviceInstallation[]
   licenses           License[]
   orders             Order[]
@@ -162,6 +171,8 @@ model TelegramAccount {
   heldLicenses       License[]                    @relation("LicenseHolderTelegram")
   holderHistoryFrom  LicenseHolderHistory[]       @relation("HolderHistoryFrom")
   holderHistoryTo    LicenseHolderHistory[]       @relation("HolderHistoryTo")
+  authChallenges     TelegramAuthChallenge[]
+  recoveryGrants     TelegramRecoveryGrant[]
 
   @@index([telegramId])
 }
@@ -203,6 +214,8 @@ model DeviceInstallation {
   telegramLinkChallenges     TelegramLicenseLinkChallenge[]
   replacementChallengesNew   DeviceReplacementChallenge[] @relation("ReplacementNewDevice")
   replacementChallengesOld   DeviceReplacementChallenge[] @relation("ReplacementOldDevice")
+  telegramAuthChallenges     TelegramAuthChallenge[]
+  telegramRecoveryGrants     TelegramRecoveryGrant[]
 
   @@index([userId])
   @@index([userId, revokedAt])
@@ -401,6 +414,52 @@ model DeviceReplacementChallenge {
 
   @@index([expiresAt])
   @@index([licenseId])
+}
+
+model TelegramAuthChallenge {
+  id                    String              @id @default(cuid())
+  tokenHash             String              @unique
+  requestingDeviceId    String
+  requestingMobileUserId String
+  purpose               TelegramAuthPurpose
+  telegramAccountId     String?
+  otpHash               String?
+  otpExpiresAt          DateTime?           @db.Timestamptz(3)
+  attemptCount          Int                 @default(0)
+  maxAttempts           Int                 @default(5)
+  verifiedAt            DateTime?           @db.Timestamptz(3)
+  consumedAt            DateTime?           @db.Timestamptz(3)
+  expiresAt             DateTime            @db.Timestamptz(3)
+  createdAt             DateTime            @default(now()) @db.Timestamptz(3)
+
+  requestingDevice DeviceInstallation @relation(fields: [requestingDeviceId], references: [id], onDelete: Cascade)
+  requestingUser   User               @relation(fields: [requestingMobileUserId], references: [id], onDelete: Cascade)
+  telegramAccount  TelegramAccount?   @relation(fields: [telegramAccountId], references: [id], onDelete: SetNull)
+  recoveryGrants   TelegramRecoveryGrant[]
+
+  @@index([expiresAt])
+  @@index([requestingDeviceId, createdAt])
+  @@index([telegramAccountId])
+}
+
+model TelegramRecoveryGrant {
+  id                String    @id @default(cuid())
+  challengeId       String
+  telegramAccountId String
+  deviceId          String
+  mobileUserId      String
+  expiresAt         DateTime  @db.Timestamptz(3)
+  consumedAt        DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+
+  challenge       TelegramAuthChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  telegramAccount TelegramAccount       @relation(fields: [telegramAccountId], references: [id], onDelete: Cascade)
+  device          DeviceInstallation    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user            User                  @relation(fields: [mobileUserId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([deviceId, mobileUserId])
+  @@index([telegramAccountId])
 }
 
 // ---------------------------------------------------------------------------

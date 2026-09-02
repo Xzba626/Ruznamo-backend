@@ -15,14 +15,22 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { MobileJwtAuthGuard } from './guards/mobile-jwt-auth.guard';
 import { MobileJwtPayload } from './mobile-jwt.payload';
 import { AuthService } from './auth.service';
+import { TelegramAuthService } from './telegram-auth.service';
 import { RegisterDeviceDto } from './dto/register-device.dto';
 import { MobileLogoutDto, MobileRefreshDto } from './dto/mobile-refresh.dto';
+import {
+  CreateTelegramAuthChallengeDto,
+  VerifyTelegramAuthDto,
+} from './dto/telegram-auth.dto';
 
 @ApiTags('mobile-auth')
 @UseGuards(MobileJwtAuthGuard)
 @Controller('api/v1/auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly telegramAuthService: TelegramAuthService,
+  ) {}
 
   @Public()
   @Post('device/register')
@@ -59,6 +67,25 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout all mobile sessions' })
   async logoutAll(@CurrentUser() user: MobileJwtPayload, @Req() req: Request): Promise<void> {
     await this.authService.logoutAll(user.sub, this.meta(req));
+  }
+
+  @Post('telegram/challenge')
+  @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Create Telegram identity verification challenge (login/recovery)' })
+  createTelegramChallenge(
+    @CurrentUser() user: MobileJwtPayload,
+    @Body() body: CreateTelegramAuthChallengeDto,
+  ) {
+    return this.telegramAuthService.createChallenge(user, body.purpose);
+  }
+
+  @Post('telegram/verify')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
+  @ApiOperation({ summary: 'Verify Telegram OTP and issue short-lived recovery grant' })
+  verifyTelegramOtp(@CurrentUser() user: MobileJwtPayload, @Body() body: VerifyTelegramAuthDto) {
+    return this.telegramAuthService.verifyOtp(body.challengeId, body.code, user);
   }
 
   private meta(req: Request): { ipAddress?: string; userAgent?: string } {

@@ -105,4 +105,14 @@ export const tj: TelegramI18n = {
   revokeDeviceConfirm: 'Хомӯш кардани дастгоҳро аз ин иҷозатнома тасдиқ кунед.',
   deviceRevoked: '✅ Дастгоҳ хомӯш карда шуд.',
   licenseControlSection: '🔐 Идораи иҷозатнома',
+  telegramAuthOtp: (code) =>
+    `🔐 Тасдиқи Ruznamo\n\n` +
+    `Рамзи тасдиқ:\n${code}\n\n` +
+    `Ин рамзро дар барномаи Ruznamo ворид кунед.\n\n` +
+    `Рамз 5 дақиқа эътибор дорад.\n\n` +
+    `Ин рамзро ба касе надиҳед.`,
+  telegramAuthChallengeUsed: '❌ Ин пайванд аллакай истифода шудааст ё анҷом ёфтааст.',
+  telegramAuthChallengeExpired: '❌ Ин пайванд аллакай истифода шудааст ё анҷом ёфтааст.',
+  telegramAuthNoLicenses:
+    'Ба ин ҳисоби Telegram ягон иҷозатномаи Ruznamo пайваст нашудааст.',
 };

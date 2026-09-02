@@ -6,6 +6,7 @@ import { AuditModule } from '../audit/audit.module';
 import { SecurityModule } from '../security/security.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { TelegramAuthService } from './telegram-auth.service';
 import { MobileJwtAuthGuard } from './guards/mobile-jwt-auth.guard';
 import { MobileJwtStrategy } from './strategies/mobile-jwt.strategy';
 
@@ -23,7 +24,7 @@ import { MobileJwtStrategy } from './strategies/mobile-jwt.strategy';
     AuditModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, MobileJwtStrategy, MobileJwtAuthGuard],
-  exports: [AuthService, MobileJwtAuthGuard],
+  providers: [AuthService, TelegramAuthService, MobileJwtStrategy, MobileJwtAuthGuard],
+  exports: [AuthService, TelegramAuthService, MobileJwtAuthGuard],
 })
 export class AuthModule {}

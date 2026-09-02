@@ -145,7 +145,6 @@ export class DeviceReplacementService {
 
     const license = await this.prisma.license.findUnique({
       where: { id: challenge.licenseId },
-      include: { plan: { include: { features: true } } },
     });
 
     if (!license) {
@@ -153,6 +152,47 @@ export class DeviceReplacementService {
     }
 
     if (license.holderTelegramAccountId !== holderTelegramAccountId) {
+      throw new ForbiddenException({
+        code: 'NOT_LICENSE_HOLDER',
+        message: 'Only the holder Telegram account may approve replacement',
+      });
+    }
+
+    const result = await this.executeReplacement({
+      licenseId: challenge.licenseId,
+      newDeviceId: challenge.newDeviceId,
+      oldDeviceId: challenge.oldDeviceId,
+      holderTelegramAccountId,
+      actorType: AuditActorType.TELEGRAM_BOT,
+      actorId: holderTelegramAccountId,
+      reason: 'device_replacement_approved',
+      consumeChallengeId: challenge.id,
+    });
+
+    return result;
+  }
+
+  async executeReplacement(params: {
+    licenseId: string;
+    newDeviceId: string;
+    oldDeviceId: string;
+    holderTelegramAccountId: string;
+    actorType: AuditActorType;
+    actorId: string;
+    reason?: string;
+    metadata?: Record<string, unknown>;
+    consumeChallengeId?: string;
+  }): Promise<{ replaced: boolean; licenseId: string }> {
+    const license = await this.prisma.license.findUnique({
+      where: { id: params.licenseId },
+      include: { plan: { include: { features: true } } },
+    });
+
+    if (!license) {
+      throw new NotFoundException('License not found');
+    }
+
+    if (license.holderTelegramAccountId !== params.holderTelegramAccountId) {
       throw new ForbiddenException({
         code: 'NOT_LICENSE_HOLDER',
         message: 'Only the holder Telegram account may approve replacement',
@@ -173,25 +213,26 @@ export class DeviceReplacementService {
 
       const newDeviceActive = await tx.licenseActivation.findUnique({
         where: {
-          licenseId_deviceId: { licenseId: license.id, deviceId: challenge.newDeviceId },
+          licenseId_deviceId: { licenseId: license.id, deviceId: params.newDeviceId },
         },
+        include: { device: true },
       });
 
-      if (newDeviceActive) {
+      if (newDeviceActive && !newDeviceActive.device.revokedAt) {
         throw new BadRequestException('New device already activated');
       }
 
       if (activeCount < maxDevices) {
         await tx.licenseActivation.create({
-          data: { licenseId: license.id, deviceId: challenge.newDeviceId },
+          data: { licenseId: license.id, deviceId: params.newDeviceId },
         });
       } else {
         await tx.deviceInstallation.update({
-          where: { id: challenge.oldDeviceId },
+          where: { id: params.oldDeviceId },
           data: { revokedAt: now },
         });
         await tx.licenseActivation.create({
-          data: { licenseId: license.id, deviceId: challenge.newDeviceId },
+          data: { licenseId: license.id, deviceId: params.newDeviceId },
         });
       }
 
@@ -209,30 +250,33 @@ export class DeviceReplacementService {
           licenseId: license.id,
           fromStatus: license.status,
           toStatus: LicenseStatus.ACTIVE,
-          reason: 'device_replacement_approved',
+          reason: params.reason ?? 'device_replacement_approved',
           metadata: {
-            oldDeviceId: challenge.oldDeviceId,
-            newDeviceId: challenge.newDeviceId,
-            holderTelegramAccountId,
+            oldDeviceId: params.oldDeviceId,
+            newDeviceId: params.newDeviceId,
+            holderTelegramAccountId: params.holderTelegramAccountId,
+            ...params.metadata,
           },
         },
       });
 
-      await tx.deviceReplacementChallenge.update({
-        where: { id: challenge.id },
-        data: { consumedAt: now },
-      });
+      if (params.consumeChallengeId) {
+        await tx.deviceReplacementChallenge.update({
+          where: { id: params.consumeChallengeId },
+          data: { consumedAt: now },
+        });
+      }
     });
 
     await this.auditService.log({
-      actorType: AuditActorType.TELEGRAM_BOT,
-      actorId: holderTelegramAccountId,
+      actorType: params.actorType,
+      actorId: params.actorId,
       action: 'license.device.replacement_completed',
       entityType: 'License',
       entityId: license.id,
       metadata: {
-        oldDeviceId: challenge.oldDeviceId,
-        newDeviceId: challenge.newDeviceId,
+        oldDeviceId: params.oldDeviceId,
+        newDeviceId: params.newDeviceId,
       },
     });
 
