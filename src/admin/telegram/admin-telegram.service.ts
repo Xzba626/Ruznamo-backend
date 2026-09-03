@@ -224,6 +224,11 @@ export class AdminTelegramService {
         },
       });
 
+      // Newly ACTIVE binding must not remain on the permanent deny-list (same-ID reconnect).
+      await tx.adminTelegramRevokedId.deleteMany({
+        where: { telegramUserId: newTelegramId },
+      });
+
       await tx.adminUser.update({
         where: { id: adminUserId },
         data: { telegramId: newTelegramId },
@@ -391,6 +396,10 @@ export class AdminTelegramService {
           verifiedAt: now,
           lastSeenAt: now,
         },
+      });
+
+      await tx.adminTelegramRevokedId.deleteMany({
+        where: { telegramUserId: input.telegramUserId },
       });
 
       await tx.adminUser.update({

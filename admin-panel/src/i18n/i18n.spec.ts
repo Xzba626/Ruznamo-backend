@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   formatAuditAction,
   labelAuditAction,
@@ -8,11 +8,16 @@ import {
   labelPlanCode,
   labelPlanPurchaseAvailability,
   knownOrderStatuses,
+  setActiveLocale,
 } from './index';
 import { localizeError } from './errors';
 import { UNKNOWN_AUDIT_ACTION_LABEL } from './audit';
 
 describe('admin-panel i18n', () => {
+  beforeEach(() => {
+    setActiveLocale('ru');
+  });
+
   it('maps required order statuses to Russian', () => {
     expect(labelOrderStatus('PENDING')).toBe('Ожидает оплаты');
     expect(labelOrderStatus('RECEIPT_SUBMITTED')).toBe('Чек получен');
@@ -27,11 +32,11 @@ describe('admin-panel i18n', () => {
     expect(labelLicenseStatus('UNKNOWN')).toBe('Неизвестный статус');
   });
 
-  it('maps plan codes to Russian presentation labels', () => {
-    expect(labelPlanCode('STANDARD')).toBe('Стандарт');
-    expect(labelPlanCode('PRO')).toBe('Про');
-    expect(labelPlanCode('PRO_PLUS')).toBe('Про+');
-    expect(labelPlan({ code: 'PRO', name: 'Pro' })).toBe('Про');
+  it('maps plan codes to product names Standard/Pro/Pro Plus', () => {
+    expect(labelPlanCode('STANDARD')).toBe('Standard');
+    expect(labelPlanCode('PRO')).toBe('Pro');
+    expect(labelPlanCode('PRO_PLUS')).toBe('Pro Plus');
+    expect(labelPlan({ code: 'PRO', name: 'Pro' })).toBe('Pro');
   });
 
   it('maps plan purchase availability to Russian', () => {

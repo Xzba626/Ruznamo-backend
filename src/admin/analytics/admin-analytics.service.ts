@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { LicenseIssueSource, LicenseStatus, OrderStatus, Prisma, TrialGrantStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { formatAppVersionLabel } from '../../devices/device-metadata.util';
+import { customerDeviceWhere } from '../../devices/probe-device-filter.util';
 
 const ACTIVE_DEVICE_DAYS = 30;
 
@@ -143,6 +144,7 @@ export class AdminAnalyticsService {
     const now = new Date();
     const activeDeviceSince = new Date(now.getTime() - ACTIVE_DEVICE_DAYS * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const deviceWhere = customerDeviceWhere();
 
     const [
       totalDevices,
@@ -159,9 +161,9 @@ export class AdminAnalyticsService {
       recentActivations,
       recentOrders,
     ] = await Promise.all([
-      this.prisma.deviceInstallation.count({ where: { revokedAt: null } }),
+      this.prisma.deviceInstallation.count({ where: deviceWhere }),
       this.prisma.deviceInstallation.count({
-        where: { revokedAt: null, lastSeenAt: { gte: activeDeviceSince } },
+        where: { ...deviceWhere, lastSeenAt: { gte: activeDeviceSince } },
       }),
       this.prisma.trialGrant.count({ where: { status: TrialGrantStatus.ACTIVE, expiresAt: { gt: now } } }),
       this.prisma.license.count({
@@ -187,11 +189,13 @@ export class AdminAnalyticsService {
       this.prisma.user.groupBy({ by: ['category'], _count: { _all: true } }),
       this.prisma.deviceInstallation.groupBy({
         by: ['appVersionCode', 'appVersionName', 'appVersion'],
-        where: { revokedAt: null },
+        where: deviceWhere,
         _count: { _all: true },
       }),
       this.prisma.user.count({ where: { category: 'PERSONAL' } }),
-      this.prisma.deviceInstallation.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+      this.prisma.deviceInstallation.count({
+        where: { ...deviceWhere, createdAt: { gte: thirtyDaysAgo } },
+      }),
       this.prisma.licenseActivation.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
       this.prisma.order.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
     ]);
@@ -200,6 +204,26 @@ export class AdminAnalyticsService {
     const planMap = new Map(plans.map((plan) => [plan.id, plan]));
 
     const totalUsers = categoryDistribution.reduce((sum, row) => sum + row._count._all, 0);
+
+    const versionBuckets = new Map<string, { appVersion: string; versionCode: number | null; count: number }>();
+    for (const row of appVersionDistribution) {
+      const label =
+        formatAppVersionLabel({
+          appVersionName: row.appVersionName,
+          appVersionCode: row.appVersionCode,
+          appVersion: row.appVersion,
+        }) ?? 'UNKNOWN';
+      const existing = versionBuckets.get(label);
+      if (existing) {
+        existing.count += row._count._all;
+      } else {
+        versionBuckets.set(label, {
+          appVersion: label,
+          versionCode: row.appVersionCode,
+          count: row._count._all,
+        });
+      }
+    }
 
     return {
       definitions: this.metricDefinitionsRu(),
@@ -235,21 +259,7 @@ export class AdminAnalyticsService {
         defaultPersonalCount: nullCategoryCount,
         note: 'PERSONAL is the schema default; may include unset onboarding choices.',
       },
-      appVersionDistribution: appVersionDistribution
-        .map((row) => {
-          const label =
-            formatAppVersionLabel({
-              appVersionName: row.appVersionName,
-              appVersionCode: row.appVersionCode,
-              appVersion: row.appVersion,
-            }) ?? 'UNKNOWN';
-          return {
-            appVersion: label,
-            versionCode: row.appVersionCode,
-            count: row._count._all,
-          };
-        })
-        .sort((a, b) => b.count - a.count),
+      appVersionDistribution: [...versionBuckets.values()].sort((a, b) => b.count - a.count),
       generatedAt: now.toISOString(),
     };
   }

@@ -1,19 +1,39 @@
-const roleLabels: Record<string, string> = {
-  SUPER_ADMIN: 'Суперадминистратор',
-  ADMIN: 'Администратор',
-  SUPPORT: 'Поддержка',
+import { getActiveLocale, type AdminLocale } from './locale-state';
+
+const roleLabels: Record<AdminLocale, Record<string, string>> = {
+  ru: {
+    SUPER_ADMIN: 'Суперадминистратор',
+    ADMIN: 'Администратор',
+    SUPPORT: 'Поддержка',
+  },
+  tj: {
+    SUPER_ADMIN: 'Супермудир',
+    ADMIN: 'Мудир',
+    SUPPORT: 'Дастгирӣ',
+  },
 };
 
 export function labelRole(code: string): string {
-  return roleLabels[code] ?? code;
+  const locale = getActiveLocale();
+  return roleLabels[locale][code] ?? roleLabels.ru[code] ?? code;
 }
 
 export function formatDateTime(value: string | Date): string {
-  return new Date(value).toLocaleString('ru-RU');
+  const locale = getActiveLocale() === 'tj' ? 'tg-TJ' : 'ru-RU';
+  try {
+    return new Date(value).toLocaleString(locale);
+  } catch {
+    return new Date(value).toLocaleString('ru-RU');
+  }
 }
 
 export function formatDate(value: string | Date): string {
-  return new Date(value).toLocaleDateString('ru-RU');
+  const locale = getActiveLocale() === 'tj' ? 'tg-TJ' : 'ru-RU';
+  try {
+    return new Date(value).toLocaleDateString(locale);
+  } catch {
+    return new Date(value).toLocaleDateString('ru-RU');
+  }
 }
 
 export function formatMoney(amount: string | number, currency: string): string {

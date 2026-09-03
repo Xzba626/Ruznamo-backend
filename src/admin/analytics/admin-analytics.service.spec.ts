@@ -19,8 +19,8 @@ describe('AdminAnalyticsService', () => {
     jest.clearAllMocks();
     prisma.deviceInstallation.count.mockResolvedValue(5);
     prisma.deviceInstallation.groupBy.mockResolvedValue([
-      { appVersion: '1.0.1', _count: { _all: 3 } },
-      { appVersion: null, _count: { _all: 2 } },
+      { appVersion: '1.0.1', appVersionName: '1.0.1', appVersionCode: 1, _count: { _all: 3 } },
+      { appVersion: null, appVersionName: null, appVersionCode: null, _count: { _all: 2 } },
     ]);
     prisma.trialGrant.count.mockResolvedValue(1);
     prisma.license.count.mockResolvedValue(2);
@@ -45,7 +45,7 @@ describe('AdminAnalyticsService', () => {
     const result = await service.getOverview();
 
     expect(result.totals.devices).toBe(5);
-    expect(result.appVersionDistribution[0].appVersion).toBe('1.0.1');
+    expect(result.appVersionDistribution[0].appVersion).toBe('1.0.1 (1)');
     expect(result).not.toHaveProperty('users');
     expect(result.definitions[0].title).toContain('Активные устройства');
   });

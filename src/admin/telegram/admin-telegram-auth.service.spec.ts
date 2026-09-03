@@ -73,6 +73,22 @@ describe('AdminTelegramAuthService', () => {
     await expect(service.isTelegramAdminManagementInitialized()).resolves.toBe(true);
   });
 
+  it('listActiveAdminTelegramIds stays empty after zero ACTIVE and does not merge env', async () => {
+    prisma.adminTelegramIdentity.count.mockResolvedValue(1);
+    prisma.adminTelegramRevokedId.count.mockResolvedValue(1);
+    prisma.adminTelegramRevokedId.findMany.mockResolvedValue([{ telegramUserId: 111n }]);
+    prisma.adminTelegramIdentity.findMany.mockResolvedValue([]);
+    await expect(service.listActiveAdminTelegramIds()).resolves.toEqual([]);
+  });
+
+  it('listActiveAdminTelegramIds returns ACTIVE DB ids and ignores env when initialized', async () => {
+    prisma.adminTelegramIdentity.count.mockResolvedValue(1);
+    prisma.adminTelegramRevokedId.count.mockResolvedValue(0);
+    prisma.adminTelegramRevokedId.findMany.mockResolvedValue([]);
+    prisma.adminTelegramIdentity.findMany.mockResolvedValue([{ telegramUserId: 333n }]);
+    await expect(service.listActiveAdminTelegramIds()).resolves.toEqual(['333']);
+  });
+
   it('treats revoked-id history alone as initialized (env never used)', async () => {
     prisma.adminTelegramRevokedId.findUnique.mockResolvedValue(null);
     prisma.adminTelegramIdentity.count.mockResolvedValue(0);

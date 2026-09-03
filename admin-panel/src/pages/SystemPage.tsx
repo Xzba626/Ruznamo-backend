@@ -91,7 +91,7 @@ export function SystemPage() {
         ) : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Версия</th><th>Устройств</th></tr></thead>
+              <thead><tr><th>{strings.system.colVersion}</th><th>{strings.system.colDevices}</th></tr></thead>
               <tbody>
                 {status.android.deviceVersionDistribution.map((row) => (
                   <tr key={row.appVersion}>

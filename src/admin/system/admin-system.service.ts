@@ -4,6 +4,8 @@ import { HealthCheckService, PrismaHealthIndicator } from '@nestjs/terminus';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { maskSecret, normalizeTelegramBotUsername } from '../../config/telegram-env.util';
+import { formatAppVersionLabel } from '../../devices/device-metadata.util';
+import { customerDeviceWhere } from '../../devices/probe-device-filter.util';
 import { PrismaService } from '../../prisma/prisma.service';
 
 type ServiceStatus = 'healthy' | 'warning' | 'error' | 'not_configured' | 'info';
@@ -39,8 +41,8 @@ export class AdminSystemService {
         orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.deviceInstallation.groupBy({
-        by: ['appVersion'],
-        where: { revokedAt: null },
+        by: ['appVersionCode', 'appVersionName', 'appVersion'],
+        where: customerDeviceWhere(),
         _count: { _all: true },
       }),
       this.prisma.$queryRaw<Array<{ count: bigint }>>`
@@ -48,12 +50,22 @@ export class AdminSystemService {
       `.catch(() => [{ count: BigInt(0) }]),
     ]);
 
-    const deviceVersions = deviceVersionRows
-      .map((row) => ({
-        appVersion: row.appVersion ?? 'unknown',
-        count: row._count._all,
-      }))
-      .sort((a, b) => b.count - a.count);
+    const versionBuckets = new Map<string, { appVersion: string; count: number }>();
+    for (const row of deviceVersionRows) {
+      const label =
+        formatAppVersionLabel({
+          appVersionName: row.appVersionName,
+          appVersionCode: row.appVersionCode,
+          appVersion: row.appVersion,
+        }) ?? 'unknown';
+      const existing = versionBuckets.get(label);
+      if (existing) {
+        existing.count += row._count._all;
+      } else {
+        versionBuckets.set(label, { appVersion: label, count: row._count._all });
+      }
+    }
+    const deviceVersions = [...versionBuckets.values()].sort((a, b) => b.count - a.count);
 
     const telegram = await this.getTelegramRuntimeSummary();
 
@@ -80,7 +92,7 @@ export class AdminSystemService {
         configuredLatestVersion: appVersion?.latestVersion ?? null,
         minimumSupportedVersion: appVersion?.minimumSupportedVersion ?? null,
         forceUpdate: appVersion?.forceUpdate ?? false,
-        note: 'Версии на устройствах — из telemetry DeviceInstallation.appVersion',
+        note: 'Версии на устройствах — telemetry DeviceInstallation (appVersionName + appVersionCode)',
         deviceVersionDistribution: deviceVersions,
       },
       telegram,

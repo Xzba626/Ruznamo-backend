@@ -50,6 +50,8 @@ export const tj: RuStrings = {
     noDeviceVersions: 'Ҳоло маълумот нест',
     dataManagement: 'Идоракунии маълумот',
     security: 'Амният',
+    colVersion: 'Версия',
+    colDevices: 'Дастгоҳҳо',
   },
   updates: {
     ...ru.updates,

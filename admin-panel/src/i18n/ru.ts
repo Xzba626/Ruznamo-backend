@@ -225,6 +225,8 @@ export const ru = {
     configuredLatest: 'Рекомендуемая версия (конфиг)',
     minimumSupported: 'Минимальная версия',
     deviceVersions: 'Версии на устройствах',
+    colVersion: 'Версия',
+    colDevices: 'Устройств',
     webhook: 'Webhook',
     lastError: 'Последняя ошибка',
     noDeviceVersions: 'Нет данных о версиях устройств',

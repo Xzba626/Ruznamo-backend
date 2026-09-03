@@ -24,6 +24,7 @@ describe('AdminTelegramService', () => {
     },
     adminTelegramRevokedId: {
       upsert: jest.fn(),
+      deleteMany: jest.fn(),
     },
     adminUser: {
       findUnique: jest.fn(),
@@ -110,6 +111,9 @@ describe('AdminTelegramService', () => {
         create: expect.objectContaining({ telegramUserId: 999999999n, isVerified: true }),
       }),
     );
+    expect(prisma.adminTelegramRevokedId.deleteMany).toHaveBeenCalledWith({
+      where: { telegramUserId: 999999999n },
+    });
   });
 
   it('treats unlinked telegram user as unauthorized', async () => {
