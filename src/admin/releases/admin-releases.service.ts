@@ -160,6 +160,12 @@ export class AdminReleasesService {
         message: 'Only draft releases can be published',
       });
     }
+    if (!this.storage.isSigningPolicyConfigured()) {
+      throw new BadRequestException({
+        code: 'SIGNING_POLICY_NOT_CONFIGURED',
+        message: 'Configure production signing certificate before publishing releases',
+      });
+    }
 
     const head = await this.storage.headObject(release.objectKey);
     if (!head.exists) {

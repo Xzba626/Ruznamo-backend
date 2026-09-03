@@ -102,7 +102,7 @@ export const tj: RuStrings = {
       'Боркунӣ ва нашр дастнорас аст, то захирагоҳи объектӣ дар сервер танзим шавад.',
     signingNotConfigured: 'Сертификати имзои production ҳоло танзим нашудааст.',
     signingNotConfiguredHint:
-      'Нашр бе ANDROID_RELEASE_SIGNING_CERT_SHA256 дар сервер дастнорас аст.',
+      'Нашр дастнорас аст, то дар сервер изи сертификати имзои production муқаррар шавад.',
     validationTitle: 'Санҷиши APK',
     validationPackage: 'Package',
     validationVersion: 'Version',
@@ -119,7 +119,7 @@ export const tj: RuStrings = {
     ...ru.dataReset,
     title: 'Идоракунии маълумот',
     subtitle:
-      'Ин амалиётҳо ба маълумоти production таъсир мерасонанд. Аввал пешнамоиши ибтидоиро иҷро кунед.',
+      'Ин амалиётҳо ба маълумоти корӣ таъсир мерасонанд. Аввал пешнамоиши ибтидоиро иҷро кунед.',
     passwordStatus: 'Пароли тозакунӣ',
     passwordConfigured: 'Танзим шудааст',
     passwordNotConfigured: 'Танзим нашудааст',
@@ -139,7 +139,7 @@ export const tj: RuStrings = {
     scopeFactory: 'Бозсозии пурраи система',
     scopeFactoryRisk: 'Критикӣ',
     scopeFactoryHint:
-      'Маълумоти корбарӣ нест мешавад ва танзимот тибқи шартномаи backend ба ҳолати иҷозатшуда бармегардад.',
+      'Маълумоти корбарӣ нест мешавад ва танзимот тибқи қоидаҳои система ба ҳолати иҷозатшуда бармегардад.',
     preview: 'Пешнамоиши ибтидоӣ',
     previewLoading: 'Пешнамоиш омода шуда истодааст…',
     previewFailed: 'Гирифтани пешнамоиши ибтидоӣ муяссар нашуд.',
@@ -196,6 +196,12 @@ export const tj: RuStrings = {
     preserved_non_test_users: 'Корбарони ғайритестӣ',
     preserved_non_test_devices: 'Дастгоҳҳои ғайритестӣ',
     preserved_system_config: 'Танзимоти система',
+  },
+  profile: {
+    ...ru.profile,
+    currentPassword: 'Пароли ҷорӣ',
+    newPassword: 'Пароли нав',
+    confirmPassword: 'Такрори парол',
   },
   devices: {
     ...ru.devices,

@@ -14,6 +14,12 @@ describe('admin production UX copy', () => {
     expect(tj.dataReset.preview.toLowerCase()).not.toContain('dry');
   });
 
+  it('TJ password labels are not Russian leakage', () => {
+    expect(tj.profile.currentPassword).not.toMatch(/Текущий/);
+    expect(tj.profile.newPassword).not.toMatch(/Новый/);
+    expect(tj.profile.currentPassword).toMatch(/[а-яА-ЯёЁҷӣӯҳқғ]/);
+  });
+
   it('updates empty/history/storage strings exist in RU and TJ', () => {
     expect(ru.updates.noCurrentTitle).toBeTruthy();
     expect(ru.updates.historyEmpty).toBeTruthy();
