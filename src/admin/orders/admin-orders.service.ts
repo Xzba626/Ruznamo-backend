@@ -136,6 +136,7 @@ export class AdminOrdersService {
       approvedAt: order.approvedAt,
       rejectedAt: order.rejectedAt,
       rejectionReason: order.rejectionReason,
+      rejectionReasonCode: order.rejectionReasonCode,
       paymentMethodName: order.paymentMethodName,
       paymentMethodType: order.paymentMethodType,
       paymentMethodValue: order.paymentMethodValue,

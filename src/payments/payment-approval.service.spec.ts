@@ -100,25 +100,50 @@ describe('PaymentApprovalService', () => {
     await expect(service.approve('ord_1', actor)).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('rejects eligible under-review order', async () => {
+  it('rejects eligible under-review order with reason code', async () => {
     prisma.order.findUnique.mockResolvedValue({
       id: 'ord_1',
       status: OrderStatus.UNDER_REVIEW,
     });
+    const orderUpdate = jest.fn();
     prisma.$transaction.mockImplementation(async (cb: (tx: typeof prisma) => Promise<void>) =>
       cb({
-        order: { update: jest.fn() },
+        order: { update: orderUpdate },
         receipt: { updateMany: jest.fn() },
       } as never),
     );
 
-    const result = await service.reject('ord_1', actor);
+    const result = await service.reject('ord_1', actor, {
+      code: 'AMOUNT_MISMATCH',
+    });
 
     expect(result.alreadyProcessed).toBe(false);
-    expect(licenseIssuance.issueLicense).not.toHaveBeenCalled();
-    expect(auditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'payment.rejected' }),
+    expect(orderUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rejectionReasonCode: 'AMOUNT_MISMATCH',
+          rejectionReason: 'Неверная сумма',
+        }),
+      }),
     );
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'payment.rejected',
+        metadata: expect.objectContaining({ reasonCode: 'AMOUNT_MISMATCH' }),
+      }),
+    );
+  });
+
+  it('idempotent reject returns alreadyProcessed', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'ord_1',
+      status: OrderStatus.REJECTED,
+      rejectionReasonCode: 'AMOUNT_MISMATCH',
+      rejectionReason: 'Неверная сумма',
+    });
+    const result = await service.reject('ord_1', actor, { code: 'AMOUNT_MISMATCH' });
+    expect(result.alreadyProcessed).toBe(true);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('throws when approving order without receipt', async () => {

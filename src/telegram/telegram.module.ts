@@ -5,6 +5,7 @@ import { AuthModule } from '../auth/auth.module';
 import { LicensesModule } from '../licenses/licenses.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { TelegramAdminPaymentMethodsService } from './telegram-admin-payment-methods.service';
+import { TelegramAdminOrderRejectService } from './telegram-admin-order-reject.service';
 import { TelegramBotSessionService } from './telegram-bot-session.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
 import { TelegramCommandsService } from './telegram-commands.service';
@@ -24,6 +25,7 @@ import { TelegramAdminLicensesBotService } from './telegram-admin-licenses-bot.s
     ScreenRendererService,
     TelegramCommandsService,
     TelegramAdminPaymentMethodsService,
+    TelegramAdminOrderRejectService,
     TelegramAdminLicensesBotService,
     TelegramSupportRelayService,
     SupportConversationService,

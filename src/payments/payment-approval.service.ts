@@ -12,6 +12,11 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { LicenseIssuanceService } from '../licenses/license-issuance.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  PaymentRejectionReasonCode,
+  parsePaymentRejectionReasonCode,
+  rejectionReasonLabel,
+} from './rejection-reason';
 
 export interface PaymentActorContext {
   actorType: AuditActorType;
@@ -31,7 +36,16 @@ export interface PaymentApprovalResult {
 export interface PaymentRejectionResult {
   orderId: string;
   alreadyProcessed: boolean;
+  reasonCode?: string | null;
+  reasonText?: string | null;
 }
+
+export type PaymentRejectReasonInput =
+  | string
+  | {
+      code?: string | null;
+      text?: string | null;
+    };
 
 @Injectable()
 export class PaymentApprovalService {
@@ -160,7 +174,7 @@ export class PaymentApprovalService {
   async reject(
     orderId: string,
     actor: PaymentActorContext,
-    reason?: string,
+    reason?: PaymentRejectReasonInput,
   ): Promise<PaymentRejectionResult> {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
 
@@ -169,13 +183,19 @@ export class PaymentApprovalService {
     }
 
     if (order.status === OrderStatus.REJECTED) {
-      return { orderId: order.id, alreadyProcessed: true };
+      return {
+        orderId: order.id,
+        alreadyProcessed: true,
+        reasonCode: order.rejectionReasonCode,
+        reasonText: order.rejectionReason,
+      };
     }
 
     if (order.status === OrderStatus.COMPLETED || order.status === OrderStatus.APPROVED) {
       throw new BadRequestException('Completed orders cannot be rejected');
     }
 
+    const normalized = this.normalizeRejectReason(reason);
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       await tx.order.update({
@@ -183,7 +203,8 @@ export class PaymentApprovalService {
         data: {
           status: OrderStatus.REJECTED,
           rejectedAt: now,
-          rejectionReason: reason ?? 'admin_rejected',
+          rejectionReason: normalized.text,
+          rejectionReasonCode: normalized.code,
           awaitingReceipt: false,
         },
       });
@@ -193,7 +214,7 @@ export class PaymentApprovalService {
         data: {
           status: ReceiptStatus.REJECTED,
           reviewedAt: now,
-          rejectionReason: reason ?? 'admin_rejected',
+          rejectionReason: normalized.text,
         },
       });
     });
@@ -204,10 +225,46 @@ export class PaymentApprovalService {
       action: 'payment.rejected',
       entityType: 'Order',
       entityId: order.id,
-      metadata: { telegramUserId: actor.telegramUserId },
+      metadata: {
+        telegramUserId: actor.telegramUserId,
+        reasonCode: normalized.code,
+      },
     });
 
-    return { orderId: order.id, alreadyProcessed: false };
+    return {
+      orderId: order.id,
+      alreadyProcessed: false,
+      reasonCode: normalized.code,
+      reasonText: normalized.text,
+    };
+  }
+
+  private normalizeRejectReason(reason?: PaymentRejectReasonInput): {
+    code: string;
+    text: string;
+  } {
+    if (typeof reason === 'string') {
+      const asCode = parsePaymentRejectionReasonCode(reason);
+      if (asCode && asCode !== PaymentRejectionReasonCode.OTHER) {
+        return { code: asCode, text: rejectionReasonLabel(asCode, 'RU') };
+      }
+      const text = reason.trim() || 'admin_rejected';
+      return { code: PaymentRejectionReasonCode.OTHER, text };
+    }
+
+    const code =
+      parsePaymentRejectionReasonCode(reason?.code) ?? PaymentRejectionReasonCode.OTHER;
+    const custom = reason?.text?.trim();
+    if (code === PaymentRejectionReasonCode.OTHER) {
+      return {
+        code,
+        text: custom || rejectionReasonLabel(PaymentRejectionReasonCode.OTHER, 'RU'),
+      };
+    }
+    return {
+      code,
+      text: custom || rejectionReasonLabel(code, 'RU'),
+    };
   }
 
   async getStoredLicenseKeyForUser(

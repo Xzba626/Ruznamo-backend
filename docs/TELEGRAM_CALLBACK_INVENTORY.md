@@ -24,7 +24,9 @@ Source of truth in code: `src/telegram/nav/callback-inventory.ts`.
 | `licdevitem:*` | user | devices | device detail |
 | `licrev:confirm:*` / `licrev:do:*` | user | devices | disconnect |
 | `link:*` / `repl:*` | user | deeplink | confirm/cancel |
-| `payment:approve:*` / `payment:reject:*` | admin | orders | payment decision |
+| `payment:approve:*` | admin | orders | approve |
+| `payment:reject:*` | admin | orders | open reject reason select (no mutation) |
+| `admin:reject:pick:*` / `custom:*` / `do:*` / `change:*` / `back:*` / `cancel:*` | admin | reject wizard | reason → confirm → reject |
 | `admin:orders` | admin | ADMIN_ROOT | pending orders |
 | `admin:pm:list` | admin | requisites | open payment methods list |
 | `admin:pm:back` / `action:admin_menu` | admin | requisites list Back | ADMIN_ROOT |

@@ -43,6 +43,7 @@ type OrderDetail = {
   approvedAt?: string | null;
   rejectedAt?: string | null;
   rejectionReason?: string | null;
+  rejectionReasonCode?: string | null;
   paymentMethodName?: string | null;
   paymentMethodType?: string | null;
   paymentMethodValue?: string | null;
@@ -272,6 +273,20 @@ export function OrdersPage() {
                 <p>{strings.orders.colPaymentMethod}: {detail.paymentMethodName}{detail.paymentMethodRecipient ? ` · ${detail.paymentMethodRecipient}` : ''}</p>
               )}
               <p className="muted">{formatDateTime(detail.createdAt)}</p>
+              {detail.status === 'REJECTED' && (
+                <>
+                  {detail.rejectedAt && (
+                    <p className="muted">Rejected: {formatDateTime(detail.rejectedAt)}</p>
+                  )}
+                  {(detail.rejectionReason || detail.rejectionReasonCode) && (
+                    <p>
+                      Reason
+                      {detail.rejectionReasonCode ? ` [${detail.rejectionReasonCode}]` : ''}:{' '}
+                      {detail.rejectionReason ?? '—'}
+                    </p>
+                  )}
+                </>
+              )}
 
               <h3>{strings.orders.sectionTelegram}</h3>
               <p>{formatTelegramUser(detail.user.telegramAccount ? {

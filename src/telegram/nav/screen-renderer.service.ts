@@ -70,6 +70,7 @@ export class ScreenRendererService {
       existing?.flow === 'admin_support_reply' ||
       existing?.flow === 'admin_create_license' ||
       existing?.flow === 'admin_payment_method' ||
+      existing?.flow === 'admin_order_reject' ||
       existing?.flow === 'deferred_start';
 
     if (keepFlow && existing) {

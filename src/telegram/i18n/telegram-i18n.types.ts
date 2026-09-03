@@ -35,7 +35,15 @@ export interface TelegramI18n {
   receiptReceived: string;
   noAwaitingOrder: string;
   paymentApproved: (planName: string, days: number, expiresAt: string, key: string) => string;
+  /** @deprecated prefer paymentRejectedDetailed */
   paymentRejected: string;
+  paymentRejectedDetailed: (
+    orderShortId: string,
+    planName: string,
+    periodLabel: string,
+    reason: string,
+    guidance: string | null,
+  ) => string;
   myLicensesTitle: string;
   subscriptionInfo: (plan: string, days: number, expiresAt: string, maskedKey: string) => string;
   licenseListItem: (

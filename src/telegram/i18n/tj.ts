@@ -50,6 +50,13 @@ export const tj: TelegramI18n = {
     `✅ Пардохт тасдиқ шуд\n\nТариф: ${planName}\nМӯҳлат: ${days} рӯз\nТо: ${expiresAt}\n\nКалид:\n\`${key}\``,
   paymentRejected:
     '❌ Пардохт тасдиқ нашуд.\n\nЧеки нав фиристед ё тарифро аз нав интихоб кунед.',
+  paymentRejectedDetailed: (orderShortId, planName, periodLabel, reason, guidance) =>
+    `❌ Пардохт тасдиқ нашуд\n\n` +
+    `Дархост #${orderShortId}\n` +
+    `${planName} · ${periodLabel}\n\n` +
+    `Сабаб:\n${reason}\n\n` +
+    (guidance ? `${guidance}\n\n` : '') +
+    `Маълумотро санҷед ва дархости нав эҷод кунед ё ба дастгирӣ муроҷиат кунед.`,
   myLicensesTitle: '🔑 Иҷозатномаҳои ман',
   subscriptionInfo: (plan, days, expiresAt, maskedKey) =>
     `Тариф: ${plan}\nМӯҳлат: ${days} рӯз\nТо: ${expiresAt}\nКалид: ${maskedKey}`,

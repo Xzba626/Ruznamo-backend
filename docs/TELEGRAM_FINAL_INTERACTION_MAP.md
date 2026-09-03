@@ -20,7 +20,12 @@ USER_ROOT
 
 ```
 ADMIN_ROOT
-├── ADMIN_ORDERS_LIST → ADMIN_ORDER_DETAIL → approve/reject confirms
+├── ADMIN_ORDERS_LIST → ADMIN_ORDER_DETAIL
+│     ├── ✅ Approve → confirm → PaymentApprovalService (unchanged)
+│     └── ❌ Reject → ADMIN_ORDER_REJECT_REASON
+│           ├── preset → ADMIN_ORDER_REJECT_CONFIRM → final Reject → REJECTED
+│           ├── ✍️ OTHER → ADMIN_ORDER_REJECT_CUSTOM_REASON → confirm → REJECTED
+│           └── Back → same ADMIN_ORDER_DETAIL (no mutation)
 ├── ADMIN_PAYMENT_METHODS_LIST
 │     ├── ➕ add / ✏️ edit → ADMIN_PAYMENT_METHOD_EDIT wizard (text steps)
 │     ├── Save → clear wizard → ADMIN_PAYMENT_METHODS_LIST (no success-stuck state)
@@ -73,7 +78,16 @@ Canonical parent map: `src/telegram/nav/bot-screens.ts` (`SCREEN_PARENT`).
 | AWAITING_PAYMENT_RECEIPT | photo/document | text → receipt hint |
 | SUPPORT_ACTIVE | text/photo/document | — (routed to conversation) |
 | ADMIN_SUPPORT_REPLY | text/photo/document | — |
+| ADMIN_ORDER_REJECT_CUSTOM_REASON | text (5–500) | media/empty → stay on step |
 | Admin idle | buttons | «Выберите действие кнопками» + Admin panel |
+
+### Payment reject contract
+
+1. `payment:reject:*` → reason select only (no DB mutation)
+2. Preset / custom → confirmation preview
+3. `admin:reject:do:*` → `PaymentApprovalService.reject` with `{ code, text }`
+4. Customer notification uses **customer** `TelegramAccount.language`
+5. Persist `rejectionReasonCode` + `rejectionReason` (+ `rejectedAt`); actor in audit `payment.rejected`
 
 ## 9. Authorization
 

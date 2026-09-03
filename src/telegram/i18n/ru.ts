@@ -51,6 +51,13 @@ export const ru: TelegramI18n = {
     `✅ Оплата подтверждена\n\nТариф: ${planName}\nСрок: ${days} дней\nДействует до: ${expiresAt}\n\nВаш лицензионный ключ:\n\`${key}\`\n\nВведите этот ключ в приложении Ruznamo.`,
   paymentRejected:
     '❌ Платёж не подтверждён.\n\nПожалуйста, проверьте оплату и отправьте новый чек или выберите тариф заново.',
+  paymentRejectedDetailed: (orderShortId, planName, periodLabel, reason, guidance) =>
+    `❌ Оплата не подтверждена\n\n` +
+    `Заявка #${orderShortId}\n` +
+    `${planName} · ${periodLabel}\n\n` +
+    `Причина:\n${reason}\n\n` +
+    (guidance ? `${guidance}\n\n` : '') +
+    `Проверьте данные и при необходимости создайте новую заявку или обратитесь в поддержку.`,
   myLicensesTitle: '🔑 Мои лицензии',
   subscriptionInfo: (plan, days, expiresAt, maskedKey) =>
     `Тариф: ${plan}\nСрок: ${days} дней\nДействует до: ${expiresAt}\nКлюч: ${maskedKey}`,

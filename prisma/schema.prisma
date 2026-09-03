@@ -566,8 +566,9 @@ model Order {
   paidAt          DateTime?     @db.Timestamptz(3)
   approvedAt      DateTime?     @db.Timestamptz(3)
   approvedById    String?
-  rejectedAt      DateTime?     @db.Timestamptz(3)
-  rejectionReason String?
+  rejectedAt            DateTime? @db.Timestamptz(3)
+  rejectionReason       String?
+  rejectionReasonCode   String?
   expiresAt       DateTime?     @db.Timestamptz(3)
   idempotencyKey  String?       @unique
   paymentMethodId        String?

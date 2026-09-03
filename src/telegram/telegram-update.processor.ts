@@ -44,6 +44,7 @@ import { TelegramBotSessionService } from './telegram-bot-session.service';
 import { TelegramSupportRelayService } from './telegram-support-relay.service';
 import { TelegramCommandsService } from './telegram-commands.service';
 import { TelegramAdminPaymentMethodsService } from './telegram-admin-payment-methods.service';
+import { TelegramAdminOrderRejectService } from './telegram-admin-order-reject.service';
 import { TelegramAdminLicensesBotService } from './telegram-admin-licenses-bot.service';
 import { ScreenRendererService } from './nav/screen-renderer.service';
 import { BotScreen } from './nav/bot-screens';
@@ -104,6 +105,7 @@ export class TelegramUpdateProcessor {
     private readonly paymentConfigService: PaymentConfigService,
     private readonly paymentMethodService: PaymentMethodService,
     private readonly adminPaymentMethodsService: TelegramAdminPaymentMethodsService,
+    private readonly adminOrderRejectService: TelegramAdminOrderRejectService,
     private readonly adminLicensesBot: TelegramAdminLicensesBotService,
     private readonly screenRenderer: ScreenRendererService,
     private readonly adminTelegramService: AdminTelegramService,
@@ -330,6 +332,11 @@ export class TelegramUpdateProcessor {
       return true;
     }
 
+    const handledRejectText = await this.adminOrderRejectService.handleText(telegramId, chatId, text);
+    if (handledRejectText) {
+      return true;
+    }
+
     const handled = await this.adminPaymentMethodsService.handleText(telegramId, chatId, text);
     if (handled) {
       return true;
@@ -372,6 +379,10 @@ export class TelegramUpdateProcessor {
           chatId,
           'Ожидается текстовый ввод для реквизитов. Отправьте текст или нажмите «Отмена».',
         );
+        return true;
+      }
+      if (session?.flow === 'admin_order_reject' && session.step === 'custom') {
+        await this.botApi.sendPlainMessage(chatId, 'Напишите причину текстовым сообщением.');
         return true;
       }
       const resolved = await this.telegramAccountService.resolveTelegramUser({
@@ -1413,6 +1424,15 @@ export class TelegramUpdateProcessor {
 
     const paymentCallback = parsePaymentCallback(data);
     if (paymentCallback) {
+      if (paymentCallback.action === 'reject') {
+        await this.adminOrderRejectService.handleCallback(
+          telegramId,
+          chatId,
+          `payment:reject:${paymentCallback.orderId}`,
+          query.id,
+        );
+        return;
+      }
       await this.handleAdminDecision(
         query.id,
         paymentCallback.action,
@@ -1421,6 +1441,16 @@ export class TelegramUpdateProcessor {
         chatId,
         query.message?.message_id,
       );
+      return;
+    }
+
+    const rejectWizardHandled = await this.adminOrderRejectService.handleCallback(
+      telegramId,
+      chatId,
+      data,
+      query.id,
+    );
+    if (rejectWizardHandled) {
       return;
     }
 
@@ -2363,6 +2393,7 @@ export class TelegramUpdateProcessor {
     }
 
     try {
+      // Legacy path — reject should go through reason wizard; keep as safety net only.
       const result = await this.paymentApprovalService.reject(orderId, actor);
       const order = await this.orderService.getOrderForAdminReview(orderId);
       const userChatId = order?.user.telegramAccount?.chatId ?? order?.user.telegramAccount?.telegramId;

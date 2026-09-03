@@ -3,6 +3,7 @@ export const BOT_FLOW = {
   PURCHASE: 'purchase',
   ADMIN_SUPPORT_REPLY: 'admin_support_reply',
   ADMIN_CREATE_LICENSE: 'admin_create_license',
+  ADMIN_ORDER_REJECT: 'admin_order_reject',
   DEFERRED_START: 'deferred_start',
   NAV: 'nav',
 } as const;

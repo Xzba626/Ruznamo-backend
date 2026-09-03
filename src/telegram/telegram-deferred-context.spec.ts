@@ -75,6 +75,7 @@ describe('TelegramUpdateProcessor deferred context and Standard card', () => {
     paymentConfigService as never,
     { listActive: jest.fn().mockResolvedValue([]) } as never,
     { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
+    { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
     { showList: jest.fn(), showDetail: jest.fn(), showDevices: jest.fn(), showRevokeConfirm: jest.fn(), revokeLicense: jest.fn() } as never,
     { answerCallback: jest.fn(), renderMenu: jest.fn(), getScreen: jest.fn(), getPayload: jest.fn(), roleRoot: jest.fn() } as never,
     { tryCompleteLinkFromBot: jest.fn() } as never,
