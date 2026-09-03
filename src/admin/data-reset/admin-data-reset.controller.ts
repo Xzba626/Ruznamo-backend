@@ -61,8 +61,8 @@ export class AdminDataResetController {
   @Post('dry-run')
   @RequirePermissions('system:reset')
   @ApiOperation({ summary: 'Preview data reset impact counts' })
-  dryRun(@Body() body: DataResetDryRunDto) {
-    return this.dataResetService.dryRun(body.scope as DataResetScope);
+  dryRun(@CurrentAdmin() admin: AdminJwtPayload, @Body() body: DataResetDryRunDto) {
+    return this.dataResetService.dryRun(body.scope as DataResetScope, admin.sub);
   }
 
   @Post('execute')
@@ -79,6 +79,7 @@ export class AdminDataResetController {
       scope: body.scope as DataResetScope,
       resetPassword: body.resetPassword,
       confirmationPhrase: body.confirmationPhrase,
+      previewId: body.previewId,
       ipAddress: req.ip,
     });
   }

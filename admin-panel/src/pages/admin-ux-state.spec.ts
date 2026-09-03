@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-/**
- * Pure helpers mirroring UpdatesPage state machine rules.
- * Keeps regressions focused without mounting React.
- */
 function pageShowsFalseUploadSpinner(pagePhase: string, uploadPhase: string): boolean {
   return pagePhase !== 'PAGE_LOADING' && uploadPhase !== 'UPLOADING' && pagePhase === 'IDLE'
     ? false
@@ -16,9 +12,7 @@ function canExecuteDestructive(opts: {
   resetPassword: string;
   confirmationPhrase: string;
   expectedPhrase: string;
-  gateDisabled: boolean;
 }): boolean {
-  if (opts.gateDisabled) return false;
   if (!opts.passwordConfigured) return false;
   if (!opts.hasPreview) return false;
   if (!opts.resetPassword.trim()) return false;
@@ -33,15 +27,14 @@ describe('admin UX state rules', () => {
     expect(pageShowsFalseUploadSpinner('IDLE', 'UPLOADING')).toBe(true);
   });
 
-  it('keeps execute disabled without password/preview/phrase and during gate', () => {
+  it('enables execute only with password, preview and matching phrase', () => {
     expect(
       canExecuteDestructive({
         passwordConfigured: false,
         hasPreview: true,
         resetPassword: 'x',
-        confirmationPhrase: 'УДАЛИТЬ ВСЕ ДАННЫЕ',
-        expectedPhrase: 'УДАЛИТЬ ВСЕ ДАННЫЕ',
-        gateDisabled: false,
+        confirmationPhrase: 'УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ',
+        expectedPhrase: 'УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ',
       }),
     ).toBe(false);
 
@@ -50,9 +43,8 @@ describe('admin UX state rules', () => {
         passwordConfigured: true,
         hasPreview: false,
         resetPassword: 'x',
-        confirmationPhrase: 'УДАЛИТЬ ВСЕ ДАННЫЕ',
-        expectedPhrase: 'УДАЛИТЬ ВСЕ ДАННЫЕ',
-        gateDisabled: false,
+        confirmationPhrase: 'УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ',
+        expectedPhrase: 'УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ',
       }),
     ).toBe(false);
 
@@ -62,9 +54,18 @@ describe('admin UX state rules', () => {
         hasPreview: true,
         resetPassword: 'secret-password',
         confirmationPhrase: 'УДАЛИТЬ ВСЕ ДАННЫЕ',
-        expectedPhrase: 'УДАЛИТЬ ВСЕ ДАННЫЕ',
-        gateDisabled: true,
+        expectedPhrase: 'УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ',
       }),
     ).toBe(false);
+
+    expect(
+      canExecuteDestructive({
+        passwordConfigured: true,
+        hasPreview: true,
+        resetPassword: 'secret-password',
+        confirmationPhrase: 'УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ',
+        expectedPhrase: 'УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ',
+      }),
+    ).toBe(true);
   });
 });

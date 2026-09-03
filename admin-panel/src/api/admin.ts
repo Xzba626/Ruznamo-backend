@@ -262,6 +262,9 @@ export function dataResetDryRun(scope: string) {
     samples?: Array<{ table: string; id: string; reason: string; label?: string }>;
     generatedAt?: string;
     additionalImpact?: Record<string, string>;
+    previewId?: string;
+    previewExpiresAt?: string;
+    confirmationPhrase?: string;
   }>('/api/v1/admin/system/data-reset/dry-run', {
     method: 'POST',
     body: JSON.stringify({ scope }),
@@ -272,6 +275,7 @@ export function executeDataReset(body: {
   scope: string;
   resetPassword: string;
   confirmationPhrase: string;
+  previewId: string;
 }) {
   return apiRequest<{ afterCounts: Record<string, number> }>(
     '/api/v1/admin/system/data-reset/execute',

@@ -6,11 +6,25 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuditActorType, DataResetScope, Prisma, SystemSecurityCredentialType } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ResetPasswordService } from '../../security/reset-password.service';
 
 export const DATA_RESET_CONFIRMATION_PHRASE = 'УДАЛИТЬ ВСЕ ДАННЫЕ';
+
+/** Operation-specific confirmation phrases (owner-visible). */
+export const DATA_RESET_CONFIRMATION_BY_SCOPE: Record<DataResetScope, string> = {
+  TEST_DATA_CLEANUP: 'УДАЛИТЬ ТЕСТОВЫЕ ДАННЫЕ',
+  USER_DATA_RESET: 'УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ',
+  FACTORY_RESET: 'УДАЛИТЬ ВСЕ ДАННЫЕ',
+};
+
+export function confirmationPhraseForScope(scope: DataResetScope): string {
+  return DATA_RESET_CONFIRMATION_BY_SCOPE[scope] ?? DATA_RESET_CONFIRMATION_PHRASE;
+}
+
+const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 const TEST_EMAIL_PATTERNS = ['@example.com', '@test.', 'test@', '+test'];
 const TEST_DISPLAY_PATTERNS = ['test user', 'demo user', 'e2e', 'testuser'];
@@ -54,6 +68,7 @@ export interface TestDataDryRunRow {
 export const USER_DATA_RESET_PRESERVED = [
   'database_schema_and_migrations',
   'admin_accounts',
+  'admin_telegram_authority',
   'data_reset_password',
   'plans_and_prices',
   'payment_methods',
@@ -66,6 +81,10 @@ export const USER_DATA_RESET_PRESERVED = [
 @Injectable()
 export class AdminDataResetService {
   private readonly failedAttempts = new Map<string, { count: number; lockedUntil: number }>();
+  private readonly previewTokens = new Map<
+    string,
+    { adminId: string; scope: DataResetScope; expiresAt: number }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -177,9 +196,16 @@ export class AdminDataResetService {
     return { configured: true, passwordChangedAt: now.toISOString() };
   }
 
-  async dryRun(scope: DataResetScope) {
+  async dryRun(scope: DataResetScope, adminId?: string) {
+    const previewId = this.issuePreviewToken(scope, adminId ?? 'anonymous');
     if (scope === DataResetScope.TEST_DATA_CLEANUP) {
-      return this.dryRunTestCleanup();
+      const result = await this.dryRunTestCleanup();
+      return {
+        ...result,
+        previewId,
+        previewExpiresAt: new Date(Date.now() + PREVIEW_TTL_MS).toISOString(),
+        confirmationPhrase: confirmationPhraseForScope(scope),
+      };
     }
     if (scope === DataResetScope.USER_DATA_RESET) {
       const counts = await this.countUserOperationalData();
@@ -191,6 +217,9 @@ export class AdminDataResetService {
         preserved: [...USER_DATA_RESET_PRESERVED],
         samples,
         generatedAt: new Date().toISOString(),
+        previewId,
+        previewExpiresAt: new Date(Date.now() + PREVIEW_TTL_MS).toISOString(),
+        confirmationPhrase: confirmationPhraseForScope(scope),
       };
     }
     if (scope === DataResetScope.FACTORY_RESET) {
@@ -203,6 +232,7 @@ export class AdminDataResetService {
         preserved: [
           'database_schema_and_migrations',
           'admin_accounts',
+          'admin_telegram_authority',
           'data_reset_password',
           'system_security_credentials',
           'app_releases',
@@ -215,6 +245,9 @@ export class AdminDataResetService {
         },
         samples,
         generatedAt: new Date().toISOString(),
+        previewId,
+        previewExpiresAt: new Date(Date.now() + PREVIEW_TTL_MS).toISOString(),
+        confirmationPhrase: confirmationPhraseForScope(scope),
       };
     }
     throw new BadRequestException({ code: 'INVALID_RESET_SCOPE', message: 'Unknown reset scope' });
@@ -225,14 +258,18 @@ export class AdminDataResetService {
     scope: DataResetScope;
     resetPassword: string;
     confirmationPhrase: string;
+    previewId: string;
     ipAddress?: string;
   }) {
-    if (params.confirmationPhrase.trim() !== DATA_RESET_CONFIRMATION_PHRASE) {
+    const expectedPhrase = confirmationPhraseForScope(params.scope);
+    if (params.confirmationPhrase.trim() !== expectedPhrase) {
       throw new BadRequestException({
         code: 'CONFIRMATION_PHRASE_MISMATCH',
-        message: 'Confirmation phrase does not match',
+        message: 'Confirmation phrase does not match for this operation',
       });
     }
+
+    this.consumePreviewToken(params.previewId, params.adminId, params.scope);
 
     await this.verifyResetPassword(params.adminId, params.resetPassword);
 
@@ -312,6 +349,39 @@ export class AdminDataResetService {
         where: { key: lockKey },
         create: { key: lockKey, value: 'false' },
         update: { value: 'false' },
+      });
+    }
+  }
+
+  private issuePreviewToken(scope: DataResetScope, adminId: string): string {
+    const previewId = randomBytes(24).toString('base64url');
+    this.previewTokens.set(previewId, {
+      adminId,
+      scope,
+      expiresAt: Date.now() + PREVIEW_TTL_MS,
+    });
+    return previewId;
+  }
+
+  private consumePreviewToken(previewId: string, adminId: string, scope: DataResetScope): void {
+    const token = this.previewTokens.get(previewId);
+    this.previewTokens.delete(previewId);
+    if (!token) {
+      throw new BadRequestException({
+        code: 'PREVIEW_REQUIRED',
+        message: 'Fresh preliminary preview is required before execute',
+      });
+    }
+    if (token.expiresAt < Date.now()) {
+      throw new BadRequestException({
+        code: 'PREVIEW_EXPIRED',
+        message: 'Preliminary preview expired; run preview again',
+      });
+    }
+    if (token.adminId !== adminId || token.scope !== scope) {
+      throw new BadRequestException({
+        code: 'PREVIEW_SCOPE_MISMATCH',
+        message: 'Preview does not match the selected operation or admin',
       });
     }
   }

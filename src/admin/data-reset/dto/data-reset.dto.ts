@@ -41,4 +41,9 @@ export class ExecuteDataResetDto {
   @IsString()
   @MinLength(1)
   confirmationPhrase!: string;
+
+  /** Opaque preview token from dry-run; required for execute. */
+  @IsString()
+  @MinLength(16)
+  previewId!: string;
 }

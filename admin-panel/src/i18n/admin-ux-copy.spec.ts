@@ -50,6 +50,7 @@ describe('admin production UX copy', () => {
   it('execute remains gated by password and preview copy', () => {
     expect(ru.dataReset.executeDisabledNoPassword).toMatch(/парол/i);
     expect(ru.dataReset.executeDisabledNoPreview).toMatch(/предварительн/i);
-    expect(ru.dataReset.executeGateNote).toMatch(/отключено/i);
+    expect(ru.dataReset.confirmationPhraseUser).toBe('УДАЛИТЬ ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ');
+    expect(ru.dataReset.confirmationPhraseFactory).toBe('УДАЛИТЬ ВСЕ ДАННЫЕ');
   });
 });

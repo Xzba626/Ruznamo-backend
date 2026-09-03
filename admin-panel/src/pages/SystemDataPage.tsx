@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   changeResetPassword,
   dataResetDryRun,
+  executeDataReset,
   fetchResetPasswordStatus,
   initializeResetPassword,
 } from '../api/admin';
@@ -44,6 +45,9 @@ export function SystemDataPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [passwordFormError, setPasswordFormError] = useState('');
   const [passwordFormOk, setPasswordFormOk] = useState('');
+  const [executeBusy, setExecuteBusy] = useState(false);
+  const [executeError, setExecuteError] = useState('');
+  const [executeOk, setExecuteOk] = useState('');
 
   const loadPasswordStatus = () => {
     fetchResetPasswordStatus()
@@ -67,6 +71,8 @@ export function SystemDataPage() {
     setConfirmationPhrase('');
     setResetPassword('');
     setDetailsOpen(false);
+    setExecuteError('');
+    setExecuteOk('');
   }, [scope]);
 
   const scopes: Array<{
@@ -75,14 +81,8 @@ export function SystemDataPage() {
     risk: string;
     hint: string;
     riskClass: string;
+    advanced?: boolean;
   }> = [
-    {
-      id: 'TEST_DATA_CLEANUP',
-      title: strings.dataReset.scopeTest,
-      risk: strings.dataReset.scopeTestRisk,
-      hint: strings.dataReset.scopeTestHint,
-      riskClass: 'risk-low',
-    },
     {
       id: 'USER_DATA_RESET',
       title: strings.dataReset.scopeUser,
@@ -91,11 +91,19 @@ export function SystemDataPage() {
       riskClass: 'risk-high',
     },
     {
+      id: 'TEST_DATA_CLEANUP',
+      title: strings.dataReset.scopeTest,
+      risk: strings.dataReset.scopeTestRisk,
+      hint: strings.dataReset.scopeTestHint,
+      riskClass: 'risk-low',
+    },
+    {
       id: 'FACTORY_RESET',
       title: strings.dataReset.scopeFactory,
       risk: strings.dataReset.scopeFactoryRisk,
       hint: strings.dataReset.scopeFactoryHint,
       riskClass: 'risk-critical',
+      advanced: true,
     },
   ];
 
@@ -106,25 +114,35 @@ export function SystemDataPage() {
         ? strings.dataReset.executeFactory
         : strings.dataReset.executeUser;
 
+  const expectedPhrase =
+    scope === 'TEST_DATA_CLEANUP'
+      ? strings.dataReset.confirmationPhraseTest
+      : scope === 'FACTORY_RESET'
+        ? strings.dataReset.confirmationPhraseFactory
+        : strings.dataReset.confirmationPhraseUser;
+
   const passwordConfigured = Boolean(passwordStatus?.configured);
 
   const canPreview = !previewBusy;
 
   const executeBlockedReason = useMemo(() => {
     if (!passwordConfigured) return strings.dataReset.executeDisabledNoPassword;
-    if (!preview) return strings.dataReset.executeDisabledNoPreview;
+    if (!preview?.previewId) return strings.dataReset.executeDisabledNoPreview;
     if (!resetPassword.trim()) return strings.dataReset.resetPassword;
-    if (confirmationPhrase.trim() !== strings.dataReset.confirmationPhrase) {
+    if (confirmationPhrase.trim() !== expectedPhrase) {
       return strings.dataReset.confirmationHint;
     }
     return '';
-  }, [passwordConfigured, preview, resetPassword, confirmationPhrase, strings.dataReset]);
+  }, [passwordConfigured, preview, resetPassword, confirmationPhrase, expectedPhrase, strings.dataReset]);
 
   const canShowExecuteForm = Boolean(preview) && passwordConfigured;
+  const canExecute = !executeBlockedReason && !executeBusy;
 
   const runPreview = async () => {
     setPreviewBusy(true);
     setPreviewError('');
+    setExecuteError('');
+    setExecuteOk('');
     try {
       const response = await dataResetDryRun(scope);
       setPreview(response);
@@ -133,6 +151,34 @@ export function SystemDataPage() {
       setPreviewError(getErrorMessage(err, strings.dataReset.previewFailed));
     } finally {
       setPreviewBusy(false);
+    }
+  };
+
+  const runExecute = async () => {
+    if (!canExecute || !preview?.previewId) return;
+    if (!window.confirm(`${strings.dataReset.confirmDialogTitle}\n\n${strings.dataReset.confirmDialogBody}`)) {
+      return;
+    }
+    setExecuteBusy(true);
+    setExecuteError('');
+    setExecuteOk('');
+    try {
+      await executeDataReset({
+        scope,
+        resetPassword,
+        confirmationPhrase: confirmationPhrase.trim(),
+        previewId: preview.previewId,
+      });
+      setExecuteOk(strings.dataReset.completed);
+      setPreview(null);
+      setResetPassword('');
+      setConfirmationPhrase('');
+    } catch (err) {
+      setExecuteError(getErrorMessage(err, strings.errors.loadDataReset));
+      // Stale preview must be refreshed after failed/consumed attempt.
+      setPreview(null);
+    } finally {
+      setExecuteBusy(false);
     }
   };
 
@@ -252,6 +298,7 @@ export function SystemDataPage() {
               <div className="operation-card-title">{item.title}</div>
               <div className={`risk-chip ${item.riskClass}`}>
                 {strings.dataReset.riskLabel}: {item.risk}
+                {item.advanced ? ` · ${strings.dataReset.advancedLabel}` : ''}
               </div>
               <p className="muted">{item.hint}</p>
             </button>
@@ -348,7 +395,7 @@ export function SystemDataPage() {
             <div className="execute-panel">
               <p className="muted">
                 {strings.dataReset.confirmationVisible}{' '}
-                <strong className="mono">{strings.dataReset.confirmationPhrase}</strong>
+                <strong className="mono">{expectedPhrase}</strong>
               </p>
               <div className="form-grid">
                 <label>
@@ -369,12 +416,17 @@ export function SystemDataPage() {
                   />
                 </label>
               </div>
-              <button type="button" className="btn-danger" disabled>
-                {executeLabel}
+              {executeError && <div className="alert error">{executeError}</div>}
+              {executeOk && <div className="alert success">{executeOk}</div>}
+              <button
+                type="button"
+                className="btn-danger"
+                disabled={!canExecute}
+                onClick={() => void runExecute()}
+              >
+                {executeBusy ? strings.dataReset.executing : executeLabel}
               </button>
-              <p className="muted">
-                {executeBlockedReason || strings.dataReset.executeGateNote}
-              </p>
+              {executeBlockedReason && <p className="muted">{executeBlockedReason}</p>}
             </div>
           )}
         </section>
