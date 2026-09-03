@@ -150,6 +150,13 @@ export class AdminReleasesService {
   }
 
   async publish(releaseId: string) {
+    if (!this.storage.isSigningPolicyConfigured()) {
+      throw new BadRequestException({
+        code: 'SIGNING_POLICY_NOT_CONFIGURED',
+        message: 'Configure production signing certificate before publishing releases',
+      });
+    }
+
     const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
     if (!release) {
       throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
@@ -158,12 +165,6 @@ export class AdminReleasesService {
       throw new BadRequestException({
         code: 'RELEASE_NOT_DRAFT',
         message: 'Only draft releases can be published',
-      });
-    }
-    if (!this.storage.isSigningPolicyConfigured()) {
-      throw new BadRequestException({
-        code: 'SIGNING_POLICY_NOT_CONFIGURED',
-        message: 'Configure production signing certificate before publishing releases',
       });
     }
 
