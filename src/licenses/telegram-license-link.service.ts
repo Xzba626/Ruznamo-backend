@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   AuditActorType,
+  LicenseActivationRevokeReason,
   LicenseIssueSource,
   LicenseStatus,
   Prisma,
@@ -15,7 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { PrismaService } from '../prisma/prisma.service';
 import { readMaxDevicesFromFeatures } from '../admin/common/plan-features.util';
-import { revokeDeviceInstallation } from '../devices/revoke-device-installation';
+import { activeActivationsForLicense } from './active-license-activation';
 import {
   buildLicenseLinkStartPayload,
   generateOpaqueToken,
@@ -159,7 +160,7 @@ export class TelegramLicenseLinkService {
       where: { id: challenge.licenseId },
       include: {
         activations: {
-          where: { deviceId: challenge.deviceId, device: { revokedAt: null } },
+          where: { deviceId: challenge.deviceId, revokedAt: null, device: { revokedAt: null } },
         },
       },
     });
@@ -285,7 +286,7 @@ export class TelegramLicenseLinkService {
     }
 
     const activation = await this.prisma.licenseActivation.findFirst({
-      where: { licenseId, deviceId },
+      where: { licenseId, deviceId, revokedAt: null },
       include: { device: true },
     });
 
@@ -294,25 +295,31 @@ export class TelegramLicenseLinkService {
     }
 
     const devicesUsedBefore = await this.prisma.licenseActivation.count({
-      where: { licenseId, device: { revokedAt: null } },
+      where: activeActivationsForLicense(licenseId),
     });
     const deviceLimit = readMaxDevicesFromFeatures(license.plan.features) ?? 1;
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      await revokeDeviceInstallation(tx, deviceId, now);
+      await tx.licenseActivation.update({
+        where: { id: activation.id },
+        data: {
+          revokedAt: now,
+          revokeReason: LicenseActivationRevokeReason.HOLDER_DISCONNECT,
+        },
+      });
       await tx.licenseEvent.create({
         data: {
           licenseId,
           fromStatus: license.status,
           toStatus: license.status,
           reason: 'holder_device_revoked',
-          metadata: { deviceId, holderTelegramAccountId },
+          metadata: { deviceId, holderTelegramAccountId, activationId: activation.id },
         },
       });
     });
 
-    const devicesUsedAfter = devicesUsedBefore - 1;
+    const devicesUsedAfter = Math.max(0, devicesUsedBefore - 1);
 
     await this.auditService.log({
       actorType: AuditActorType.TELEGRAM_BOT,
@@ -385,7 +392,7 @@ export class TelegramLicenseLinkService {
       where: { id: params.licenseId },
       include: {
         activations: {
-          where: { deviceId: params.deviceId, device: { revokedAt: null } },
+          where: { deviceId: params.deviceId, revokedAt: null, device: { revokedAt: null } },
         },
       },
     });

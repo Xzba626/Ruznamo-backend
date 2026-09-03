@@ -5,12 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuditActorType, LicenseStatus, Prisma } from '@prisma/client';
+import { AuditActorType, LicenseActivationRevokeReason, LicenseStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { readMaxDevicesFromFeatures } from '../admin/common/plan-features.util';
 import { LicenseKeyService } from '../security/license-key.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { activeActivationsForLicense, ACTIVE_LICENSE_ACTIVATION_WHERE } from './active-license-activation';
 import { buildReplacementStartPayload, generateOpaqueToken } from './license-link-token.util';
 
 const REPLACEMENT_CHALLENGE_TTL_MS = 15 * 60 * 1000;
@@ -35,7 +36,7 @@ export class DeviceReplacementService {
       include: {
         plan: { include: { features: true } },
         activations: {
-          where: { device: { revokedAt: null } },
+          where: ACTIVE_LICENSE_ACTIVATION_WHERE,
           include: { device: true },
           orderBy: { createdAt: 'asc' },
         },
@@ -207,33 +208,50 @@ export class DeviceReplacementService {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "License" WHERE id = ${license.id} FOR UPDATE`);
 
       const activeCount = await tx.licenseActivation.count({
-        where: { licenseId: license.id, device: { revokedAt: null } },
+        where: activeActivationsForLicense(license.id),
       });
       const maxDevices = readMaxDevicesFromFeatures(license.plan.features) ?? 1;
 
-      const newDeviceActive = await tx.licenseActivation.findUnique({
+      const newDeviceActivation = await tx.licenseActivation.findUnique({
         where: {
           licenseId_deviceId: { licenseId: license.id, deviceId: params.newDeviceId },
         },
         include: { device: true },
       });
 
-      if (newDeviceActive && !newDeviceActive.device.revokedAt) {
+      if (newDeviceActivation && !newDeviceActivation.revokedAt && !newDeviceActivation.device.revokedAt) {
         throw new BadRequestException('New device already activated');
       }
 
       if (activeCount < maxDevices) {
-        await tx.licenseActivation.create({
-          data: { licenseId: license.id, deviceId: params.newDeviceId },
-        });
+        if (newDeviceActivation) {
+          await tx.licenseActivation.update({
+            where: { id: newDeviceActivation.id },
+            data: { revokedAt: null, revokeReason: null },
+          });
+        } else {
+          await tx.licenseActivation.create({
+            data: { licenseId: license.id, deviceId: params.newDeviceId },
+          });
+        }
       } else {
-        await tx.deviceInstallation.update({
-          where: { id: params.oldDeviceId },
-          data: { revokedAt: now },
+        await tx.licenseActivation.updateMany({
+          where: { licenseId: license.id, deviceId: params.oldDeviceId, revokedAt: null },
+          data: {
+            revokedAt: now,
+            revokeReason: LicenseActivationRevokeReason.DEVICE_REPLACEMENT,
+          },
         });
-        await tx.licenseActivation.create({
-          data: { licenseId: license.id, deviceId: params.newDeviceId },
-        });
+        if (newDeviceActivation) {
+          await tx.licenseActivation.update({
+            where: { id: newDeviceActivation.id },
+            data: { revokedAt: null, revokeReason: null },
+          });
+        } else {
+          await tx.licenseActivation.create({
+            data: { licenseId: license.id, deviceId: params.newDeviceId },
+          });
+        }
       }
 
       await tx.license.update({

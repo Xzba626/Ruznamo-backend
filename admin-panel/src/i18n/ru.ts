@@ -349,6 +349,10 @@ export const ru = {
     telegramNotConnected: 'Не подключён',
     telegramLinkedAt: 'Подключён с',
     telegramChange: 'Сменить Telegram',
+    telegramDisconnect: 'Отключить Telegram',
+    telegramDisconnectHint:
+      'Отключит Telegram-администратора. Для подтверждения введите текущий пароль Admin Panel.',
+    telegramDisconnected: 'Telegram администратора отключён',
     telegramRebindHint:
       'Подтвердите текущий пароль, откройте бота и введите одноразовый код. Старый Telegram сразу потеряет права администратора.',
     telegramStartRebind: 'Начать смену Telegram',

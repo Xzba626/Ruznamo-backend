@@ -1235,7 +1235,9 @@ export class TelegramUpdateProcessor {
       const billingPeriod = license.order?.billingPeriod ?? BillingPeriod.MONTHLY;
       const days = resolveOrderTermDays(billingPeriod);
       const deviceLimit = readMaxDevicesFromFeatures(license.plan.features, 2);
-      const devicesUsed = license.activations.filter((a) => !a.device.revokedAt).length;
+      const devicesUsed = license.activations.filter(
+        (a) => !a.revokedAt && !a.device.revokedAt,
+      ).length;
       const expires = license.expiresAt
         ? formatDateLocalized(license.expiresAt, this.langCode(resolved))
         : '—';
@@ -2356,7 +2358,7 @@ export class TelegramUpdateProcessor {
       where: { id: licenseId },
       include: {
         activations: {
-          where: { device: { revokedAt: null } },
+          where: { revokedAt: null, device: { revokedAt: null } },
           include: { device: true },
         },
       },

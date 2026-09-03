@@ -78,10 +78,10 @@ describe('LicensesService', () => {
   function mockTransaction(handlers: {
     license?: Record<string, unknown> | null;
     device?: typeof mobileDevice | null;
-    existingActivation?: { id: string } | null;
+    existingActivation?: { id: string; revokedAt?: Date | null; revokeReason?: string | null } | null;
     activeActivationCount?: number;
     createError?: Prisma.PrismaClientKnownRequestError;
-    racedActivation?: { id: string } | null;
+    racedActivation?: { id: string; revokedAt?: Date | null } | null;
   }) {
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(1),
@@ -224,6 +224,20 @@ describe('LicensesService', () => {
 
     await expect(service.activate(mobileJwt, licenseKey, {})).rejects.toMatchObject({
       response: { code: 'LICENSE_REVOKED' },
+    });
+  });
+
+  it('rejects silent re-activation of holder-disconnected license/device pair', async () => {
+    mockTransaction({
+      existingActivation: {
+        id: 'act_1',
+        revokedAt: new Date(),
+        revokeReason: 'HOLDER_DISCONNECT',
+      },
+    });
+
+    await expect(service.activate(mobileJwt, licenseKey, {})).rejects.toMatchObject({
+      response: { code: 'LICENSE_RECOVERY_REQUIRED' },
     });
   });
 

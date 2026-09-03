@@ -11,6 +11,7 @@ import { RecoveryGrantContext, TelegramAuthService } from '../auth/telegram-auth
 import { EntitlementService } from '../entitlements/entitlement.service';
 import { readMaxDevicesFromFeatures } from '../admin/common/plan-features.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { activeActivationsForLicense, ACTIVE_LICENSE_ACTIVATION_WHERE } from './active-license-activation';
 import { DeviceReplacementService } from './device-replacement.service';
 import { TelegramLicenseLinkService } from './telegram-license-link.service';
 
@@ -62,7 +63,7 @@ export class LicenseRecoveryService {
 
     return {
       items: licenses.map((license) => {
-        const activeActivations = license.activations.filter((a) => !a.device.revokedAt);
+        const activeActivations = license.activations.filter((a) => !a.revokedAt && !a.device.revokedAt);
         const maxDevices = readMaxDevicesFromFeatures(license.plan.features) ?? 1;
 
         return {
@@ -172,12 +173,12 @@ export class LicenseRecoveryService {
         include: { device: true },
       });
 
-      if (existingActivation && !existingActivation.device.revokedAt) {
+      if (existingActivation && !existingActivation.revokedAt && !existingActivation.device.revokedAt) {
         return { license, device, idempotent: true as const, deviceReplacementRequired: false as const };
       }
 
       const activeActivations = await tx.licenseActivation.findMany({
-        where: { licenseId: license.id, device: { revokedAt: null } },
+        where: activeActivationsForLicense(license.id),
         include: {
           device: {
             select: {
@@ -209,9 +210,16 @@ export class LicenseRecoveryService {
         };
       }
 
-      await tx.licenseActivation.create({
-        data: { licenseId: license.id, deviceId: device.id },
-      });
+      if (existingActivation) {
+        await tx.licenseActivation.update({
+          where: { id: existingActivation.id },
+          data: { revokedAt: null, revokeReason: null },
+        });
+      } else {
+        await tx.licenseActivation.create({
+          data: { licenseId: license.id, deviceId: device.id },
+        });
+      }
 
       const now = new Date();
       await tx.license.update({

@@ -263,6 +263,63 @@ export class AdminTelegramService {
     };
   }
 
+  async disconnectTelegram(adminUserId: string, currentPassword: string): Promise<AdminTelegramStatus> {
+    const admin = await this.prisma.adminUser.findUnique({ where: { id: adminUserId } });
+    if (!admin?.isActive) {
+      throw new UnauthorizedException('Admin account not found');
+    }
+
+    const valid = await this.passwordService.verify(currentPassword, admin.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const identity = await this.prisma.adminTelegramIdentity.findUnique({
+      where: { adminUserId },
+    });
+
+    if (!identity || identity.status !== AdminTelegramIdentityStatus.ACTIVE) {
+      return this.getStatus(adminUserId);
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.adminTelegramIdentity.update({
+        where: { adminUserId },
+        data: {
+          status: AdminTelegramIdentityStatus.REVOKED,
+          isVerified: false,
+          revokedAt: now,
+        },
+      });
+
+      await tx.adminTelegramRevokedId.upsert({
+        where: { telegramUserId: identity.telegramUserId },
+        create: {
+          telegramUserId: identity.telegramUserId,
+          revokedAt: now,
+          revokedByAdminUserId: adminUserId,
+        },
+        update: { revokedAt: now, revokedByAdminUserId: adminUserId },
+      });
+
+      await tx.adminUser.update({
+        where: { id: adminUserId },
+        data: { telegramId: null },
+      });
+    });
+
+    await this.auditService.log({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminUserId,
+      action: 'admin.telegram.disconnected',
+      entityType: 'AdminTelegramIdentity',
+      metadata: { telegramUserId: identity.telegramUserId.toString() },
+    });
+
+    return this.getStatus(adminUserId);
+  }
+
   async tryCompleteLinkFromBot(input: {
     code: string;
     telegramUserId: bigint;

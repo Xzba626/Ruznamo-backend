@@ -22,8 +22,8 @@ export const tj: TelegramI18n = {
     `✓ Бе реклама\n` +
     `✓ То 2 дастгоҳи фаъол ҳамзамон\n` +
     `✓ Калиди шахсии литсензия\n` +
-    `✓ Воридшавӣ ва барқarorсозӣ тавассути Telegram\n` +
-    `✓ Имкони барқaror ва нусхабардории калид\n` +
+    `✓ Воридшавӣ ва барқарорсозӣ тавассути Telegram\n` +
+    `✓ Имкони барқарор ва нусхабардории калид\n` +
     `✓ Иваз кардани бехатари дастгоҳ\n` +
     `✓ Дастгирии Ruznamo`,
   standardDurationMonthButton: (price) => `1 моҳ · ${price}`,
@@ -143,7 +143,7 @@ export const tj: TelegramI18n = {
   telegramAuthOtp: (code) =>
     `Рамзи тасдиқ:\n\n${code}\n\n5 дақиқа эътибор дорад.\nБа касе надиҳед.`,
   telegramAuthOtpRecovery: (code) =>
-    `Барқaror кардани дастрасӣ\n\nРамзи тасдиқ:\n\n${code}\n\n5 дақиқа эътибор дорад.\nБа касе надиҳед.`,
+    `Барқарор кардани дастрасӣ\n\nРамзи тасдиқ:\n\n${code}\n\n5 дақиқа эътибор дорад.\nБа касе надиҳед.`,
   telegramAuthOtpLink: (code) =>
     `Пайвасткунии Telegram\n\nРамзи тасдиқ:\n\n${code}\n\n5 дақиқа эътибор дорад.\nБа касе надиҳед.`,
   telegramAuthCopyCode: '📋 Нусхабардории рамз',
@@ -151,9 +151,9 @@ export const tj: TelegramI18n = {
   telegramAuthChallengeExpired: '❌ Пайванд анҷом ёфтааст.',
   telegramAuthNoLicenses: 'Иҷозатнома пайваст нест.',
   mainMenuTitle: '🏠 Менюи асосии Ruznamo',
-  replyRecoverAccess: '♻️ Барқaror кардани дастрасӣ',
+  replyRecoverAccess: '♻️ Барқарор кардани дастрасӣ',
   recoverAccessBody:
-    'Барои бехатар барқaror кардани дастрасӣ: Ruznamo → Танзимот → Иҷозатнома → Калиди дастрасӣ → Барқaror кардани дастрасӣ.',
+    'Барои бехатар барқарор кардани дастрасӣ: Ruznamo → Танзимот → Иҷозатнома → Калиди дастрасӣ → Барқарор кардани дастрасӣ.',
   replyAdminMenu: '🛠 Менюи маъмур',
   stopAcknowledged: 'Амали ҷорӣ қатъ шуд.',
   adminRootTitle: 'Панели маъмури Ruznamo',

@@ -79,10 +79,10 @@ describe('TelegramAuthService', () => {
     );
   });
 
-  it('creates RECOVERY challenge on revoked device session', async () => {
+  it('creates RECOVERY challenge on active device', async () => {
     prisma.deviceInstallation.findFirst.mockResolvedValue({
       id: 'device_1',
-      revokedAt: new Date(),
+      revokedAt: null,
     });
     prisma.telegramAuthChallenge.create.mockResolvedValue({ id: 'challenge_1' });
 
@@ -91,14 +91,11 @@ describe('TelegramAuthService', () => {
     expect(result.challengeId).toBe('challenge_1');
   });
 
-  it('rejects LINK_ACCOUNT challenge on revoked device', async () => {
-    prisma.deviceInstallation.findFirst.mockResolvedValue({
-      id: 'device_1',
-      revokedAt: new Date(),
-    });
+  it('rejects challenge on globally blocked device', async () => {
+    prisma.deviceInstallation.findFirst.mockResolvedValue(null);
 
     await expect(
-      service.createChallenge(mobileUser, TelegramAuthPurpose.LINK_ACCOUNT, 'lic_1'),
+      service.createChallenge(mobileUser, TelegramAuthPurpose.RECOVERY),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 

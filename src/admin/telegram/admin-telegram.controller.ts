@@ -43,6 +43,16 @@ export class AdminTelegramController {
     return this.adminTelegramService.verifyTelegramRebind(admin.sub, body.otp);
   }
 
+  @Post('disconnect')
+  @RequirePermissions('dashboard:read')
+  @ApiOperation({ summary: 'Disconnect active Telegram admin binding (password required)' })
+  async disconnect(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Body() body: AdminTelegramRebindStartDto,
+  ) {
+    return this.adminTelegramService.disconnectTelegram(admin.sub, body.currentPassword);
+  }
+
   @Get('status')
   @RequirePermissions('dashboard:read')
   @ApiOperation({ summary: 'Telegram connection status for current admin' })

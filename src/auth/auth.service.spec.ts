@@ -234,7 +234,7 @@ describe('AuthService', () => {
     );
   });
 
-  it('allows limited re-auth for revoked device registration', async () => {
+  it('rejects revoked device registration (global device block)', async () => {
     prisma.deviceInstallation.findUnique.mockResolvedValue({
       id: 'dev_1',
       userId: 'usr_1',
@@ -242,23 +242,16 @@ describe('AuthService', () => {
       revokedAt: new Date(),
       user: { status: UserStatus.ACTIVE, trialGrant: null },
     });
-    prisma.deviceInstallation.update.mockResolvedValue({
-      id: 'dev_1',
-      installationId,
-      revokedAt: new Date(),
-    });
-    prisma.refreshToken.create.mockResolvedValue({ id: 'rt_1' });
 
-    const result = await service.registerDevice(
-      {
-        installationId,
-        platform: Platform.ANDROID,
-        appVersion: '1.0.0',
-      },
-      {},
-    );
-
-    expect(result.device.status).toBe('REVOKED');
-    expect(result.tokens.accessToken).toBeDefined();
+    await expect(
+      service.registerDevice(
+        {
+          installationId,
+          platform: Platform.ANDROID,
+          appVersion: '1.0.0',
+        },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

@@ -1,9 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditActorType, BillingPeriod, LicenseIssueSource, LicenseStatus, PlanCode, Prisma } from '@prisma/client';
+import { AuditActorType, BillingPeriod, LicenseActivationRevokeReason, LicenseIssueSource, LicenseStatus, PlanCode, Prisma } from '@prisma/client';
 import { AuditService } from '../../audit/audit.service';
 import { readMaxDevicesFromFeatures } from '../common/plan-features.util';
 import { LicenseIssuanceService } from '../../licenses/license-issuance.service';
-import { revokeDeviceInstallation } from '../../devices/revoke-device-installation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginateMeta, PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreateManualLicenseDto } from './dto/create-manual-license.dto';
@@ -107,7 +106,10 @@ export class AdminLicensesService {
     }
 
     const deviceLimit = readMaxDevicesFromFeatures(license.plan.features);
-    const activeDeviceCount = license.activations.filter((a: { device: { revokedAt: Date | null } }) => !a.device.revokedAt).length;
+    const activeDeviceCount = license.activations.filter(
+      (a: { revokedAt: Date | null; device: { revokedAt: Date | null } }) =>
+        !a.revokedAt && !a.device.revokedAt,
+    ).length;
 
     return {
       id: license.id,
@@ -262,7 +264,7 @@ export class AdminLicensesService {
     }
 
     const activation = await this.prisma.licenseActivation.findFirst({
-      where: { licenseId, deviceId },
+      where: { licenseId, deviceId, revokedAt: null },
       include: { device: true },
     });
     if (!activation || activation.device.revokedAt) {
@@ -271,7 +273,13 @@ export class AdminLicensesService {
 
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await revokeDeviceInstallation(tx, deviceId, now);
+      await tx.licenseActivation.update({
+        where: { id: activation.id },
+        data: {
+          revokedAt: now,
+          revokeReason: LicenseActivationRevokeReason.ADMIN_DISCONNECT,
+        },
+      });
       await tx.licenseEvent.create({
         data: {
           licenseId,

@@ -6,6 +6,7 @@ import {
   fetchTelegramStatus,
   startTelegramRebind,
   verifyTelegramRebind,
+  disconnectTelegramAdmin,
 } from '../api/admin';
 import { tokenStore } from '../api/client';
 import { getErrorMessage } from '../api/client';
@@ -20,6 +21,7 @@ export function ProfilePage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [disconnectPassword, setDisconnectPassword] = useState('');
   const [rebindPassword, setRebindPassword] = useState('');
   const [rebindOtp, setRebindOtp] = useState('');
   const [rebindLink, setRebindLink] = useState<{ deepLink: string | null; expiresAt: string } | null>(null);
@@ -82,6 +84,30 @@ export function ProfilePage() {
       setRebindLink({ deepLink: result.deepLink, expiresAt: result.expiresAt });
       setRebindPassword('');
       setMessage(strings.profile.telegramRebindStarted);
+    } catch (err) {
+      setError(getErrorMessage(err, strings.errors.telegramRebind));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDisconnectTelegram(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      const status = await disconnectTelegramAdmin(disconnectPassword);
+      setTelegram((prev) => ({
+        ...prev,
+        ...status,
+        firstName: null,
+        lastSeenAt: prev?.lastSeenAt ?? null,
+        username: null,
+        verifiedAt: null,
+      }));
+      setDisconnectPassword('');
+      setMessage(strings.profile.telegramDisconnected);
     } catch (err) {
       setError(getErrorMessage(err, strings.errors.telegramRebind));
     } finally {
@@ -249,8 +275,30 @@ export function ProfilePage() {
           )}
         </dl>
 
+        {telegram?.connected && (
+          <details className="rebind-panel">
+            <summary>{strings.profile.telegramDisconnect}</summary>
+            <p className="muted">{strings.profile.telegramDisconnectHint}</p>
+            <form className="form-stack" onSubmit={onDisconnectTelegram}>
+              <label>
+                {strings.profile.currentPassword}
+                <input
+                  type="password"
+                  value={disconnectPassword}
+                  onChange={(e) => setDisconnectPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+              </label>
+              <button type="submit" className="btn-danger" disabled={busy}>
+                {strings.profile.telegramDisconnect}
+              </button>
+            </form>
+          </details>
+        )}
+
         <details className="rebind-panel">
-          <summary>{strings.profile.telegramChange}</summary>
+          <summary>{telegram?.connected ? strings.profile.telegramChange : strings.profile.telegramStartRebind}</summary>
           <p className="muted">{strings.profile.telegramRebindHint}</p>
           {!rebindLink ? (
             <form className="form-stack" onSubmit={onStartRebind}>

@@ -90,6 +90,17 @@ export function verifyTelegramRebind(otp: string) {
   });
 }
 
+export function disconnectTelegramAdmin(currentPassword: string) {
+  return apiRequest<{
+    connected: boolean;
+    isVerified: boolean;
+    telegramUserId: string | null;
+  }>('/api/v1/admin/telegram/disconnect', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword }),
+  });
+}
+
 export function createTelegramConnect() {
   return apiRequest<{ code: string; expiresAt: string; deepLink: string | null; instructions: string }>(
     '/api/v1/admin/telegram/connect',

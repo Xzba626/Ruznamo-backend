@@ -95,6 +95,7 @@ export class EntitlementService {
             where: { revokedAt: null },
             include: {
               activations: {
+                where: { revokedAt: null },
                 include: {
                   license: {
                     include: { plan: { include: { features: true } } },
@@ -282,6 +283,7 @@ export class EntitlementService {
     const activation = await this.prisma.licenseActivation.findFirst({
       where: {
         licenseId,
+        revokedAt: null,
         device: {
           userId,
           installationId,
@@ -296,6 +298,7 @@ export class EntitlementService {
     return this.prisma.licenseActivation.count({
       where: {
         licenseId,
+        revokedAt: null,
         device: { revokedAt: null },
       },
     });

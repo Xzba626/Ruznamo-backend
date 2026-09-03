@@ -162,6 +162,12 @@ enum AdminTelegramIdentityStatus {
   REVOKED
 }
 
+enum LicenseActivationRevokeReason {
+  HOLDER_DISCONNECT
+  ADMIN_DISCONNECT
+  DEVICE_REPLACEMENT
+}
+
 // ---------------------------------------------------------------------------
 // Users & identity
 // ---------------------------------------------------------------------------
@@ -379,15 +385,20 @@ model License {
 }
 
 model LicenseActivation {
-  id        String   @id @default(cuid())
-  licenseId String
-  deviceId  String
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  id           String                          @id @default(cuid())
+  licenseId    String
+  deviceId     String
+  createdAt    DateTime                        @default(now()) @db.Timestamptz(3)
+  /// Soft-revoke of THIS license slot on THIS installation (not a global device block).
+  revokedAt    DateTime?                       @db.Timestamptz(3)
+  revokeReason LicenseActivationRevokeReason?
 
   license License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   device  DeviceInstallation @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
   @@unique([licenseId, deviceId])
+  @@index([licenseId, revokedAt])
+  @@index([deviceId, revokedAt])
 }
 
 model LicenseEvent {

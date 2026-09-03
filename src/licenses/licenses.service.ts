@@ -10,6 +10,7 @@ import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { EntitlementService } from '../entitlements/entitlement.service';
 import { LicenseKeyService } from '../security/license-key.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { activeActivationsForLicense } from './active-license-activation';
 
 interface RequestMeta {
   ipAddress?: string;
@@ -72,14 +73,22 @@ export class LicensesService {
       });
 
       if (existingActivation) {
+        if (existingActivation.revokedAt) {
+          throw new ForbiddenException({
+            code: 'LICENSE_RECOVERY_REQUIRED',
+            message:
+              'This license was disconnected from this device. Recover access via Telegram holder verification.',
+            details: {
+              licenseId: license.id,
+              telegramVerificationRequired: true,
+            },
+          });
+        }
         return { license, device, idempotent: true as const };
       }
 
       const activeActivationCount = await tx.licenseActivation.count({
-        where: {
-          licenseId: license.id,
-          device: { revokedAt: null },
-        },
+        where: activeActivationsForLicense(license.id),
       });
 
       if (activeActivationCount >= maxDevices) {
@@ -112,6 +121,13 @@ export class LicensesService {
             },
           });
           if (racedActivation) {
+            if (racedActivation.revokedAt) {
+              throw new ForbiddenException({
+                code: 'LICENSE_RECOVERY_REQUIRED',
+                message:
+                  'This license was disconnected from this device. Recover access via Telegram holder verification.',
+              });
+            }
             return { license, device, idempotent: true as const };
           }
           throw new ForbiddenException({
@@ -184,6 +200,7 @@ export class LicensesService {
     const activations = await this.prisma.licenseActivation.findMany({
       where: {
         device: { userId, revokedAt: null },
+        revokedAt: null,
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -235,7 +252,9 @@ export class LicensesService {
 
     return {
       items: [...licenseMap.values()].map((license) => {
-        const activeActivations = license.activations.filter((a) => !a.device.revokedAt);
+        const activeActivations = license.activations.filter(
+          (a) => !a.revokedAt && !a.device.revokedAt,
+        );
         const maxDevices = this.readMaxDevices(license.plan.features ?? []);
         const holder = license.holderTelegramAccount;
 
