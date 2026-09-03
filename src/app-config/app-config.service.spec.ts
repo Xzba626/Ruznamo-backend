@@ -107,4 +107,17 @@ describe('AppConfigService', () => {
 
     expect(result.android.updateRequired).toBe(true);
   });
+
+  it('never invents 1.0.0 when AppVersion row is missing', async () => {
+    prisma.appVersion.findFirst.mockResolvedValue(null);
+    prisma.systemConfig.findMany.mockResolvedValue([]);
+    prisma.systemConfig.findUnique.mockResolvedValue({ value: '1' });
+
+    const result = await service.getPublicConfig(Platform.ANDROID, '1.0.10');
+
+    expect(result.android.latestVersion).toBeNull();
+    expect(result.android.minimumSupportedVersion).toBeNull();
+    expect(result.android.updateRequired).toBe(false);
+    expect(result.android.updateRecommended).toBe(false);
+  });
 });

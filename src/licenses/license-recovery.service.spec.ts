@@ -175,6 +175,10 @@ describe('LicenseRecoveryService', () => {
 
     await expect(
       service.activateViaTelegram('grant_1', 'lic_1', mobileUser, {}),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toMatchObject({
+      response: {
+        code: 'DEVICE_REPLACEMENT_REQUIRED',
+      },
+    });
   });
 });

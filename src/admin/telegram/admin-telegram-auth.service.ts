@@ -6,8 +6,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 /**
  * Telegram Admin authority:
  * 1. Explicitly revoked telegram IDs never regain access (even via env).
- * 2. If any ACTIVE AdminTelegramIdentity exists in DB → DB is sole authority.
- * 3. Otherwise env ADMIN_TELEGRAM_IDS is bootstrap-only fallback.
+ * 2. If Telegram-admin management was ever initialized (any identity row OR any
+ *    revoked-id row), env is NEVER used — only ACTIVE DB bindings.
+ * 3. Env ADMIN_TELEGRAM_IDS is bootstrap-only when the system was never initialized.
+ *
+ * Critical: disconnecting the last ACTIVE admin must NOT reopen env fallback.
  */
 @Injectable()
 export class AdminTelegramAuthService {
@@ -24,8 +27,8 @@ export class AdminTelegramAuthService {
       return false;
     }
 
-    const dbAuthorityActive = await this.hasAnyActiveDbBinding();
-    if (dbAuthorityActive) {
+    const initialized = await this.isTelegramAdminManagementInitialized();
+    if (initialized) {
       const activeIdentity = await this.prisma.adminTelegramIdentity.findFirst({
         where: {
           telegramUserId,
@@ -59,7 +62,8 @@ export class AdminTelegramAuthService {
       }
     }
 
-    if (fromDb.length === 0) {
+    const initialized = await this.isTelegramAdminManagementInitialized();
+    if (!initialized) {
       const envIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
       for (const id of envIds) {
         if (!revokedSet.has(id)) {
@@ -71,10 +75,16 @@ export class AdminTelegramAuthService {
     return [...merged];
   }
 
-  private async hasAnyActiveDbBinding(): Promise<boolean> {
-    const count = await this.prisma.adminTelegramIdentity.count({
-      where: { status: AdminTelegramIdentityStatus.ACTIVE, isVerified: true },
-    });
-    return count > 0;
+  /**
+   * Initialized = at least one AdminTelegramIdentity ever existed
+   * OR at least one AdminTelegramRevokedId exists.
+   * Zero ACTIVE bindings after disconnect still counts as initialized.
+   */
+  async isTelegramAdminManagementInitialized(): Promise<boolean> {
+    const [identityCount, revokedCount] = await Promise.all([
+      this.prisma.adminTelegramIdentity.count(),
+      this.prisma.adminTelegramRevokedId.count(),
+    ]);
+    return identityCount > 0 || revokedCount > 0;
   }
 }

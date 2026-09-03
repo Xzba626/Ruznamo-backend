@@ -61,17 +61,20 @@ export class AppConfigService {
     const announcementEnabled = announcementMap.ANNOUNCEMENT_ENABLED === 'true';
 
     const maintenanceEnabled = maintenanceMode?.value === 'true';
-    const latestVersion = appVersion?.latestVersion ?? '1.0.0';
-    const minimumSupportedVersion = appVersion?.minimumSupportedVersion ?? '1.0.0';
+    // Never invent device/policy versions. Missing AppVersion row → null (UNKNOWN), not "1.0.0".
+    const latestVersion = appVersion?.latestVersion ?? null;
+    const minimumSupportedVersion = appVersion?.minimumSupportedVersion ?? null;
     const forceUpdate = appVersion?.forceUpdate ?? false;
 
     let updateRequired = forceUpdate;
     let updateRecommended = false;
 
-    if (clientAppVersion) {
+    if (clientAppVersion && minimumSupportedVersion) {
       if (compareSemver(clientAppVersion, minimumSupportedVersion) < 0) {
         updateRequired = true;
       }
+    }
+    if (clientAppVersion && latestVersion) {
       if (compareSemver(clientAppVersion, latestVersion) < 0) {
         updateRecommended = true;
       }

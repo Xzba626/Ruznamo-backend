@@ -241,6 +241,20 @@ describe('LicensesService', () => {
     });
   });
 
+  it('activates License B on same installation after holder disconnect of License A', async () => {
+    // No existingActivation for License B on this device → create path.
+    // DeviceInstallation remains ACTIVE (revokedAt null). Prior A soft-revoke is irrelevant.
+    const tx = mockTransaction({
+      existingActivation: null,
+      activeActivationCount: 0,
+    });
+
+    const result = await service.activate(mobileJwt, licenseKey, {});
+    expect(tx.licenseActivation.create).toHaveBeenCalled();
+    expect(result.license.status).toBe(LicenseStatus.ACTIVE);
+    expect(result.entitlements.access).toBe(true);
+  });
+
   it('rejects activation on a revoked device', async () => {
     mockTransaction({ device: null });
 

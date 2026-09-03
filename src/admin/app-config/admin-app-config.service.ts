@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AuditActorType, Platform } from '@prisma/client';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -111,11 +111,17 @@ export class AdminAppConfigService {
             },
           });
         } else {
+          if (!dto.android.latestVersion || !dto.android.minimumSupportedVersion) {
+            throw new BadRequestException({
+              code: 'APP_VERSION_REQUIRED',
+              message: 'latestVersion and minimumSupportedVersion are required when creating AppVersion',
+            });
+          }
           await tx.appVersion.create({
             data: {
               platform: Platform.ANDROID,
-              latestVersion: dto.android.latestVersion ?? '1.0.0',
-              minimumSupportedVersion: dto.android.minimumSupportedVersion ?? '1.0.0',
+              latestVersion: dto.android.latestVersion,
+              minimumSupportedVersion: dto.android.minimumSupportedVersion,
               updateUrl: dto.android.updateUrl,
               forceUpdate: dto.android.forceUpdate ?? false,
               isActive: true,

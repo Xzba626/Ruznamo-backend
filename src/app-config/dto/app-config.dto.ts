@@ -26,11 +26,11 @@ export class MaintenanceConfigDto {
 }
 
 export class AndroidConfigDto {
-  @ApiProperty({ example: '1.0.0' })
-  latestVersion!: string;
+  @ApiPropertyOptional({ example: '1.0.10', nullable: true, description: 'From AppVersion; null if unset (never invent 1.0.0)' })
+  latestVersion!: string | null;
 
-  @ApiProperty({ example: '1.0.0' })
-  minimumSupportedVersion!: string;
+  @ApiPropertyOptional({ example: '1.0.0', nullable: true, description: 'From AppVersion; null if unset (never invent 1.0.0)' })
+  minimumSupportedVersion!: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   updateUrl!: string | null;

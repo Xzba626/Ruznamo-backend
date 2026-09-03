@@ -8,8 +8,13 @@ type DeviceRow = {
   id: string;
   installationId: string;
   deviceName: string | null;
+  deviceManufacturer: string | null;
+  deviceModel: string | null;
   platform: string;
   appVersion: string | null;
+  appVersionLabel: string | null;
+  appVersionUnknown: boolean;
+  appLocale: string | null;
   lastSeenAt: string | null;
   isActive: boolean;
   createdAt: string;
@@ -62,16 +67,28 @@ export function DevicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((device) => (
+                {data.items.map((device) => {
+                  const hardware = [device.deviceManufacturer, device.deviceModel]
+                    .filter(Boolean)
+                    .join(' ');
+                  const versionLabel = device.appVersionLabel
+                    ?? (device.appVersionUnknown || !device.appVersion ? 'UNKNOWN' : device.appVersion);
+                  return (
                   <tr key={device.id}>
-                    <td>{device.deviceName ?? device.installationId}</td>
+                    <td>
+                      {hardware || device.deviceName || device.installationId}
+                      {hardware ? (
+                        <div className="muted" style={{ fontSize: 12 }}>{device.installationId}</div>
+                      ) : null}
+                    </td>
                     <td>{device.user.displayName ?? device.user.email ?? strings.common.dash}</td>
-                    <td>{labelPlatform(device.platform)}{device.appVersion ? ` · ${device.appVersion}` : ''}</td>
+                    <td>{labelPlatform(device.platform)} · {versionLabel}{device.appLocale ? ` · ${device.appLocale}` : ''}</td>
                     <td>{labelDeviceActive(device.isActive)}</td>
                     <td>{device.lastSeenAt ? formatDateTime(device.lastSeenAt) : strings.common.dash}</td>
                     <td>{formatDate(device.createdAt)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

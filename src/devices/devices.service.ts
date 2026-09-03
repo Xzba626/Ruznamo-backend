@@ -9,7 +9,6 @@ import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { EntitlementService } from '../entitlements/entitlement.service';
 import { buildDeviceMetadataUpdate } from './device-metadata.util';
-import { revokeDeviceInstallation } from './revoke-device-installation';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDeviceMetadataDto } from './dto/register-device-metadata.dto';
 
@@ -125,17 +124,27 @@ export class DevicesService {
     }
 
     const revokedAt = new Date();
+    // Soft-revoke license slots + kill sessions for THIS installation.
+    // Do NOT set DeviceInstallation.revokedAt (that is reserved for explicit global block).
     const updated = await this.prisma.$transaction(async (tx) => {
-      await revokeDeviceInstallation(tx, device.id, revokedAt);
+      await tx.licenseActivation.updateMany({
+        where: { deviceId: device.id, revokedAt: null },
+        data: { revokedAt },
+      });
+      await tx.refreshToken.updateMany({
+        where: { deviceId: device.id, revokedAt: null },
+        data: { revokedAt },
+      });
       return tx.deviceInstallation.findUniqueOrThrow({ where: { id: device.id } });
     });
 
     await this.auditService.log({
       actorType: AuditActorType.USER,
       actorId: user.sub,
-      action: 'device.revoked',
+      action: 'device.slots_cleared',
       entityType: 'DeviceInstallation',
       entityId: device.id,
+      metadata: { mode: 'soft_revoke_activations_only' },
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
     });

@@ -2,51 +2,38 @@
 
 Date: 2026-09-03  
 Repository: `D:\Ruznamo-Backend`  
-Migration: `20260903090000_license_activation_slot_model`
+Migration: `20260903090000_license_activation_slot_model` (**applied on production Neon**)
 
-## DEVICE MODEL BEFORE
+## Evidence policy
 
-| Concept | Implementation |
-|---------|----------------|
-| Disconnect from license | Set `DeviceInstallation.revokedAt` (global) |
-| LicenseActivation | Sticky join row; never soft-revoked |
-| Same-license re-entry | Idempotent if activation row exists |
-| Different license after disconnect | Blocked by global `DEVICE_REVOKED` |
-| Admin Telegram | DB + env fallback forever |
-
-**Symptom:** Holder disconnect → phone “cursed” for every license + recovery.
-
-## DEVICE MODEL AFTER
-
-| Concept | Implementation |
-|---------|----------------|
-| `DeviceInstallation` | Installation identity; `revokedAt` = **admin/self global block only** |
-| `LicenseActivation` | Slot; `revokedAt` + `revokeReason` = disconnected from **this** license |
-| Per-license anti-share | Soft-revoked pair → `LICENSE_RECOVERY_REQUIRED` on key entry |
-| Different license | Allowed if device not globally blocked and target license has capacity |
-| Telegram verified return | Recovery clears `LicenseActivation.revokedAt` (or creates slot) |
-| Replacement | Soft-revokes old activation (`DEVICE_REPLACEMENT`); does **not** block installation |
-| Admin Telegram | If any ACTIVE DB binding exists → **DB only**; revoked IDs never via env |
+Claims require: CODE → TEST → DEPLOYED → REAL RUNTIME → EVIDENCE.  
+Words like «исправлено» / PASS without evidence are rejected.
 
 ---
 
-## CHECKLIST
+## DEVICE MODEL AFTER
 
-| Check | Result |
-|-------|--------|
-| LICENSE A REVOKE (slot only) | PASS (code) |
-| LICENSE B ON SAME DEVICE | PASS (code — device not globally revoked) |
-| SAME LICENSE KEY AFTER REVOKE | PASS → `LICENSE_RECOVERY_REQUIRED` |
-| TELEGRAM VERIFIED RECOVERY | PASS (clears soft-revoke) |
-| ADMIN TELEGRAM DISCONNECT | PASS (API + Profile UI) |
-| OLD ADMIN TELEGRAM DENIED | PASS (`AdminTelegramRevokedId` + no env when DB active) |
-| NEW ADMIN TELEGRAM | PASS (rebind flow) |
-| ENV BYPASS REMOVED | PASS when ACTIVE binding exists |
-| TELEGRAM RU | PASS (no mixed-script hits in RU dict) |
-| TELEGRAM TJ | PASS fixed `барқарор*` mixed Latin |
-| MIXED SCRIPT | PASS after TJ fix |
-| HARDCODED VERSION FALLBACK | FOUND in `app-config` defaults `1.0.0` (policy seed, not device telemetry) |
-| PRODUCTION RESET | NO |
+| Concept | Rule |
+|---------|------|
+| `DeviceInstallation` | Installation identity. `revokedAt` = **global security block only**. |
+| `LicenseActivation` | License slot on installation. Soft-revocable. |
+| HOLDER_DISCONNECT | Soft-revoke `LicenseActivation` only (`revokeReason=HOLDER_DISCONNECT`). |
+| Same license key after disconnect | `LICENSE_RECOVERY_REQUIRED` (no silent slot). |
+| Different valid license | Normal activation if capacity. |
+| Full slots recovery | `DEVICE_REPLACEMENT_REQUIRED` + explicit device list (no silent eviction). |
+
+### DeviceInstallation.revokedAt — call-site audit
+
+| File | Function | Trigger | Sets `DeviceInstallation.revokedAt`? |
+|------|----------|---------|--------------------------------------|
+| `src/devices/revoke-device-installation.ts` | `revokeDeviceInstallation` | Helper for **explicit global block** | YES (helper body) |
+| *any current app path* | — | — | **NONE call the helper** |
+| `src/devices/devices.service.ts` | `revoke` (`POST /devices/revoke`) | Mobile “self” remove | **NO** — soft-revokes activations + refresh tokens only |
+| `src/licenses/telegram-license-link.service.ts` | `revokeDeviceAsHolder` | Telegram holder disconnect | **NO** — activation soft-revoke only |
+| `src/licenses/device-replacement.service.ts` | replace flow | Explicit replacement | **NO** — old activation soft-revoke |
+| `src/admin/licenses/admin-licenses.service.ts` | admin device disconnect | Admin | **NO** — activation soft-revoke |
+
+**Definition of former “self”:** mobile `POST /api/v1/devices/revoke`. Under the new model it clears license slots on that installation and invalidates refresh tokens; it does **not** globally blacklist the installation.
 
 ---
 
@@ -55,60 +42,71 @@ Migration: `20260903090000_license_activation_slot_model`
 ```
 sender.id
  → AdminTelegramRevokedId? → DENY
- → any ACTIVE AdminTelegramIdentity in DB?
-      YES → require ACTIVE+verified identity for this id
-      NO  → bootstrap: ADMIN_TELEGRAM_IDS env (until first DB binding)
+ → Telegram-admin management initialized?
+      (any AdminTelegramIdentity row OR any AdminTelegramRevokedId)
+      YES → only ACTIVE+verified DB binding; env NEVER used
+      NO  → bootstrap-only: ADMIN_TELEGRAM_IDS env
 ```
 
-Profile actions: Connect / Replace / **Disconnect**.
+**Critical:** disconnecting the last ACTIVE binding leaves the system **initialized** → env cannot resurrect the old admin.
+
+Profile: Connect / Replace / Disconnect (password + confirm).
 
 ---
 
-## ADMIN DATA LINEAGE (minimum)
+## ADMIN DATA LINEAGE
 
-| UI field | API | Service | DB / producer |
-|----------|-----|---------|---------------|
-| Overview users | `/admin/dashboard/summary` | `AdminDashboardService` | `User` counts |
-| Active devices | same | same | `DeviceInstallation` where `revokedAt null` |
-| Active licenses | same | same | `License` ACTIVE |
-| Device app version | `/admin/devices` | `AdminDevicesService` | `DeviceInstallation.appVersionName/Code` ← Android telemetry sync |
-| Latest published APK | `/admin/releases` | `AdminReleasesService` | `AppRelease` PUBLISHED |
-| Min supported version | `/admin/app-config` / public config | `AppConfigService` | `AppVersion` / default **1.0.0** if unset |
-| Tariff prices | `/admin/plans` | `AdminPlansService` | `PlanPrice` (DB authoritative) |
-| Telegram admin status | `/admin/telegram/status` | `AdminTelegramService` | `AdminTelegramIdentity` |
+| UI label | Frontend | API | Backend | DB / producer | Fallback |
+|----------|----------|-----|---------|---------------|----------|
+| Overview user counts | Dashboard/Overview | `GET /admin/dashboard/summary` | `AdminDashboardService` | `User` aggregates | — |
+| Active devices | Overview | same | same | `DeviceInstallation` where `revokedAt IS NULL` | — |
+| Active licenses | Overview | same | same | `License` ACTIVE | — |
+| Sales / orders | Sales page | `GET /admin/orders` | `AdminOrdersService` | `Order` + payment/receipt | — |
+| License status / devices | Licenses | `GET /admin/licenses` | `AdminLicensesService` | `License` + active `LicenseActivation` | — |
+| Device manufacturer/model | Devices | `GET /admin/devices` | `AdminDevicesService` | `DeviceInstallation.deviceManufacturer/Model` ← Android register/telemetry | empty → installationId |
+| Device app version | Devices | same | same | `appVersionName`/`appVersionCode` via `formatAppVersionLabel` | **UNKNOWN** (never invent `1.0.0`) |
+| Device locale | Devices | same | same | `appLocale` | omit |
+| Device lastSeen | Devices | same | same | `lastSeenAt` | dash |
+| Analytics active devices | Analytics | `GET /admin/analytics` | `AdminAnalyticsService` | `DeviceInstallation` lastSeen window | — |
+| Published APK version | Updates | `GET /admin/releases` | `AdminReleasesService` | `AppRelease` PUBLISHED | — |
+| Min / latest policy | System / public config | `/admin/app-config`, `/api/v1/app-config` | `AppConfigService` | `AppVersion` | **null** if unset (not `1.0.0`) |
+| Tariff prices | Tariffs | `/admin/plans` | `AdminPlansService` | `PlanPrice` | — |
+| Telegram Admin status | Profile | `/admin/telegram/status` | `AdminTelegramService` | `AdminTelegramIdentity` | «Не подключён» |
 
-**Rule:** LATEST PUBLISHED ≠ INSTALLED ≠ MINIMUM POLICY. No device row should invent `1.0.0`.
+**Version truth (independent):**
+- A. PUBLISHED = `AppRelease.status=PUBLISHED`
+- B. INSTALLED = `DeviceInstallation.appVersionName/Code`
+- C. MINIMUM = `AppVersion.minimumSupportedVersion`
+
+### `"1.0.0"` occurrence classification
+
+| Location | Class |
+|----------|-------|
+| `prisma/seed.ts` | seed defaults only |
+| `src/app-config/dto` Swagger examples | docs example |
+| `src/bootstrap.ts` / health swagger `.setVersion('1.0.0')` | API package version string, not device telemetry |
+| `src/**/*.spec.ts` fixtures | test-only |
+| `docs/*` contract samples | docs |
+| Public/admin config runtime fallback | **REMOVED** — returns `null` |
+| Admin Devices UI | shows **UNKNOWN** when missing |
 
 ---
 
-## TEST DATA CLASSIFICATION
+## CHECKLIST (code/test only — runtime separate)
 
-Do not delete without explicit authorization. Known probe patterns:
-
-- `AuthProbe*`, `E2E*`, `Local Test`, `Production Test`, `probe-*` version strings
-
-Return exact IDs in a follow-up cleanup pass.
-
----
-
-## OWNERSHIP TRANSFER
-
-Supported: password change, session revoke, Telegram disconnect/replace.  
-Email change: **not implemented** (do not fake).
+| Check | Status |
+|-------|--------|
+| Holder disconnect soft-revokes activation | CODE + TEST |
+| License B on same install | CODE + TEST name: `activates License B on same installation after holder disconnect of License A` |
+| Same A key → recovery | CODE + TEST |
+| Full slots → `DEVICE_REPLACEMENT_REQUIRED` | CODE + TEST |
+| Env cannot resurrect after zero ACTIVE | CODE + TEST |
+| Mobile self revoke does not set global `revokedAt` | CODE |
+| RU/TJ mixed-script detector | TEST |
+| Real Huawei / Admin Telegram E2E | **BLOCKED** until owner runs controlled production scenarios |
 
 ---
 
-## TESTS
+## TESTS / BUILD
 
-**187 / 187** Jest PASS. Admin panel build PASS.
-
-Targeted regressions added/updated:
-
-- holder revoke soft-revokes `LicenseActivation` only
-- same-license key → `LICENSE_RECOVERY_REQUIRED`
-- Admin Telegram: env bootstrap only when no ACTIVE DB binding; revoked IDs denied
-- entitlements require active slot on current installation
-
-## RUNTIME
-
-Not marked COMPLETE until production holder-disconnect + License B activation + Admin Telegram deny are verified live.
+Run and report exact counts in the release-gate final report.
