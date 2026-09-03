@@ -264,9 +264,14 @@ export const ru = {
     selectedFile: 'Выбранный файл',
     removeFile: 'Убрать',
     changeFile: 'Заменить',
-    startUpload: 'Загрузить на сервер',
+    startUpload: 'Загрузить',
     uploadingApk: 'Загрузка APK…',
+    preparingUpload: 'Подготовка загрузки…',
+    validatingApk: 'APK загружен. Проверяем файл…',
     uploadFailed: 'Не удалось загрузить APK.',
+    deleteDraft: 'Удалить черновик',
+    publishConfirm: (version: string) =>
+      `Опубликовать Ruznamo ${version}?\n\nПосле публикации эта версия станет доступна для обновления устройств.`,
     changelogSection: 'Что нового',
     changelogRu: 'Русский',
     changelogTg: 'Тоҷикӣ',
@@ -284,7 +289,7 @@ export const ru = {
     statusPurged: 'Файл удалён',
     storageNotConfigured: 'Хранилище APK не настроено.',
     storageNotConfiguredHint:
-      'Загрузка и публикация недоступны, пока на сервере не настроено объектное хранилище.',
+      'Подключите Private Vercel Blob к backend-проекту ruznamo-backend-o4xk. APK не проходит через Function.',
     signingNotConfigured: 'Сертификат production-подписи ещё не настроен.',
     signingNotConfiguredHint:
       'Публикация недоступна, пока на сервере не задан отпечаток сертификата production-подписи.',

@@ -1,17 +1,7 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Put,
-  UploadedFile,
-  UseGuards,
-  UseInterceptors,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Platform } from '@prisma/client';
+import { Throttle } from '@nestjs/throttler';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
 import { CurrentAdmin } from '../decorators/current-admin.decorator';
 import { AdminJwtAuthGuard } from '../guards/admin-jwt-auth.guard';
@@ -19,7 +9,6 @@ import { AdminPermissionsGuard } from '../guards/admin-permissions.guard';
 import { AdminJwtPayload } from '../auth/admin-jwt.payload';
 import { AdminReleasesService } from './admin-releases.service';
 import { UpdateReleaseDraftDto } from './dto/update-release-draft.dto';
-import { UploadedApkFile } from './admin-releases.service';
 
 @ApiTags('admin-releases')
 @ApiBearerAuth()
@@ -35,17 +24,22 @@ export class AdminReleasesController {
     return this.releasesService.getOverview(Platform.ANDROID);
   }
 
-  @Post('upload')
+  @Post('upload-authorization')
   @RequirePermissions('releases:manage')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileInterceptor('apk', {
-      limits: { fileSize: 250 * 1024 * 1024 },
-    }),
-  )
-  @ApiOperation({ summary: 'Upload APK and create/update draft release' })
-  upload(@CurrentAdmin() admin: AdminJwtPayload, @UploadedFile() file: UploadedApkFile) {
-    return this.releasesService.uploadDraft(admin.sub, file);
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Issue one-time direct-to-Blob APK upload authorization' })
+  createUploadAuthorization(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Body() body: { fileSize?: number },
+  ) {
+    return this.releasesService.createUploadAuthorization(admin.sub, body?.fileSize);
+  }
+
+  @Post('finalize')
+  @RequirePermissions('releases:manage')
+  @ApiOperation({ summary: 'Validate uploaded Blob object and create DRAFT AppRelease' })
+  finalize(@CurrentAdmin() admin: AdminJwtPayload, @Body() body: { uploadId: string }) {
+    return this.releasesService.finalizeUpload(admin.sub, body.uploadId);
   }
 
   @Put(':id')
@@ -64,21 +58,28 @@ export class AdminReleasesController {
 
   @Post(':id/archive')
   @RequirePermissions('releases:manage')
-  @ApiOperation({ summary: 'Archive release' })
+  @ApiOperation({ summary: 'Archive non-current release' })
   archive(@Param('id') id: string) {
     return this.releasesService.archive(id);
   }
 
+  @Delete(':id')
+  @RequirePermissions('releases:manage')
+  @ApiOperation({ summary: 'Delete DRAFT release and its Blob object' })
+  deleteDraft(@Param('id') id: string) {
+    return this.releasesService.deleteDraft(id);
+  }
+
   @Post(':id/purge-file')
   @RequirePermissions('releases:manage')
-  @ApiOperation({ summary: 'Delete APK binary but keep release history' })
+  @ApiOperation({ summary: 'Delete ARCHIVED APK binary but keep release history' })
   purgeFile(@Param('id') id: string) {
     return this.releasesService.purgeFile(id);
   }
 
   @Get(':id/download-url')
   @RequirePermissions('releases:read')
-  @ApiOperation({ summary: 'Get admin download URL for release APK' })
+  @ApiOperation({ summary: 'Get short-lived admin download URL for release APK' })
   downloadUrl(@Param('id') id: string) {
     return this.releasesService.getDownloadUrl(id);
   }

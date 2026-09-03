@@ -1,13 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AppReleaseStatus, Platform, TelegramLanguage } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { ObjectStorageService } from '../storage/object-storage.service';
+import { ReleaseStorageFacade } from '../storage/release-storage.facade';
 
 @Injectable()
 export class AppUpdateService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: ObjectStorageService,
+    private readonly storage: ReleaseStorageFacade,
   ) {}
 
   async checkUpdate(params: {
@@ -34,20 +34,17 @@ export class AppUpdateService {
 
     const changelog =
       locale === 'tj' || locale === TelegramLanguage.TJ.toLowerCase()
-        ? latest.changelogTg ?? latest.changelogRu
-        : latest.changelogRu ?? latest.changelogTg;
-
-    let downloadUrl: string | null = null;
-    if (this.storage.isConfigured()) {
-      downloadUrl =
-        this.storage.getPublicUrl(latest.objectKey) ??
-        (await this.storage.getSignedDownloadUrl(latest.objectKey, 3600));
-    }
+        ? latest.changelogTg ?? ''
+        : latest.changelogRu ?? '';
 
     return {
       updateAvailable: true,
       currentVersionCode: currentCode,
+      releaseId: latest.id,
+      latestVersionName: latest.versionName,
+      latestVersionCode: latest.versionCode,
       latest: {
+        releaseId: latest.id,
         versionName: latest.versionName,
         versionCode: latest.versionCode,
         mandatory: latest.mandatory,
@@ -56,9 +53,50 @@ export class AppUpdateService {
         packageName: latest.packageName,
         signingCertificateSha256: latest.signingCertificateSha256,
         changelog,
-        downloadUrl,
         publishedAt: latest.publishedAt?.toISOString() ?? null,
       },
+    };
+  }
+
+  async authorizeDownload(releaseId: string) {
+    const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
+    if (!release) {
+      throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
+    }
+    if (release.status !== AppReleaseStatus.PUBLISHED && release.status !== AppReleaseStatus.ARCHIVED) {
+      throw new BadRequestException({
+        code: 'RELEASE_NOT_DOWNLOADABLE',
+        message: 'Release is not available for download',
+      });
+    }
+    if (!this.storage.isConfigured()) {
+      throw new BadRequestException({
+        code: 'OBJECT_STORAGE_NOT_CONFIGURED',
+        message: 'Object storage is not configured',
+      });
+    }
+
+    const objectHead = await this.storage.head(release.objectKey);
+    if (!objectHead.exists) {
+      throw new BadRequestException({
+        code: 'APK_FILE_MISSING',
+        message: 'APK binary is missing from object storage',
+      });
+    }
+
+    const auth = await this.storage.createDownloadAuthorization(release.objectKey, {
+      expiresInSeconds: 300,
+    });
+
+    return {
+      releaseId: release.id,
+      versionName: release.versionName,
+      versionCode: release.versionCode,
+      fileSize: Number(release.fileSize),
+      sha256: release.sha256,
+      packageName: release.packageName,
+      downloadUrl: auth.downloadUrl,
+      expiresAt: auth.expiresAt,
     };
   }
 }

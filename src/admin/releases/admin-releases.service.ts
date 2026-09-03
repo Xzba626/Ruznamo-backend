@@ -4,24 +4,18 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { AppReleaseStatus, Platform, Prisma } from '@prisma/client';
+import { AppReleaseStatus, Platform } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { ApkInspectorService } from '../../apk/apk-inspector.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ObjectStorageService } from '../../storage/object-storage.service';
+import { ReleaseStorageFacade } from '../../storage/release-storage.facade';
 import { formatAppVersionLabel } from '../../devices/device-metadata.util';
-
-export type UploadedApkFile = {
-  buffer: Buffer;
-  originalname?: string;
-  mimetype?: string;
-  size?: number;
-};
 
 @Injectable()
 export class AdminReleasesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: ObjectStorageService,
+    private readonly storage: ReleaseStorageFacade,
     private readonly apkInspector: ApkInspectorService,
   ) {}
 
@@ -36,7 +30,9 @@ export class AdminReleasesService {
         orderBy: { versionCode: 'desc' },
         take: 50,
       }),
-      this.prisma.deviceInstallation.count({ where: { revokedAt: null, appVersionCode: { not: null } } }),
+      this.prisma.deviceInstallation.count({
+        where: { revokedAt: null, appVersionCode: { not: null } },
+      }),
     ]);
 
     const adoption = latestPublished
@@ -46,11 +42,12 @@ export class AdminReleasesService {
     return {
       storageConfigured: this.storage.isConfigured(),
       signingConfigured: this.storage.isSigningPolicyConfigured(),
+      storageProvider: this.storage.providerName(),
+      functionApkProxy: false,
       current: latestPublished
         ? {
             ...this.serializeRelease(latestPublished),
             adoption,
-            downloadUrl: await this.safeDownloadUrl(latestPublished),
           }
         : null,
       history: await Promise.all(
@@ -64,31 +61,100 @@ export class AdminReleasesService {
     };
   }
 
-  async uploadDraft(adminId: string, file: UploadedApkFile) {
-    if (!file?.buffer?.length) {
-      throw new BadRequestException({ code: 'APK_REQUIRED', message: 'APK file is required' });
-    }
+  async createUploadAuthorization(adminId: string, declaredFileSize?: number) {
     if (!this.storage.isConfigured()) {
       throw new ServiceUnavailableException({
         code: 'OBJECT_STORAGE_NOT_CONFIGURED',
-        message: 'Configure object storage before uploading APK releases',
+        message: 'Configure Vercel Private Blob before uploading APK releases',
       });
     }
 
-    const inspected = await this.apkInspector.inspect(file.buffer);
+    const uploadId = randomUUID().replace(/-/g, '');
+    const pathname = this.storage.buildApkObjectKey(uploadId);
+    const auth = await this.storage.createUploadAuthorization(pathname, {
+      maximumSizeInBytes: declaredFileSize && declaredFileSize > 0 ? declaredFileSize : undefined,
+    });
+
+    return {
+      uploadId,
+      pathname: auth.pathname,
+      uploadUrl: auth.uploadUrl,
+      method: auth.method,
+      headers: auth.headers,
+      expiresAt: auth.expiresAt,
+      provider: auth.provider,
+      createdByAdminId: adminId,
+    };
+  }
+
+  async finalizeUpload(adminId: string, uploadId: string) {
+    if (!this.storage.isConfigured()) {
+      throw new ServiceUnavailableException({
+        code: 'OBJECT_STORAGE_NOT_CONFIGURED',
+        message: 'Object storage is not configured',
+      });
+    }
+    if (!uploadId?.trim()) {
+      throw new BadRequestException({ code: 'UPLOAD_ID_REQUIRED', message: 'uploadId is required' });
+    }
+
+    const pathname = this.storage.buildApkObjectKey(uploadId);
+    const objectHead = await this.storage.head(pathname);
+    if (!objectHead.exists) {
+      throw new BadRequestException({
+        code: 'APK_FILE_MISSING',
+        message: 'APK was not found in Blob after upload',
+      });
+    }
+
+    const buffer = await this.storage.getBuffer(pathname);
+    let inspected;
+    try {
+      inspected = await this.apkInspector.inspect(buffer);
+    } catch (error) {
+      await this.storage.delete(pathname).catch(() => undefined);
+      throw error;
+    }
+
+    if (objectHead.size > 0 && objectHead.size !== inspected.fileSize) {
+      await this.storage.delete(pathname).catch(() => undefined);
+      throw new BadRequestException({
+        code: 'APK_SIZE_MISMATCH',
+        message: 'Uploaded Blob size does not match APK content',
+      });
+    }
+
     const latestPublished = await this.prisma.appRelease.findFirst({
       where: { platform: Platform.ANDROID, status: AppReleaseStatus.PUBLISHED },
       orderBy: { versionCode: 'desc' },
     });
     if (latestPublished && inspected.versionCode <= latestPublished.versionCode) {
+      await this.storage.delete(pathname).catch(() => undefined);
       throw new BadRequestException({
         code: 'VERSION_CODE_NOT_INCREASING',
         message: `versionCode must be greater than ${latestPublished.versionCode}`,
       });
     }
 
-    const objectKey = this.storage.buildApkObjectKey(inspected.versionCode, inspected.sha256);
-    await this.storage.putObject(objectKey, file.buffer, 'application/vnd.android.package-archive');
+    const existing = await this.prisma.appRelease.findUnique({
+      where: {
+        platform_versionCode: {
+          platform: Platform.ANDROID,
+          versionCode: inspected.versionCode,
+        },
+      },
+    });
+    if (existing && existing.status !== AppReleaseStatus.DRAFT) {
+      await this.storage.delete(pathname).catch(() => undefined);
+      throw new BadRequestException({
+        code: 'VERSION_CODE_EXISTS',
+        message: 'A release with this versionCode already exists',
+      });
+    }
+
+    if (existing?.objectKey && existing.objectKey !== pathname) {
+      await this.storage.delete(existing.objectKey).catch(() => undefined);
+    }
 
     const release = await this.prisma.appRelease.upsert({
       where: {
@@ -103,7 +169,7 @@ export class AdminReleasesService {
         versionCode: inspected.versionCode,
         packageName: inspected.packageName,
         signingCertificateSha256: inspected.signingCertificateSha256,
-        objectKey,
+        objectKey: pathname,
         fileSize: BigInt(inspected.fileSize),
         sha256: inspected.sha256,
         status: AppReleaseStatus.DRAFT,
@@ -113,10 +179,11 @@ export class AdminReleasesService {
         versionName: inspected.versionName,
         packageName: inspected.packageName,
         signingCertificateSha256: inspected.signingCertificateSha256,
-        objectKey,
+        objectKey: pathname,
         fileSize: BigInt(inspected.fileSize),
         sha256: inspected.sha256,
         status: AppReleaseStatus.DRAFT,
+        createdByAdminId: adminId,
       },
     });
 
@@ -161,6 +228,9 @@ export class AdminReleasesService {
     if (!release) {
       throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
     }
+    if (release.status === AppReleaseStatus.PUBLISHED) {
+      return this.serializeRelease(release);
+    }
     if (release.status !== AppReleaseStatus.DRAFT) {
       throw new BadRequestException({
         code: 'RELEASE_NOT_DRAFT',
@@ -168,8 +238,46 @@ export class AdminReleasesService {
       });
     }
 
-    const head = await this.storage.headObject(release.objectKey);
-    if (!head.exists) {
+    const expectedPackage = (
+      process.env.ANDROID_PACKAGE_NAME ?? 'com.Tajroot.Ruznamo'
+    ).trim();
+    if (release.packageName !== expectedPackage) {
+      throw new BadRequestException({
+        code: 'APK_PACKAGE_MISMATCH',
+        message: `Expected package ${expectedPackage}, got ${release.packageName}`,
+      });
+    }
+
+    const allowedCert = (process.env.ANDROID_RELEASE_SIGNING_CERT_SHA256 ?? '')
+      .trim()
+      .toLowerCase();
+    if (!allowedCert || release.signingCertificateSha256.toLowerCase() !== allowedCert) {
+      throw new BadRequestException({
+        code: 'APK_SIGNING_MISMATCH',
+        message: 'APK signing certificate does not match configured release identity',
+      });
+    }
+
+    if (!release.changelogRu?.trim() || !release.changelogTg?.trim()) {
+      throw new BadRequestException({
+        code: 'CHANGELOG_REQUIRED',
+        message: 'Localized changelog is required in Russian and Tajik before publish',
+      });
+    }
+
+    const latestPublished = await this.prisma.appRelease.findFirst({
+      where: { platform: release.platform, status: AppReleaseStatus.PUBLISHED },
+      orderBy: { versionCode: 'desc' },
+    });
+    if (latestPublished && release.versionCode <= latestPublished.versionCode) {
+      throw new BadRequestException({
+        code: 'VERSION_CODE_NOT_INCREASING',
+        message: `versionCode must be greater than ${latestPublished.versionCode}`,
+      });
+    }
+
+    const objectHead = await this.storage.head(release.objectKey);
+    if (!objectHead.exists) {
       throw new BadRequestException({
         code: 'APK_FILE_MISSING',
         message: 'APK binary is missing from object storage',
@@ -202,11 +310,44 @@ export class AdminReleasesService {
     if (!release) {
       throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
     }
+    if (release.status === AppReleaseStatus.PUBLISHED) {
+      throw new BadRequestException({
+        code: 'CANNOT_ARCHIVE_ONLY_PUBLISHED',
+        message: 'Publish a replacement before archiving the current published APK',
+      });
+    }
     const updated = await this.prisma.appRelease.update({
       where: { id: releaseId },
       data: { status: AppReleaseStatus.ARCHIVED, archivedAt: new Date() },
     });
     return this.serializeRelease(updated);
+  }
+
+  async deleteDraft(releaseId: string) {
+    const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
+    if (!release) {
+      throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
+    }
+    if (release.status !== AppReleaseStatus.DRAFT) {
+      throw new BadRequestException({
+        code: 'RELEASE_NOT_DRAFT',
+        message: 'Only draft releases can be deleted',
+      });
+    }
+
+    if (this.storage.isConfigured()) {
+      try {
+        await this.storage.delete(release.objectKey);
+      } catch {
+        throw new ServiceUnavailableException({
+          code: 'BLOB_DELETE_FAILED',
+          message: 'Could not delete APK from Blob. Retry draft delete.',
+        });
+      }
+    }
+
+    await this.prisma.appRelease.delete({ where: { id: release.id } });
+    return { deleted: true, id: releaseId };
   }
 
   async purgeFile(releaseId: string) {
@@ -220,9 +361,22 @@ export class AdminReleasesService {
         message: 'Publish a replacement before purging the current published APK',
       });
     }
+    if (release.status !== AppReleaseStatus.ARCHIVED) {
+      throw new BadRequestException({
+        code: 'PURGE_ARCHIVED_ONLY',
+        message: 'Only archived releases can be purged',
+      });
+    }
 
     if (this.storage.isConfigured()) {
-      await this.storage.deleteObject(release.objectKey).catch(() => undefined);
+      try {
+        await this.storage.delete(release.objectKey);
+      } catch {
+        throw new ServiceUnavailableException({
+          code: 'BLOB_DELETE_FAILED',
+          message: 'Could not delete APK from Blob. Retry purge.',
+        });
+      }
     }
 
     const updated = await this.prisma.appRelease.update({
@@ -240,25 +394,10 @@ export class AdminReleasesService {
     if (release.status === AppReleaseStatus.PURGED) {
       throw new BadRequestException({ code: 'APK_PURGED', message: 'APK file has been purged' });
     }
-    const url = await this.safeDownloadUrl(release);
-    if (!url) {
-      throw new ServiceUnavailableException({
-        code: 'DOWNLOAD_UNAVAILABLE',
-        message: 'Download URL is not available',
-      });
-    }
-    return { url, release: this.serializeRelease(release) };
-  }
-
-  private async safeDownloadUrl(release: { objectKey: string; status: AppReleaseStatus }) {
-    if (release.status === AppReleaseStatus.PURGED || !this.storage.isConfigured()) {
-      return null;
-    }
-    const publicUrl = this.storage.getPublicUrl(release.objectKey);
-    if (publicUrl) {
-      return publicUrl;
-    }
-    return this.storage.getSignedDownloadUrl(release.objectKey, 3600);
+    const auth = await this.storage.createDownloadAuthorization(release.objectKey, {
+      expiresInSeconds: 300,
+    });
+    return { url: auth.downloadUrl, expiresAt: auth.expiresAt, release: this.serializeRelease(release) };
   }
 
   private async countAdoption(versionCode: number, activeDevices: number) {

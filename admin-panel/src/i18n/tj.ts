@@ -263,9 +263,14 @@ export const tj: RuStrings = {
     selectedFile: 'Файли интихобшуда',
     removeFile: 'Нест кардан',
     changeFile: 'Иваз кардан',
-    startUpload: 'Бор кардан ба сервер',
+    startUpload: 'Бор кардан',
     uploadingApk: 'APK бор шуда истодааст…',
+    preparingUpload: 'Омодасозии боркунӣ…',
+    validatingApk: 'APK бор шуд. Файлро месанҷем…',
     uploadFailed: 'Бор кардани APK муяссар нашуд.',
+    deleteDraft: 'Нест кардани намуна',
+    publishConfirm: (version: string) =>
+      `Ruznamo ${version}-ро нашр кунем?\n\nПас аз нашр ин версия барои навсозии дастгоҳҳо дастрас мешавад.`,
     changelogSection: 'Чӣ нав',
     changelogRu: 'Русӣ',
     changelogTg: 'Тоҷикӣ',
@@ -283,7 +288,7 @@ export const tj: RuStrings = {
     statusPurged: 'Файл нест',
     storageNotConfigured: 'Захирагоҳи APK танзим нашудааст.',
     storageNotConfiguredHint:
-      'Боркунӣ ва нашр дастнорас аст, то захирагоҳи объектӣ дар сервер танзим шавад.',
+      'Private Vercel Blob-ро ба лоиҳаи backend ruznamo-backend-o4xk пайваст кунед. APK аз Function намегузарад.',
     signingNotConfigured: 'Сертификати имзои production ҳоло танзим нашудааст.',
     signingNotConfiguredHint:
       'Нашр дастнорас аст, то дар сервер изи сертификати имзои production муқаррар шавад.',

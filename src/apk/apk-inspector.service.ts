@@ -33,56 +33,89 @@ export class ApkInspectorService {
 
     try {
       await writeFile(tempPath, buffer);
-      const parser = new AppInfoParser(tempPath);
-      const info = (await parser.parse()) as {
-        package?: string;
-        versionName?: string;
-        versionCode?: number | string;
-      };
-
-      const packageName = info.package?.trim();
-      const versionName = info.versionName?.trim();
-      const versionCode = Number(info.versionCode);
-
-      if (!packageName || !versionName || !Number.isFinite(versionCode) || versionCode <= 0) {
-        throw new BadRequestException({
-          code: 'INVALID_APK_METADATA',
-          message: 'Could not parse APK package/version metadata',
-        });
-      }
-
-      const expectedPackage = this.configService.get<string>(
-        'storage.expectedPackageName',
-        'com.Tajroot.Ruznamo',
-      );
-      if (packageName !== expectedPackage) {
-        throw new BadRequestException({
-          code: 'APK_PACKAGE_MISMATCH',
-          message: `Expected package ${expectedPackage}, got ${packageName}`,
-        });
-      }
-
-      const allowedCert = this.configService
-        .get<string>('storage.allowedSigningCertSha256')
-        ?.toLowerCase();
-      if (allowedCert && signingCertificateSha256 !== allowedCert) {
-        throw new BadRequestException({
-          code: 'APK_SIGNING_MISMATCH',
-          message: 'APK signing certificate does not match configured release identity',
-        });
-      }
-
-      return {
-        packageName,
-        versionName,
-        versionCode,
+      return this.inspectParsed(tempPath, {
         sha256,
         fileSize: buffer.length,
         signingCertificateSha256,
-      };
+      });
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
+  }
+
+  /** Inspect APK already on disk (Blob finalize path). */
+  async inspectFile(filePath: string, fileSize: number): Promise<ApkInspectionResult> {
+    const { createReadStream } = await import('fs');
+    const hash = createHash('sha256');
+    await new Promise<void>((resolve, reject) => {
+      const stream = createReadStream(filePath);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('error', reject);
+      stream.on('end', () => resolve());
+    });
+    const sha256 = hash.digest('hex');
+    const { readFile } = await import('fs/promises');
+    // Signing block extraction needs zip random access; read file for META-INF only via AdmZip path
+    const bufferForSig = await readFile(filePath);
+    const signingCertificateSha256 = this.extractSigningCertificateSha256(bufferForSig);
+    return this.inspectParsed(filePath, {
+      sha256,
+      fileSize,
+      signingCertificateSha256,
+    });
+  }
+
+  private async inspectParsed(
+    tempPath: string,
+    base: { sha256: string; fileSize: number; signingCertificateSha256: string },
+  ): Promise<ApkInspectionResult> {
+    const parser = new AppInfoParser(tempPath);
+    const info = (await parser.parse()) as {
+      package?: string;
+      versionName?: string;
+      versionCode?: number | string;
+    };
+
+    const packageName = info.package?.trim();
+    const versionName = info.versionName?.trim();
+    const versionCode = Number(info.versionCode);
+
+    if (!packageName || !versionName || !Number.isFinite(versionCode) || versionCode <= 0) {
+      throw new BadRequestException({
+        code: 'INVALID_APK_METADATA',
+        message: 'Could not parse APK package/version metadata',
+      });
+    }
+
+    const expectedPackage = this.configService.get<string>(
+      'storage.expectedPackageName',
+      'com.Tajroot.Ruznamo',
+    );
+    if (packageName !== expectedPackage) {
+      throw new BadRequestException({
+        code: 'APK_PACKAGE_MISMATCH',
+        message: `Expected package ${expectedPackage}, got ${packageName}`,
+      });
+    }
+
+    const allowedCert = this.configService
+      .get<string>('storage.allowedSigningCertSha256')
+      ?.toLowerCase();
+    if (allowedCert && base.signingCertificateSha256 !== allowedCert) {
+      throw new BadRequestException({
+        code: 'APK_SIGNING_MISMATCH',
+        message: 'APK signing certificate does not match configured release identity',
+      });
+    }
+
+    return {
+      packageName,
+      versionName,
+      versionCode,
+      sha256: base.sha256,
+      fileSize: base.fileSize,
+      signingCertificateSha256: base.signingCertificateSha256,
+    };
   }
 
   private extractSigningCertificateSha256(buffer: Buffer): string {

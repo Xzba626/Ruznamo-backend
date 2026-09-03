@@ -1,5 +1,4 @@
 import { apiRequest } from './client';
-import { tokenStore } from './client';
 import type { Paginated } from './types';
 
 export function fetchDashboardSummary() {
@@ -290,6 +289,8 @@ export function fetchReleasesOverview() {
   return apiRequest<{
     storageConfigured: boolean;
     signingConfigured: boolean;
+    storageProvider?: string;
+    functionApkProxy?: boolean;
     current: {
       id: string;
       versionLabel: string;
@@ -318,30 +319,72 @@ export function fetchReleasesOverview() {
   }>('/api/v1/admin/releases');
 }
 
-export async function uploadReleaseApk(file: File) {
-  const form = new FormData();
-  form.append('apk', file);
-  const token = tokenStore.getAccess();
-  const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
-  const response = await fetch(`${base}/api/v1/admin/releases/upload`, {
+export type DraftRelease = {
+  id: string;
+  versionLabel?: string;
+  versionName: string;
+  versionCode: number;
+  packageName: string;
+  signingCertificateSha256: string;
+  fileSize: number;
+  sha256: string;
+  status: string;
+};
+
+export function requestReleaseUploadAuthorization(fileSize: number) {
+  return apiRequest<{
+    uploadId: string;
+    pathname: string;
+    uploadUrl: string;
+    method: 'PUT';
+    headers: Record<string, string>;
+    expiresAt: string;
+    provider: string;
+  }>('/api/v1/admin/releases/upload-authorization', {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body: form,
+    body: JSON.stringify({ fileSize }),
   });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok || !json.success) {
-    throw new Error(json.error?.message ?? 'Upload failed');
-  }
-  return json.data as {
-    id: string;
-    versionName: string;
-    versionCode: number;
-    packageName: string;
-    signingCertificateSha256: string;
-    fileSize: number;
-    sha256: string;
-    status: string;
-  };
+}
+
+export function finalizeReleaseUpload(uploadId: string) {
+  return apiRequest<DraftRelease>('/api/v1/admin/releases/finalize', {
+    method: 'POST',
+    body: JSON.stringify({ uploadId }),
+  });
+}
+
+export function deleteDraftRelease(id: string) {
+  return apiRequest<{ deleted: boolean; id: string }>(`/api/v1/admin/releases/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+/** Direct browser → Blob PUT. Never send APK bytes to the Nest function. */
+export function uploadApkToBlob(
+  uploadUrl: string,
+  file: File,
+  headers: Record<string, string>,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(event.loaded, event.total);
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      reject(new Error('Не удалось загрузить APK.'));
+    };
+    xhr.onerror = () => reject(new Error('Не удалось загрузить APK.'));
+    xhr.send(file);
+  });
 }
 
 export function updateReleaseDraft(

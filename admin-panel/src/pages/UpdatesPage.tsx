@@ -1,16 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  deleteDraftRelease,
   fetchReleasesOverview,
+  finalizeReleaseUpload,
   publishRelease,
+  requestReleaseUploadAuthorization,
   updateReleaseDraft,
-  uploadReleaseApk,
+  uploadApkToBlob,
 } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import { useStrings } from '../context/LocaleContext';
 import { formatDateTime } from '../i18n';
 
 type PagePhase = 'PAGE_LOADING' | 'IDLE' | 'ERROR';
-type UploadPhase = 'IDLE' | 'FILE_SELECTED' | 'UPLOADING' | 'DRAFT_READY' | 'ERROR';
+type UploadPhase =
+  | 'IDLE'
+  | 'FILE_SELECTED'
+  | 'REQUESTING_UPLOAD_AUTH'
+  | 'UPLOADING'
+  | 'VALIDATING'
+  | 'DRAFT_READY'
+  | 'ERROR';
 
 function formatBytes(size: number): string {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
@@ -27,7 +37,8 @@ export function UpdatesPage() {
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>('IDLE');
   const [uploadError, setUploadError] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [draft, setDraft] = useState<Awaited<ReturnType<typeof uploadReleaseApk>> | null>(null);
+  const [draft, setDraft] = useState<Awaited<ReturnType<typeof finalizeReleaseUpload>> | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const [changelogRu, setChangelogRu] = useState('');
   const [changelogTg, setChangelogTg] = useState('');
   const [mandatory, setMandatory] = useState(false);
@@ -81,10 +92,17 @@ export function UpdatesPage() {
 
   const startUpload = async () => {
     if (!selectedFile || !storageConfigured) return;
-    setUploadPhase('UPLOADING');
     setUploadError('');
+    setUploadProgress(null);
     try {
-      const uploaded = await uploadReleaseApk(selectedFile);
+      setUploadPhase('REQUESTING_UPLOAD_AUTH');
+      const auth = await requestReleaseUploadAuthorization(selectedFile.size);
+      setUploadPhase('UPLOADING');
+      await uploadApkToBlob(auth.uploadUrl, selectedFile, auth.headers, (loaded, total) => {
+        setUploadProgress({ loaded, total });
+      });
+      setUploadPhase('VALIDATING');
+      const uploaded = await finalizeReleaseUpload(auth.uploadId);
       setDraft(uploaded);
       setUploadPhase('DRAFT_READY');
       await updateReleaseDraft(uploaded.id, { changelogRu, changelogTg, mandatory });
@@ -96,8 +114,25 @@ export function UpdatesPage() {
     }
   };
 
+  const handleDeleteDraft = async (id: string) => {
+    try {
+      await deleteDraftRelease(id);
+      clearFile();
+      loadOverview({ soft: true });
+    } catch (err) {
+      setUploadError(getErrorMessage(err, strings.errors.generic));
+    }
+  };
+
   const handlePublish = async (id: string) => {
     if (!signingConfigured) return;
+    const versionLabel =
+      draft && 'versionLabel' in draft && typeof draft.versionLabel === 'string'
+        ? draft.versionLabel
+        : (overview?.history.find((row) => row.id === id)?.versionLabel ?? '');
+    if (!window.confirm(strings.updates.publishConfirm(versionLabel ?? ''))) {
+      return;
+    }
     setPublishing(true);
     setUploadError('');
     try {
@@ -224,7 +259,12 @@ export function UpdatesPage() {
           <button
             type="button"
             className="btn-secondary"
-            disabled={!storageConfigured || uploadPhase === 'UPLOADING'}
+            disabled={
+              !storageConfigured ||
+              uploadPhase === 'UPLOADING' ||
+              uploadPhase === 'REQUESTING_UPLOAD_AUTH' ||
+              uploadPhase === 'VALIDATING'
+            }
             onClick={() => fileInputRef.current?.click()}
           >
             {strings.updates.chooseApk}
@@ -253,7 +293,12 @@ export function UpdatesPage() {
               <button
                 type="button"
                 className="btn-primary"
-                disabled={!storageConfigured || uploadPhase === 'UPLOADING'}
+                disabled={
+                  !storageConfigured ||
+                  uploadPhase === 'UPLOADING' ||
+                  uploadPhase === 'REQUESTING_UPLOAD_AUTH' ||
+                  uploadPhase === 'VALIDATING'
+                }
                 onClick={() => void startUpload()}
               >
                 {uploadPhase === 'UPLOADING'
@@ -264,10 +309,34 @@ export function UpdatesPage() {
           </div>
         )}
 
-        {uploadPhase === 'UPLOADING' && (
+        {(uploadPhase === 'REQUESTING_UPLOAD_AUTH' ||
+          uploadPhase === 'UPLOADING' ||
+          uploadPhase === 'VALIDATING') && (
           <div className="upload-progress">
-            <div className="progress-bar indeterminate" />
-            <p>{strings.updates.uploadingApk}</p>
+            {uploadPhase === 'UPLOADING' && uploadProgress ? (
+              <>
+                <div
+                  className="progress-bar"
+                  style={{
+                    width: `${Math.min(100, Math.round((uploadProgress.loaded / uploadProgress.total) * 100))}%`,
+                  }}
+                />
+                <p>
+                  {strings.updates.uploadingApk}{' '}
+                  {Math.round((uploadProgress.loaded / uploadProgress.total) * 100)}% ·{' '}
+                  {formatBytes(uploadProgress.loaded)} / {formatBytes(uploadProgress.total)}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="progress-bar indeterminate" />
+                <p>
+                  {uploadPhase === 'VALIDATING'
+                    ? strings.updates.validatingApk
+                    : strings.updates.preparingUpload}
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -370,14 +439,19 @@ export function UpdatesPage() {
         </label>
 
         {draft && (
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={!signingConfigured || publishing}
-            onClick={() => void handlePublish(draft.id)}
-          >
-            {publishing ? strings.updates.publishing : strings.updates.publish}
-          </button>
+          <div className="selected-file-actions">
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!signingConfigured || publishing}
+              onClick={() => void handlePublish(draft.id)}
+            >
+              {publishing ? strings.updates.publishing : strings.updates.publish}
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => void handleDeleteDraft(draft.id)}>
+              {strings.updates.deleteDraft}
+            </button>
+          </div>
         )}
       </section>
 
