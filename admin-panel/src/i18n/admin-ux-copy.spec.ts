@@ -43,8 +43,12 @@ describe('admin production UX copy', () => {
     expect(ru.updates.noCurrentTitle).toBeTruthy();
     expect(ru.updates.historyEmpty).toBeTruthy();
     expect(ru.updates.storageNotConfigured).toMatch(/Хранилище/);
+    expect(ru.updates.storageConfiguredLabel).toMatch(/настроено/);
+    expect(ru.updates.signingNotConfigured).toMatch(/не настроена/);
     expect(tj.updates.historyEmpty).toBeTruthy();
     expect(tj.updates.storageNotConfigured).toMatch(/Захирагоҳ/);
+    expect(tj.updates.storageConfiguredLabel).toMatch(/танзим/);
+    expect(tj.updates.signingNotConfigured).toMatch(/танзим нашудааст/);
   });
 
   it('execute remains gated by password and preview copy', () => {

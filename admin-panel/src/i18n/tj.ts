@@ -302,7 +302,11 @@ export const tj: RuStrings = {
     storageNotConfigured: 'Захирагоҳи APK танзим нашудааст.',
     storageNotConfiguredHint:
       'Private Vercel Blob-ро ба лоиҳаи backend ruznamo-backend-o4xk пайваст кунед. APK аз Function намегузарад.',
-    signingNotConfigured: 'Сертификати имзои production ҳоло танзим нашудааст.',
+    storageConfiguredLabel: 'Захирагоҳ: танзим шудааст',
+    storageConfiguredHint:
+      'Private Vercel Blob пайваст аст. APK мустақиман ба захирагоҳ бор мешавад, на тавассути Function.',
+    signingConfiguredLabel: 'Имзои production: танзим шудааст',
+    signingNotConfigured: 'Имзои production: танзим нашудааст',
     signingNotConfiguredHint:
       'Нашр дастнорас аст, то дар сервер изи сертификати имзои production муқаррар шавад.',
     validationTitle: 'Санҷиши APK',

@@ -31,26 +31,48 @@ export class VercelBlobReleaseStorageService implements ReleaseStorageService {
   }
 
   /**
-   * Configured when owner explicitly enables vercel_blob AND either a RW token exists
-   * or the process runs on Vercel (OIDC-connected store).
-   * Presence of VERCEL alone is not enough — RELEASE_STORAGE_PROVIDER must be vercel_blob.
+   * Configured when a RW token exists, or a connected Blob store is available via OIDC
+   * (`BLOB_STORE_ID` + Vercel runtime / OIDC token).
+   * Do not invent static BLOB_READ_WRITE_TOKEN when OIDC works.
    */
   isConfigured(): boolean {
     const provider = (process.env.RELEASE_STORAGE_PROVIDER ?? '').trim().toLowerCase();
-    if (provider !== 'vercel_blob' && provider !== 'auto') {
-      // auto: prefer blob when token present
-      if (provider === '' && this.token) {
-        return true;
-      }
-      if (provider !== 'auto') {
-        return false;
-      }
+    if (provider === 's3') {
+      return false;
     }
     if (this.token) {
       return true;
     }
-    // OIDC path: only claim configured when owner set provider=vercel_blob on Vercel
+    if (this.hasOidcStoreBinding()) {
+      return provider === '' || provider === 'auto' || provider === 'vercel_blob';
+    }
+    // Explicit provider on Vercel without store id yet (pre-connect / mid-redeploy)
     return provider === 'vercel_blob' && process.env.VERCEL === '1';
+  }
+
+  /** Safe diagnostics — never returns tokens or OIDC material. */
+  getAuthDiagnostics(): {
+    storeIdAvailable: boolean;
+    authMode: 'oidc' | 'static_token' | 'none';
+    configured: boolean;
+  } {
+    const storeIdAvailable = Boolean((process.env.BLOB_STORE_ID ?? '').trim());
+    if (this.token) {
+      return { storeIdAvailable, authMode: 'static_token', configured: this.isConfigured() };
+    }
+    if (this.hasOidcStoreBinding() || (storeIdAvailable && process.env.VERCEL === '1')) {
+      return { storeIdAvailable, authMode: 'oidc', configured: this.isConfigured() };
+    }
+    return { storeIdAvailable, authMode: 'none', configured: this.isConfigured() };
+  }
+
+  private hasOidcStoreBinding(): boolean {
+    const storeId = (process.env.BLOB_STORE_ID ?? '').trim();
+    if (!storeId) {
+      return false;
+    }
+    // On Vercel Functions OIDC is injected; locally after `vercel env pull` OIDC may refresh via CLI.
+    return process.env.VERCEL === '1' || Boolean((process.env.VERCEL_OIDC_TOKEN ?? '').trim());
   }
 
   isSigningPolicyConfigured(): boolean {

@@ -45,6 +45,39 @@ export class ReleaseStorageFacade implements ReleaseStorageService {
     return Boolean(this.configService.get<string>('storage.allowedSigningCertSha256'));
   }
 
+  /** Safe storage diagnostics for Admin overview (no secrets). */
+  getStorageDiagnostics(): {
+    storeIdAvailable: boolean;
+    authMode: 'oidc' | 'static_token' | 'none' | 's3';
+    configured: boolean;
+    provider: ReleaseStorageProviderName;
+  } {
+    if (this.vercelBlob.isConfigured()) {
+      const d = this.vercelBlob.getAuthDiagnostics();
+      return {
+        storeIdAvailable: d.storeIdAvailable,
+        authMode: d.authMode,
+        configured: true,
+        provider: 'vercel_blob',
+      };
+    }
+    if (this.s3.isConfigured()) {
+      return {
+        storeIdAvailable: false,
+        authMode: 's3',
+        configured: true,
+        provider: 's3',
+      };
+    }
+    const d = this.vercelBlob.getAuthDiagnostics();
+    return {
+      storeIdAvailable: d.storeIdAvailable,
+      authMode: d.authMode,
+      configured: false,
+      provider: 'none',
+    };
+  }
+
   buildApkObjectKey(releaseId: string): string {
     const active = this.active();
     if (!active) {

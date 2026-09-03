@@ -39,11 +39,17 @@ export class AdminReleasesService {
       ? await this.countAdoption(latestPublished.versionCode, activeDevices)
       : { count: 0, percent: 0 };
 
+    const diagnostics = this.storage.getStorageDiagnostics();
     return {
       storageConfigured: this.storage.isConfigured(),
       signingConfigured: this.storage.isSigningPolicyConfigured(),
       storageProvider: this.storage.providerName(),
       functionApkProxy: false,
+      storageDiagnostics: {
+        storeIdAvailable: diagnostics.storeIdAvailable,
+        authMode: diagnostics.authMode,
+        provider: diagnostics.provider,
+      },
       current: latestPublished
         ? {
             ...this.serializeRelease(latestPublished),
@@ -58,6 +64,82 @@ export class AdminReleasesService {
           }),
         })),
       ),
+    };
+  }
+
+  /**
+   * Production-safe Blob smoke: PUT → HEAD → GET → DELETE → prove gone.
+   * Uses a unique non-release pathname; never publishes AppRelease.
+   */
+  async runStorageSmokeTest(adminId: string) {
+    if (!this.storage.isConfigured()) {
+      throw new ServiceUnavailableException({
+        code: 'OBJECT_STORAGE_NOT_CONFIGURED',
+        message: 'Vercel Private Blob is not configured',
+      });
+    }
+
+    const diagnostics = this.storage.getStorageDiagnostics();
+    const pathname = `healthchecks/releases/${randomUUID()}.txt`;
+    const payload = Buffer.from(
+      `ruznamo-blob-smoke admin=${adminId} at=${new Date().toISOString()}`,
+      'utf8',
+    );
+    const steps: Record<string, 'PASS' | 'FAIL'> = {
+      put: 'FAIL',
+      head: 'FAIL',
+      get: 'FAIL',
+      delete: 'FAIL',
+      postDelete: 'FAIL',
+    };
+
+    try {
+      await this.storage.putObject(pathname, payload, 'text/plain');
+      steps.put = 'PASS';
+
+      const afterPut = await this.storage.head(pathname);
+      if (!afterPut.exists || afterPut.size !== payload.length) {
+        throw new Error('HEAD after PUT failed');
+      }
+      steps.head = 'PASS';
+
+      const got = await this.storage.getBuffer(pathname);
+      if (got.toString('utf8') !== payload.toString('utf8')) {
+        throw new Error('GET content mismatch');
+      }
+      steps.get = 'PASS';
+
+      await this.storage.delete(pathname);
+      steps.delete = 'PASS';
+
+      const afterDelete = await this.storage.head(pathname);
+      if (afterDelete.exists) {
+        throw new Error('Object still exists after DELETE');
+      }
+      steps.postDelete = 'PASS';
+    } catch (error) {
+      await this.storage.delete(pathname).catch(() => undefined);
+      throw new ServiceUnavailableException({
+        code: 'BLOB_SMOKE_FAILED',
+        message: error instanceof Error ? error.message : 'Blob smoke test failed',
+        details: {
+          pathname,
+          steps,
+          storeIdAvailable: diagnostics.storeIdAvailable,
+          authMode: diagnostics.authMode,
+          provider: diagnostics.provider,
+        },
+      });
+    }
+
+    return {
+      ok: true,
+      pathname,
+      steps,
+      storeIdAvailable: diagnostics.storeIdAvailable,
+      authMode: diagnostics.authMode,
+      provider: diagnostics.provider,
+      leftoverObject: false,
     };
   }
 

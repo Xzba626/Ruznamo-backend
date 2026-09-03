@@ -229,14 +229,23 @@ export function UpdatesPage() {
       <section className="card section">
         <h2>{strings.updates.addUpdate}</h2>
 
-        {!storageConfigured && (
+        {storageConfigured ? (
+          <div className="alert success">
+            <strong>{strings.updates.storageConfiguredLabel}</strong>
+            <p className="muted">{strings.updates.storageConfiguredHint}</p>
+          </div>
+        ) : (
           <div className="alert warn">
             <strong>{strings.updates.storageNotConfigured}</strong>
             <p className="muted">{strings.updates.storageNotConfiguredHint}</p>
           </div>
         )}
 
-        {!signingConfigured && (
+        {signingConfigured ? (
+          <div className="alert success">
+            <strong>{strings.updates.signingConfiguredLabel}</strong>
+          </div>
+        ) : (
           <div className="alert warn">
             <strong>{strings.updates.signingNotConfigured}</strong>
             <p className="muted">{strings.updates.signingNotConfiguredHint}</p>

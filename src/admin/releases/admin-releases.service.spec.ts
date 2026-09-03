@@ -18,11 +18,18 @@ describe('AdminReleasesService Blob upload path', () => {
     isConfigured: jest.fn().mockReturnValue(false),
     isSigningPolicyConfigured: jest.fn().mockReturnValue(false),
     providerName: jest.fn().mockReturnValue('none'),
+    getStorageDiagnostics: jest.fn().mockReturnValue({
+      storeIdAvailable: false,
+      authMode: 'none',
+      configured: false,
+      provider: 'none',
+    }),
     buildApkObjectKey: jest.fn((id: string) => `releases/android/${id}/Ruznamo.apk`),
     createUploadAuthorization: jest.fn(),
     head: jest.fn(),
     getBuffer: jest.fn(),
     delete: jest.fn(),
+    putObject: jest.fn(),
   };
   const inspector = { inspect: jest.fn() };
 
@@ -56,5 +63,36 @@ describe('AdminReleasesService Blob upload path', () => {
     expect(result.uploadUrl).toContain('https://blob.example/put');
     expect(result.pathname).toContain('/Ruznamo.apk');
     expect(storage.createUploadAuthorization).toHaveBeenCalled();
+  });
+
+  it('runs storage smoke put/head/get/delete without leftover', async () => {
+    storage.isConfigured.mockReturnValue(true);
+    storage.getStorageDiagnostics.mockReturnValue({
+      storeIdAvailable: true,
+      authMode: 'oidc',
+      configured: true,
+      provider: 'vercel_blob',
+    });
+    storage.putObject.mockImplementation(async (_pathname: string, body: Buffer) => {
+      storage.head
+        .mockResolvedValueOnce({ exists: true, size: body.length })
+        .mockResolvedValueOnce({ exists: false, size: 0 });
+      storage.getBuffer.mockResolvedValue(body);
+    });
+    storage.delete.mockResolvedValue(undefined);
+
+    const result = await service.runStorageSmokeTest('admin-1');
+    expect(result.ok).toBe(true);
+    expect(result.steps).toEqual({
+      put: 'PASS',
+      head: 'PASS',
+      get: 'PASS',
+      delete: 'PASS',
+      postDelete: 'PASS',
+    });
+    expect(result.leftoverObject).toBe(false);
+    expect(result.pathname).toMatch(/^healthchecks\/releases\//);
+    expect(storage.putObject).toHaveBeenCalled();
+    expect(storage.delete).toHaveBeenCalled();
   });
 });

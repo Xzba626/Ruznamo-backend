@@ -24,6 +24,16 @@ export class AdminReleasesController {
     return this.releasesService.getOverview(Platform.ANDROID);
   }
 
+  @Post('storage-smoke')
+  @RequirePermissions('releases:manage')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Real Blob PUT/HEAD/GET/DELETE smoke (harmless healthcheck object, then deleted)',
+  })
+  storageSmoke(@CurrentAdmin() admin: AdminJwtPayload) {
+    return this.releasesService.runStorageSmokeTest(admin.sub);
+  }
+
   @Post('upload-authorization')
   @RequirePermissions('releases:manage')
   @Throttle({ default: { limit: 10, ttl: 60000 } })

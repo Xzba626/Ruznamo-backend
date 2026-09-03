@@ -311,6 +311,11 @@ export function fetchReleasesOverview() {
     signingConfigured: boolean;
     storageProvider?: string;
     functionApkProxy?: boolean;
+    storageDiagnostics?: {
+      storeIdAvailable: boolean;
+      authMode: string;
+      provider: string;
+    };
     current: {
       id: string;
       versionLabel: string;

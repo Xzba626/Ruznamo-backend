@@ -303,7 +303,10 @@ export const ru = {
     storageNotConfigured: 'Хранилище APK не настроено.',
     storageNotConfiguredHint:
       'Подключите Private Vercel Blob к backend-проекту ruznamo-backend-o4xk. APK не проходит через Function.',
-    signingNotConfigured: 'Сертификат production-подписи ещё не настроен.',
+    storageConfiguredLabel: 'Хранилище: настроено',
+    storageConfiguredHint: 'Private Vercel Blob подключён. APK загружается напрямую в хранилище, не через Function.',
+    signingConfiguredLabel: 'Production-подпись: настроена',
+    signingNotConfigured: 'Production-подпись: не настроена',
     signingNotConfiguredHint:
       'Публикация недоступна, пока на сервере не задан отпечаток сертификата production-подписи.',
     validationTitle: 'Проверка APK',
