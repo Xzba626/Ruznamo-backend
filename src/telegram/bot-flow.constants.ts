@@ -4,6 +4,16 @@ export const BOT_FLOW = {
   ADMIN_SUPPORT_REPLY: 'admin_support_reply',
   ADMIN_CREATE_LICENSE: 'admin_create_license',
   DEFERRED_START: 'deferred_start',
+  NAV: 'nav',
+} as const;
+
+export const PURCHASE_STEP = {
+  TARIFF_CARD: 'tariff_card',
+  DURATION: 'duration',
+  PAYMENT_METHOD: 'payment_method',
+  AWAITING_RECEIPT: 'awaiting_receipt',
+  PENDING_REENTRY: 'pending_reentry',
+  CANCEL_CONFIRM: 'cancel_confirm',
 } as const;
 
 export const SUPPORT_CATEGORY = {

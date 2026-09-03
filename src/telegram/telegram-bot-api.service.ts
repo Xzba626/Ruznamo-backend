@@ -113,6 +113,25 @@ export class TelegramBotApiService {
     }).then(() => undefined);
   }
 
+  /** Returns true when the message was edited successfully. */
+  async editMessageText(
+    chatId: number | bigint,
+    messageId: number,
+    text: string,
+    replyMarkup?: InlineKeyboardMarkup,
+    options?: { parseMode?: 'Markdown' | 'HTML' | 'none' },
+  ): Promise<boolean> {
+    const parseMode = options?.parseMode ?? 'Markdown';
+    const result = await this.call<{ message_id: number }>('editMessageText', {
+      chat_id: Number(chatId),
+      message_id: messageId,
+      text,
+      ...(parseMode !== 'none' ? { parse_mode: parseMode } : {}),
+      reply_markup: replyMarkup,
+    });
+    return Boolean(result);
+  }
+
   async setMyCommands(
     commands: Array<{ command: string; description: string }>,
     scope?: { type: 'all_private_chats' } | { type: 'chat'; chat_id: number },

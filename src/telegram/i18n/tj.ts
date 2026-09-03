@@ -17,13 +17,12 @@ export const tj: TelegramI18n = {
   planProLabel: 'Pro',
   standardTariffCard: () =>
     `Standard\n\n` +
-    `Дастрасии пурра ба имкониятҳои Ruznamo.\n\n` +
-    `✓ Ҳамаи имкониятҳои барнома\n` +
+    `✓ Дастрасии пурра ба ҳамаи имкониятҳои Ruznamo\n` +
     `✓ Бе реклама\n` +
     `✓ То 2 дастгоҳи фаъол ҳамзамон\n` +
     `✓ Калиди шахсии литсензия\n` +
     `✓ Воридшавӣ ва барқарорсозӣ тавассути Telegram\n` +
-    `✓ Имкони барқарор ва нусхабардории калид\n` +
+    `✓ Дидан/нусхабардории калид пас аз санҷиши бехатар\n` +
     `✓ Иваз кардани бехатари дастгоҳ\n` +
     `✓ Дастгирии Ruznamo`,
   standardDurationMonthButton: (price) => `1 моҳ · ${price}`,
@@ -153,7 +152,9 @@ export const tj: TelegramI18n = {
   mainMenuTitle: '🏠 Менюи асосии Ruznamo',
   replyRecoverAccess: '♻️ Барқарор кардани дастрасӣ',
   recoverAccessBody:
-    'Барои бехатар барқарор кардани дастрасӣ: Ruznamo → Танзимот → Иҷозатнома → Калиди дастрасӣ → Барқарор кардани дастрасӣ.',
+    'Барқарорсозӣ аз барномаи Ruznamo оғоз мешавад.\n\n' +
+    'Кушоед:\nТанзимот → Иҷозатнома → Калиди дастрасӣ → Барқарор кардани дастрасӣ\n\n' +
+    'Ruznamo Telegram-ро худкор мекушояд.',
   replyAdminMenu: '🛠 Менюи маъмур',
   stopAcknowledged: 'Амали ҷорӣ қатъ шуд.',
   adminRootTitle: 'Панели маъмури Ruznamo',
@@ -182,4 +183,56 @@ export const tj: TelegramI18n = {
   adminCopyKeyButton: '📋 Нусхабардории калид',
   adminSupportReplyPrompt: 'Ҷавобро нависед.\nМатн, акс ё ҳуҷҷат.',
   adminSupportClosed: '✅ Муроҷиат пӯшида шуд.',
+  staleCallback: 'Ин экран кӯҳна шудааст. Менюи нав кушоед.',
+  buttonUnavailable: 'Ин тугма дигар дастрас нест.',
+  pendingOrderExists: 'Шумо дархости пардохти нотамом доред.',
+  continuePendingPayment: '▶️ Идомаи пардохт',
+  cancelPendingOrder: '✖️ Бекор кардани дархост',
+  newPurchase: '🛒 Хариди нав',
+  sendReceiptButton: '📎 Фиристодани чек',
+  cancelPaymentButton: '✖️ Бекор кардани пардохт',
+  cancelPaymentConfirm: 'Ин дархости пардохтро бекор кунем?',
+  cancelPaymentYes: '✅ Ҳа, бекор',
+  cancelPaymentNo: '↩️ Не',
+  paymentCancelled: 'Дархости пардохт бекор шуд.',
+  receiptSentShort: '✅ Чек фиристода шуд.\nПас аз санҷиш натиҷа дар ҳамин ҷо меояд.',
+  myOrderButton: '🧾 Дархости ман',
+  disconnectDeviceTitle: (device, plan) => `${device}-ро аз иҷозатномаи ${plan} хомӯш кунем?`,
+  disconnectDeviceBody:
+    'Дастгоҳ дастрасии ин иҷозатномаро аз даст медиҳад.\nКалиди дигарро метавон фаъол кард.\nБарои бозпайваст ба ҳамин иҷозатнома тасдиқи Telegram лозим аст.',
+  disconnectConfirmYes: '✅ Хомӯш кардан',
+  disconnectCancel: '↩️ Бекор',
+  backToDevices: '📱 Ба дастгоҳҳо',
+  showKeyButton: '🔐 Нишон додани калид',
+  licenseDevicesButton: '📱 Дастгоҳҳо',
+  instructionGettingStarted: '🚀 Оғози кор',
+  instructionLicense: '🔑 Иҷозатнома',
+  instructionSchedule: '📅 Ҷадвал',
+  instructionDevices: '📱 Дастгоҳҳо',
+  instructionRecovery: '♻️ Барқарорсозӣ',
+  instructionSupport: '💬 Дастгирӣ',
+  instructionArticleGettingStarted:
+    'Ruznamo-ро дар Android насб кунед ва дар ҳолати зарурӣ иҷозатномаро тавассути Telegram харед ё барқарор кунед.',
+  instructionArticleLicense:
+    'Дар бот харед → пардохт кунед → чек фиристед → калид гиред → дар барнома ворид кунед.',
+  instructionArticleSchedule:
+    'Ҷадвал дар барномаи Ruznamo аст. Бот барои иҷозатнома, пардохт ва дастгирӣ аст.',
+  instructionArticleDevices:
+    'Standard — то 2 дастгоҳи фаъол. Хомӯш кардани дастгоҳ слотро озод мекунад, телефонро глобалӣ блок намекунад.',
+  instructionArticleRecovery:
+    'Аз барнома: Танзимот → Иҷозатнома → Калиди дастрасӣ → Барқарор кардани дастрасӣ. Ruznamo Telegram-ро мекушояд.',
+  instructionArticleSupport:
+    'Дар бот: Дастгирӣ → мавзӯъ → тавсиф. Маъмур дар ҳамин чат ҷавоб медиҳад.',
+  telegramAuthOtpLogin: (code) =>
+    `Вуруд ба Ruznamo\n\nРамзи тасдиқ:\n\n${code}\n\n5 дақиқа эътибор дорад.\nБа касе надиҳед.`,
+  chooseActionButtons: 'Амалро бо тугмаҳо интихоб кунед.',
+  adminChooseAction: 'Амалро бо тугмаҳо интихоб кунед.',
+  adminPanelButton: '🏠 Панели маъмур',
+  orderCancelledShort: 'Дархост бекор шуд.',
+  retryButton: '🔄 Такрор',
+  temporaryError: 'Дархост иҷро нашуд. Бори дигар кӯшиш кунед.',
+  dataUnavailable: 'Маълумот дигар дастрас нест.',
+  operationUnavailable: 'Ин амал барои ҳисоби шумо дастрас нест.',
+  rateLimited: 'Кӯшишҳои зиёд. Баъдтар кӯшиш кунед.',
+  operationExpired: 'Вақти амал гузашт. Аз нав оғоз кунед.',
 };

@@ -12,6 +12,8 @@ import { TelegramSupportRelayService } from './telegram-support-relay.service';
 import { SupportConversationService } from './support-conversation.service';
 import { TelegramUpdateProcessor } from './telegram-update.processor';
 import { TelegramWebhookController } from './telegram-webhook.controller';
+import { ScreenRendererService } from './nav/screen-renderer.service';
+import { TelegramAdminLicensesBotService } from './telegram-admin-licenses-bot.service';
 
 @Module({
   imports: [AuditModule, AuthModule, PaymentsModule, AdminModule, LicensesModule],
@@ -19,8 +21,10 @@ import { TelegramWebhookController } from './telegram-webhook.controller';
   providers: [
     TelegramBotApiService,
     TelegramBotSessionService,
+    ScreenRendererService,
     TelegramCommandsService,
     TelegramAdminPaymentMethodsService,
+    TelegramAdminLicensesBotService,
     TelegramSupportRelayService,
     SupportConversationService,
     TelegramUpdateProcessor,

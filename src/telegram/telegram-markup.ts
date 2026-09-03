@@ -6,7 +6,12 @@ export function removeReplyKeyboard(): ReplyKeyboardRemove {
   return { remove_keyboard: true };
 }
 
-export function navRow(msgs: TelegramI18n, backCallback: string): InlineKeyboardMarkup {
+export function navRow(msgs: TelegramI18n, backCallback: string, includeHome = true): InlineKeyboardMarkup {
+  if (!includeHome) {
+    return {
+      inline_keyboard: [[{ text: msgs.menuBack, callback_data: backCallback }]],
+    };
+  }
   return {
     inline_keyboard: [
       [
@@ -15,6 +20,22 @@ export function navRow(msgs: TelegramI18n, backCallback: string): InlineKeyboard
       ],
     ],
   };
+}
+
+export function backOnlyRow(msgs: TelegramI18n, backCallback: string): InlineKeyboardMarkup {
+  return navRow(msgs, backCallback, false);
+}
+
+export function pairRows(
+  buttons: Array<{ text: string; callback_data: string }>,
+): InlineKeyboardMarkup['inline_keyboard'] {
+  const rows: InlineKeyboardMarkup['inline_keyboard'] = [];
+  for (let i = 0; i < buttons.length; i += 2) {
+    const row = [buttons[i]!];
+    if (buttons[i + 1]) row.push(buttons[i + 1]!);
+    rows.push(row);
+  }
+  return rows;
 }
 
 export function homeRow(msgs: TelegramI18n): InlineKeyboardMarkup {

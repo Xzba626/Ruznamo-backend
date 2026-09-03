@@ -137,6 +137,31 @@ export class OrderService {
     });
   }
 
+  async findAwaitingReceiptOrderById(userId: string, orderId: string) {
+    return this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId,
+        status: OrderStatus.PENDING,
+        awaitingReceipt: true,
+      },
+    });
+  }
+
+  async cancelPendingOrder(userId: string, orderId: string) {
+    return this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        userId,
+        status: OrderStatus.PENDING,
+      },
+      data: {
+        status: OrderStatus.CANCELLED,
+        awaitingReceipt: false,
+      },
+    });
+  }
+
   async submitReceipt(input: {
     orderId: string;
     userId: string;

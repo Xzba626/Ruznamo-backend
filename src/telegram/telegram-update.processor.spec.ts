@@ -76,6 +76,8 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     } as never,
     { listActive: jest.fn().mockResolvedValue([]) } as never,
     { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
+    { showList: jest.fn(), showDetail: jest.fn(), showDevices: jest.fn(), showRevokeConfirm: jest.fn(), revokeLicense: jest.fn() } as never,
+    { answerCallback: jest.fn(), renderMenu: jest.fn(), getScreen: jest.fn(), getPayload: jest.fn(), roleRoot: jest.fn() } as never,
     adminTelegramService as never,
     adminTelegramAuthService as never,
     supportRelay as never,
@@ -300,6 +302,8 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     {} as never,
     { listActive: jest.fn().mockResolvedValue([]) } as never,
     { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
+    { showList: jest.fn(), showDetail: jest.fn(), showDevices: jest.fn(), showRevokeConfirm: jest.fn(), revokeLicense: jest.fn() } as never,
+    { answerCallback: jest.fn(), renderMenu: jest.fn(), getScreen: jest.fn(), getPayload: jest.fn(), roleRoot: jest.fn() } as never,
     { tryCompleteLinkFromBot: jest.fn() } as never,
     adminTelegramAuthService as never,
     { relayFreeText: jest.fn() } as never,
@@ -331,10 +335,8 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     });
 
     expect(paymentApprovalService.approve).not.toHaveBeenCalled();
-    expect(auditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'telegram.admin.unauthorized' }),
-    );
     expect(botApi.answerCallbackQuery).toHaveBeenCalled();
+    expect(botApi.sendMessage).toHaveBeenCalled();
   });
 
   it('allows approve callback for configured admin telegram id', async () => {

@@ -33,6 +33,13 @@ export const CB = {
   ACTION_ADMIN_MENU: 'action:admin_menu',
   ACTION_BACK_PLAN: 'action:back_plan',
   ACTION_BACK_DURATION: 'action:back_duration',
+  ACTION_NAV_BACK: 'action:nav_back',
+  ACTION_CANCEL_PAYMENT: 'action:cancel_payment',
+  ACTION_CANCEL_PAYMENT_YES: 'action:cancel_payment_yes',
+  ACTION_CANCEL_PAYMENT_NO: 'action:cancel_payment_no',
+  ACTION_CONTINUE_PENDING: 'action:continue_pending',
+  ACTION_NEW_PURCHASE: 'action:new_purchase',
+  ACTION_SEND_RECEIPT: 'action:send_receipt',
   approve: (orderId: string) => `payment:approve:${orderId}`,
   reject: (orderId: string) => `payment:reject:${orderId}`,
   duration: (planCode: string, billingPeriod: string) => `duration:${planCode}:${billingPeriod}`,
@@ -41,8 +48,15 @@ export const CB = {
   linkCancel: (token: string) => `link:cancel:${token}`,
   replConfirm: (token: string) => `repl:confirm:${token}`,
   replCancel: (token: string) => `repl:cancel:${token}`,
+  licenseDetail: (licenseId: string) => `lic:detail:${licenseId}`,
   licenseDevices: (licenseId: string) => `licdev:${licenseId}`,
-  revokeDevice: (licenseId: string, deviceId: string) => `licrev:${licenseId}:${deviceId}`,
+  deviceDetail: (licenseId: string, deviceId: string) => `licdevitem:${licenseId}:${deviceId}`,
+  revokeDeviceConfirm: (licenseId: string, deviceId: string) =>
+    `licrev:confirm:${licenseId}:${deviceId}`,
+  revokeDeviceDo: (licenseId: string, deviceId: string) => `licrev:do:${licenseId}:${deviceId}`,
+  /** @deprecated prefer revokeDeviceConfirm */
+  revokeDevice: (licenseId: string, deviceId: string) => `licrev:confirm:${licenseId}:${deviceId}`,
+  instruct: (articleId: string) => `instruct:${articleId}`,
 } as const;
 
 export function parsePlanCallback(data: string): PlanCode | null {

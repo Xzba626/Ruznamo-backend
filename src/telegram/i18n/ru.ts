@@ -19,13 +19,12 @@ export const ru: TelegramI18n = {
   planProLabel: 'Pro',
   standardTariffCard: () =>
     `Standard\n\n` +
-    `Полный доступ к Ruznamo для повседневной работы.\n\n` +
-    `✓ Все функции приложения\n` +
+    `✓ Полный доступ ко всем функциям Ruznamo\n` +
     `✓ Без рекламы\n` +
     `✓ До 2 активных устройств одновременно\n` +
-    `✓ Личный лицензионный ключ\n` +
+    `✓ Персональный лицензионный ключ\n` +
     `✓ Вход и восстановление через Telegram\n` +
-    `✓ Возможность восстановить и скопировать свой ключ\n` +
+    `✓ Просмотр/копирование своего ключа после безопасной проверки\n` +
     `✓ Безопасная смена устройства\n` +
     `✓ Поддержка Ruznamo`,
   standardDurationMonthButton: (price) => `1 месяц · ${price}`,
@@ -165,13 +164,15 @@ export const ru: TelegramI18n = {
   mainMenuTitle: '🏠 Главное меню Ruznamo',
   replyRecoverAccess: '♻️ Восстановить доступ',
   recoverAccessBody:
-    'Чтобы безопасно восстановить доступ на конкретном устройстве, откройте Ruznamo → Ключ доступа → Восстановить доступ. После этого вернитесь сюда по кнопке из приложения.',
+    'Восстановление запускается из приложения Ruznamo.\n\n' +
+    'Откройте:\nНастройки → Лицензия → Ключ доступа → Восстановить доступ\n\n' +
+    'Ruznamo откроет Telegram автоматически.',
   replyAdminMenu: '🛠 Меню администратора',
   stopAcknowledged: 'Текущая операция завершена.',
   adminRootTitle: 'Панель администратора Ruznamo',
   adminMenuTitle: '🛠 Панель администратора',
   adminMenuOrders: '💳 Заявки на оплату',
-  adminMenuRequisites: '💳 Реквизиты',
+  adminMenuRequisites: '💰 Реквизиты',
   adminMenuSupport: '💬 Поддержка',
   adminMenuLicenses: '🔑 Лицензии',
   adminMenuCreateLicense: '➕ Создать лицензию',
@@ -194,4 +195,56 @@ export const ru: TelegramI18n = {
   adminCopyKeyButton: '📋 Скопировать ключ',
   adminSupportReplyPrompt: 'Напишите ответ пользователю.\nМожно отправить текст, фотографию или документ.',
   adminSupportClosed: '✅ Обращение закрыто.',
+  staleCallback: 'Этот экран уже устарел. Откройте актуальное меню.',
+  buttonUnavailable: 'Эта кнопка больше недоступна.',
+  pendingOrderExists: 'У вас есть незавершённая заявка на оплату.',
+  continuePendingPayment: '▶️ Продолжить оплату',
+  cancelPendingOrder: '✖️ Отменить заявку',
+  newPurchase: '🛒 Новая покупка',
+  sendReceiptButton: '📎 Отправить чек',
+  cancelPaymentButton: '✖️ Отменить оплату',
+  cancelPaymentConfirm: 'Отменить эту заявку на оплату?',
+  cancelPaymentYes: '✅ Да, отменить',
+  cancelPaymentNo: '↩️ Нет',
+  paymentCancelled: 'Заявка на оплату отменена.',
+  receiptSentShort: '✅ Чек отправлен.\nПосле проверки вы получите результат здесь.',
+  myOrderButton: '🧾 Моя заявка',
+  disconnectDeviceTitle: (device, plan) => `Отключить ${device} от лицензии ${plan}?`,
+  disconnectDeviceBody:
+    'Устройство потеряет доступ по этой лицензии.\nДругой лицензионный ключ можно будет активировать.\nДля повторного подключения к этой же лицензии потребуется подтверждение через Telegram.',
+  disconnectConfirmYes: '✅ Отключить',
+  disconnectCancel: '↩️ Отмена',
+  backToDevices: '📱 К устройствам',
+  showKeyButton: '🔐 Показать ключ',
+  licenseDevicesButton: '📱 Устройства',
+  instructionGettingStarted: '🚀 Начало работы',
+  instructionLicense: '🔑 Лицензия',
+  instructionSchedule: '📅 Расписание',
+  instructionDevices: '📱 Устройства',
+  instructionRecovery: '♻️ Восстановление',
+  instructionSupport: '💬 Поддержка',
+  instructionArticleGettingStarted:
+    'Установите Ruznamo на Android, откройте приложение и при необходимости купите или восстановите лицензию через Telegram.',
+  instructionArticleLicense:
+    'Купите лицензию в боте → оплатите → отправьте чек → получите ключ → введите ключ в приложении (Настройки → Лицензия).',
+  instructionArticleSchedule:
+    'Расписание ведётся в приложении Ruznamo. Бот помогает с лицензией, оплатой и поддержкой.',
+  instructionArticleDevices:
+    'Одна лицензия Standard — до 2 активных устройств. Отключение устройства освобождает слот лицензии, но не блокирует телефон глобально.',
+  instructionArticleRecovery:
+    'Восстановление запускается из приложения: Настройки → Лицензия → Ключ доступа → Восстановить доступ. Ruznamo откроет Telegram автоматически.',
+  instructionArticleSupport:
+    'В боте: Поддержка → выберите тему → опишите проблему. Администратор ответит в этом же чате.',
+  telegramAuthOtpLogin: (code) =>
+    `Вход в Ruznamo\n\nКод подтверждения:\n\n${code}\n\nКод действует 5 минут.\nНикому его не сообщайте.`,
+  chooseActionButtons: 'Выберите действие кнопками ниже.',
+  adminChooseAction: 'Выберите действие кнопками.',
+  adminPanelButton: '🏠 Панель администратора',
+  orderCancelledShort: 'Заявка отменена.',
+  retryButton: '🔄 Повторить',
+  temporaryError: 'Не удалось выполнить запрос. Попробуйте ещё раз.',
+  dataUnavailable: 'Данные больше недоступны.',
+  operationUnavailable: 'Эта операция недоступна для вашего аккаунта.',
+  rateLimited: 'Слишком много попыток. Попробуйте позже.',
+  operationExpired: 'Время действия операции истекло. Начните заново.',
 };
