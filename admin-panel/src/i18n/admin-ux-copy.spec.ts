@@ -31,6 +31,14 @@ describe('admin production UX copy', () => {
     expect(ru.dataReset.preserved_protected_system_audit_logs.toLowerCase()).not.toMatch(/\baudit\b/);
   });
 
+  it('TJ profile page is not Russian leakage', () => {
+    expect(tj.profile.title).not.toBe('Профиль');
+    expect(tj.profile.accountSection).not.toBe('Аккаунт');
+    expect(tj.profile.securitySection).not.toBe('Безопасность');
+    expect(tj.profile.changePassword).not.toBe('Изменить пароль');
+    expect(tj.profile.telegramDisconnect).not.toBe('Отключить Telegram');
+  });
+
   it('updates empty/history/storage strings exist in RU and TJ', () => {
     expect(ru.updates.noCurrentTitle).toBeTruthy();
     expect(ru.updates.historyEmpty).toBeTruthy();
