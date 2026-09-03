@@ -6,6 +6,10 @@ import { createHash } from 'crypto';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import {
+  extractApkSigningBlockCertificateDer,
+  sha256HexOfDerCertificate,
+} from './apk-signing-cert';
 
 export interface ApkInspectionResult {
   packageName: string;
@@ -55,7 +59,6 @@ export class ApkInspectorService {
     });
     const sha256 = hash.digest('hex');
     const { readFile } = await import('fs/promises');
-    // Signing block extraction needs zip random access; read file for META-INF only via AdmZip path
     const bufferForSig = await readFile(filePath);
     const signingCertificateSha256 = this.extractSigningCertificateSha256(bufferForSig);
     return this.inspectParsed(filePath, {
@@ -119,19 +122,24 @@ export class ApkInspectorService {
   }
 
   private extractSigningCertificateSha256(buffer: Buffer): string {
+    // Prefer JAR (v1) certificate when present.
     const zip = new AdmZip(buffer);
     const certEntry = zip
       .getEntries()
       .find((entry) => /^META-INF\/.*\.(RSA|DSA|EC)$/i.test(entry.entryName));
-
-    if (!certEntry) {
-      throw new BadRequestException({
-        code: 'APK_SIGNATURE_MISSING',
-        message: 'Could not locate APK signing certificate',
-      });
+    if (certEntry) {
+      return createHash('sha256').update(certEntry.getData()).digest('hex');
     }
 
-    const certBuffer = certEntry.getData();
-    return createHash('sha256').update(certBuffer).digest('hex');
+    // Modern debug/release APKs often use only APK Signature Scheme v2/v3.
+    const der = extractApkSigningBlockCertificateDer(buffer);
+    if (der) {
+      return sha256HexOfDerCertificate(der);
+    }
+
+    throw new BadRequestException({
+      code: 'APK_SIGNATURE_MISSING',
+      message: 'Could not locate APK signing certificate (v1/v2/v3)',
+    });
   }
 }

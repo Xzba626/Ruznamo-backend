@@ -174,28 +174,38 @@ export class VercelBlobReleaseStorageService implements ReleaseStorageService {
 
   async getBuffer(pathname: string): Promise<Buffer> {
     this.assertConfigured();
-    const fromSdk = await this.tryGetViaSdk(pathname);
-    if (fromSdk) {
-      return fromSdk;
-    }
-
-    const objectHead = await this.head(pathname);
-    if (objectHead.url) {
-      const fromUrl = await this.tryGetViaSdk(objectHead.url);
-      if (fromUrl) {
-        return fromUrl;
+    try {
+      const fromSdk = await this.tryGetViaSdk(pathname);
+      if (fromSdk) {
+        return fromSdk;
       }
-    }
 
-    const auth = await this.createDownloadAuthorization(pathname, { expiresInSeconds: 120 });
-    const response = await fetch(auth.downloadUrl);
-    if (!response.ok) {
+      const objectHead = await this.head(pathname);
+      if (objectHead.url) {
+        const fromUrl = await this.tryGetViaSdk(objectHead.url);
+        if (fromUrl) {
+          return fromUrl;
+        }
+      }
+
+      const auth = await this.createDownloadAuthorization(pathname, { expiresInSeconds: 120 });
+      const response = await fetch(auth.downloadUrl);
+      if (!response.ok) {
+        throw new ServiceUnavailableException({
+          code: 'BLOB_GET_FAILED',
+          message: `Could not read APK object from Blob storage (${response.status})`,
+        });
+      }
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
+      }
       throw new ServiceUnavailableException({
         code: 'BLOB_GET_FAILED',
-        message: 'Could not read APK object from Blob storage',
+        message: error instanceof Error ? error.message : 'Could not read APK object from Blob',
       });
     }
-    return Buffer.from(await response.arrayBuffer());
   }
 
   private async tryGetViaSdk(urlOrPathname: string): Promise<Buffer | null> {
