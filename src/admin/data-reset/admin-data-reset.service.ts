@@ -48,7 +48,20 @@ export interface TestDataDryRunRow {
   table: string;
   id: string;
   reason: string;
+  label?: string;
 }
+
+export const USER_DATA_RESET_PRESERVED = [
+  'database_schema_and_migrations',
+  'admin_accounts',
+  'data_reset_password',
+  'plans_and_prices',
+  'payment_methods',
+  'app_config_and_versions',
+  'app_releases',
+  'system_security_credentials',
+  'protected_system_audit_logs',
+] as const;
 
 @Injectable()
 export class AdminDataResetService {
@@ -170,20 +183,38 @@ export class AdminDataResetService {
     }
     if (scope === DataResetScope.USER_DATA_RESET) {
       const counts = await this.countUserOperationalData();
-      return { scope, dryRun: true, counts, samples: [] as TestDataDryRunRow[] };
-    }
-    if (scope === DataResetScope.FACTORY_RESET) {
-      const counts = await this.countUserOperationalData();
+      const samples = await this.describeUserOperationalSamples();
       return {
         scope,
         dryRun: true,
         counts,
+        preserved: [...USER_DATA_RESET_PRESERVED],
+        samples,
+        generatedAt: new Date().toISOString(),
+      };
+    }
+    if (scope === DataResetScope.FACTORY_RESET) {
+      const counts = await this.countUserOperationalData();
+      const samples = await this.describeUserOperationalSamples();
+      return {
+        scope,
+        dryRun: true,
+        counts,
+        preserved: [
+          'database_schema_and_migrations',
+          'admin_accounts',
+          'data_reset_password',
+          'system_security_credentials',
+          'app_releases',
+          'protected_system_audit_logs',
+        ],
         additionalImpact: {
           plansAndPricing: 'Will reset to bootstrap defaults',
           paymentMethods: 'Will reset to bootstrap defaults',
           appConfig: 'Will reset to bootstrap defaults',
         },
-        samples: [] as TestDataDryRunRow[],
+        samples,
+        generatedAt: new Date().toISOString(),
       };
     }
     throw new BadRequestException({ code: 'INVALID_RESET_SCOPE', message: 'Unknown reset scope' });
@@ -381,8 +412,98 @@ export class AdminDataResetService {
         refreshTokens: 0,
         trialGrants: selection.trialIds.length,
       },
+      preserved: [
+        'non_test_users',
+        'non_test_devices',
+        'admin_accounts',
+        'plans_and_prices',
+        'payment_methods',
+        'app_releases',
+        'system_config',
+      ],
       samples: rows.slice(0, 100),
+      generatedAt: new Date().toISOString(),
     };
+  }
+
+  private async describeUserOperationalSamples(): Promise<TestDataDryRunRow[]> {
+    const [users, devices, licenses, orders, telegrams] = await Promise.all([
+      this.prisma.user.findMany({
+        take: 25,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, displayName: true, email: true },
+      }),
+      this.prisma.deviceInstallation.findMany({
+        take: 25,
+        orderBy: { lastSeenAt: 'desc' },
+        select: {
+          id: true,
+          deviceManufacturer: true,
+          deviceModel: true,
+          deviceName: true,
+          installationId: true,
+        },
+      }),
+      this.prisma.license.findMany({
+        take: 25,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, keyPrefix: true, status: true },
+      }),
+      this.prisma.order.findMany({
+        take: 25,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, status: true },
+      }),
+      this.prisma.telegramAccount.findMany({
+        take: 25,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, telegramId: true, username: true },
+      }),
+    ]);
+
+    const rows: TestDataDryRunRow[] = [];
+    for (const user of users) {
+      rows.push({
+        table: 'User',
+        id: user.id,
+        reason: 'USER_DATA_RESET',
+        label: user.displayName || user.email || user.id.slice(0, 10),
+      });
+    }
+    for (const device of devices) {
+      const hardware = [device.deviceManufacturer, device.deviceModel].filter(Boolean).join(' ');
+      rows.push({
+        table: 'DeviceInstallation',
+        id: device.id,
+        reason: 'USER_DATA_RESET',
+        label: hardware || device.deviceName || device.installationId.slice(0, 12),
+      });
+    }
+    for (const license of licenses) {
+      rows.push({
+        table: 'License',
+        id: license.id,
+        reason: 'USER_DATA_RESET',
+        label: `${license.keyPrefix}… (${license.status})`,
+      });
+    }
+    for (const order of orders) {
+      rows.push({
+        table: 'Order',
+        id: order.id,
+        reason: 'USER_DATA_RESET',
+        label: `${order.id.slice(0, 10)}… · ${order.status}`,
+      });
+    }
+    for (const tg of telegrams) {
+      rows.push({
+        table: 'TelegramAccount',
+        id: tg.id,
+        reason: 'USER_DATA_RESET',
+        label: tg.username ? `@${tg.username}` : `id:${tg.telegramId.toString()}`,
+      });
+    }
+    return rows;
   }
 
   private async buildTestSelection() {
@@ -469,11 +590,36 @@ export class AdminDataResetService {
 
   private async describeTestSelection(selection: Awaited<ReturnType<typeof this.buildTestSelection>>) {
     const rows: TestDataDryRunRow[] = [];
-    for (const id of selection.userIds.slice(0, 20)) {
-      rows.push({ table: 'User', id, reason: 'Matched test email/display pattern' });
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: selection.userIds.slice(0, 20) } },
+      select: { id: true, displayName: true, email: true },
+    });
+    for (const user of users) {
+      rows.push({
+        table: 'User',
+        id: user.id,
+        reason: 'Matched test email/display pattern',
+        label: user.displayName || user.email || user.id.slice(0, 10),
+      });
     }
-    for (const id of selection.deviceIds.slice(0, 20)) {
-      rows.push({ table: 'DeviceInstallation', id, reason: 'Matched test device/installation pattern' });
+    const devices = await this.prisma.deviceInstallation.findMany({
+      where: { id: { in: selection.deviceIds.slice(0, 20) } },
+      select: {
+        id: true,
+        deviceManufacturer: true,
+        deviceModel: true,
+        deviceName: true,
+        installationId: true,
+      },
+    });
+    for (const device of devices) {
+      const hardware = [device.deviceManufacturer, device.deviceModel].filter(Boolean).join(' ');
+      rows.push({
+        table: 'DeviceInstallation',
+        id: device.id,
+        reason: 'Matched test device/installation pattern',
+        label: hardware || device.deviceName || device.installationId.slice(0, 12),
+      });
     }
     return rows;
   }

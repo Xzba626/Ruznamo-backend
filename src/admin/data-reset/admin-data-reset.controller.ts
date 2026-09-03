@@ -24,7 +24,9 @@ export class AdminDataResetController {
   constructor(private readonly dataResetService: AdminDataResetService) {}
 
   @Get('password-status')
-  @RequirePermissions('system:read')
+  // Same capability gate as dry-run/execute: avoid requiring system:read while JWT has system:reset
+  // (observed production: global page error while dry-run still succeeded).
+  @RequirePermissions('system:reset')
   @ApiOperation({ summary: 'Data reset password configuration status' })
   passwordStatus() {
     return this.dataResetService.getResetPasswordStatus();

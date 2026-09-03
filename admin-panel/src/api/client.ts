@@ -51,7 +51,10 @@ export async function apiRequest<T>(
   retry = true,
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
+  // Only set JSON content-type when a body is present (GET + Content-Type can confuse proxies).
+  if (options.body !== undefined && options.body !== null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   const access = tokenStore.getAccess();
   if (access) headers.set('Authorization', `Bearer ${access}`);
 

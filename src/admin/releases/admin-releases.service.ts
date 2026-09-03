@@ -44,6 +44,8 @@ export class AdminReleasesService {
       : { count: 0, percent: 0 };
 
     return {
+      storageConfigured: this.storage.isConfigured(),
+      signingConfigured: this.storage.isSigningPolicyConfigured(),
       current: latestPublished
         ? {
             ...this.serializeRelease(latestPublished),

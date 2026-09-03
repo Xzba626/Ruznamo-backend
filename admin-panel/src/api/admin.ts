@@ -254,7 +254,15 @@ export function changeResetPassword(body: {
 }
 
 export function dataResetDryRun(scope: string) {
-  return apiRequest<{ counts: Record<string, number> }>('/api/v1/admin/system/data-reset/dry-run', {
+  return apiRequest<{
+    scope: string;
+    dryRun: boolean;
+    counts: Record<string, number>;
+    preserved?: string[];
+    samples?: Array<{ table: string; id: string; reason: string; label?: string }>;
+    generatedAt?: string;
+    additionalImpact?: Record<string, string>;
+  }>('/api/v1/admin/system/data-reset/dry-run', {
     method: 'POST',
     body: JSON.stringify({ scope }),
   });
@@ -276,9 +284,15 @@ export function executeDataReset(body: {
 
 export function fetchReleasesOverview() {
   return apiRequest<{
+    storageConfigured: boolean;
+    signingConfigured: boolean;
     current: {
       id: string;
       versionLabel: string;
+      versionName: string;
+      versionCode: number;
+      packageName: string;
+      signingCertificateSha256: string;
       fileSize: number;
       sha256: string;
       publishedAt: string | null;
@@ -287,9 +301,15 @@ export function fetchReleasesOverview() {
     history: Array<{
       id: string;
       versionLabel: string;
+      versionName: string;
+      versionCode: number;
       status: string;
+      fileSize: number;
       deviceCount?: number;
       publishedAt: string | null;
+      signingCertificateSha256?: string;
+      packageName?: string;
+      sha256?: string;
     }>;
   }>('/api/v1/admin/releases');
 }
@@ -308,7 +328,16 @@ export async function uploadReleaseApk(file: File) {
   if (!response.ok || !json.success) {
     throw new Error(json.error?.message ?? 'Upload failed');
   }
-  return json.data as { id: string };
+  return json.data as {
+    id: string;
+    versionName: string;
+    versionCode: number;
+    packageName: string;
+    signingCertificateSha256: string;
+    fileSize: number;
+    sha256: string;
+    status: string;
+  };
 }
 
 export function updateReleaseDraft(

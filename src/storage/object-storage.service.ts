@@ -43,6 +43,10 @@ export class ObjectStorageService {
     return Boolean(this.client && this.bucket);
   }
 
+  isSigningPolicyConfigured(): boolean {
+    return Boolean(this.configService.get<string>('storage.allowedSigningCertSha256'));
+  }
+
   buildApkObjectKey(versionCode: number, sha256: string): string {
     const safeHash = sha256.slice(0, 16);
     return `${this.apkPrefix}/ruznamo-${versionCode}-${safeHash}.apk`;

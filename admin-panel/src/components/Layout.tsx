@@ -20,12 +20,17 @@ export function Layout() {
   const strings = useStrings();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const langRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
+      }
+      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+        setLangOpen(false);
       }
     }
     document.addEventListener('click', onDocClick);
@@ -48,22 +53,52 @@ export function Layout() {
       </aside>
       <div className="main">
         <header className="topbar">
+          <div className="topbar-spacer" />
           <div className="topbar-actions">
-            <div className="locale-switch" role="group" aria-label={strings.header.language}>
+            <div className="lang-menu" ref={langRef}>
               <button
                 type="button"
-                className={locale === 'ru' ? 'active' : ''}
-                onClick={() => setLocale('ru')}
+                className="lang-trigger"
+                aria-expanded={langOpen}
+                aria-haspopup="menu"
+                aria-label={strings.header.language}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLangOpen((open) => !open);
+                  setMenuOpen(false);
+                }}
               >
-                RU
+                <span className="lang-globe" aria-hidden>
+                  🌐
+                </span>
+                <span>{locale === 'ru' ? 'RU' : 'TJ'}</span>
               </button>
-              <button
-                type="button"
-                className={locale === 'tj' ? 'active' : ''}
-                onClick={() => setLocale('tj')}
-              >
-                TJ
-              </button>
+              {langOpen && (
+                <div className="profile-dropdown lang-dropdown" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={locale === 'ru' ? 'active' : ''}
+                    onClick={() => {
+                      setLocale('ru');
+                      setLangOpen(false);
+                    }}
+                  >
+                    {strings.header.languageRu}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={locale === 'tj' ? 'active' : ''}
+                    onClick={() => {
+                      setLocale('tj');
+                      setLangOpen(false);
+                    }}
+                  >
+                    {strings.header.languageTj}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="profile-menu" ref={menuRef}>
               <button
@@ -71,13 +106,15 @@ export function Layout() {
                 className="profile-trigger"
                 aria-expanded={menuOpen}
                 aria-haspopup="menu"
+                aria-label={strings.header.profile}
                 onClick={(e) => {
                   e.stopPropagation();
                   setMenuOpen((open) => !open);
+                  setLangOpen(false);
                 }}
               >
                 <span className="profile-avatar" aria-hidden>
-                  👤
+                  A
                 </span>
               </button>
               {menuOpen && (
