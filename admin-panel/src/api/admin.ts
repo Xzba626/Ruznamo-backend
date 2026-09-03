@@ -202,6 +202,8 @@ export type AdminPlan = {
   sortOrder: number;
   licenseCount: number;
   orderCount: number;
+  maxDevices?: number | null;
+  priceConfigured?: { monthly: boolean; yearly: boolean };
   prices: Array<{
     id: string;
     billingPeriod: 'MONTHLY' | 'YEARLY';
@@ -211,8 +213,26 @@ export type AdminPlan = {
   }>;
 };
 
+export type AdminPlansResponse = {
+  plans: AdminPlan[];
+  missingCanonicalCodes: string[];
+};
+
+function normalizePlansResponse(data: AdminPlan[] | AdminPlansResponse): AdminPlansResponse {
+  if (Array.isArray(data)) {
+    return { plans: data, missingCanonicalCodes: [] };
+  }
+  return data;
+}
+
 export function fetchPlans() {
-  return apiRequest<AdminPlan[]>('/api/v1/admin/plans');
+  return apiRequest<AdminPlan[] | AdminPlansResponse>('/api/v1/admin/plans').then(normalizePlansResponse);
+}
+
+export function bootstrapSystemPlans() {
+  return apiRequest<AdminPlan[] | AdminPlansResponse>('/api/v1/admin/plans/bootstrap', {
+    method: 'POST',
+  }).then(normalizePlansResponse);
 }
 
 export function updatePlan(
@@ -222,10 +242,10 @@ export function updatePlan(
     prices?: Array<{ billingPeriod: 'MONTHLY' | 'YEARLY'; amount: string }>;
   },
 ) {
-  return apiRequest<AdminPlan[]>(`/api/v1/admin/plans/${code}`, {
+  return apiRequest<AdminPlan[] | AdminPlansResponse>(`/api/v1/admin/plans/${code}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
-  });
+  }).then(normalizePlansResponse);
 }
 
 export function fetchResetPasswordStatus() {

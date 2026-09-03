@@ -497,7 +497,7 @@ export class TelegramUpdateProcessor {
           await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
           return true;
         }
-        await this.adminPaymentMethodsService.showList(chatId);
+        await this.adminPaymentMethodsService.showList(telegramId, chatId);
         return true;
       case 'orders':
         if (!(await this.isAdmin(telegramId))) {
@@ -1416,6 +1416,20 @@ export class TelegramUpdateProcessor {
       return;
     }
 
+    if (data === 'admin:pm:back' || data === CB.ACTION_ADMIN_MENU) {
+      await this.botApi.answerCallbackQuery(query.id);
+      if (!(await this.isAdmin(telegramId))) {
+        await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
+        return;
+      }
+      const session = await this.sessionService.getSession(telegramId);
+      if (session?.flow === 'admin_payment_method') {
+        await this.sessionService.clear(telegramId);
+      }
+      await this.showAdminMenu(resolved, chatId);
+      return;
+    }
+
     const adminHandled = await this.adminPaymentMethodsService.handleCallback(
       telegramId,
       chatId,
@@ -1423,6 +1437,16 @@ export class TelegramUpdateProcessor {
       query.id,
     );
     if (adminHandled) {
+      return;
+    }
+
+    if (data === CB.ACTION_ADMIN_MENU) {
+      await this.botApi.answerCallbackQuery(query.id);
+      if (!(await this.isAdmin(telegramId))) {
+        await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
+        return;
+      }
+      await this.showAdminMenu(resolved, chatId);
       return;
     }
 

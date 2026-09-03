@@ -136,16 +136,11 @@ async function seedPermissionsAndRoles() {
 async function seedStandardPlan() {
   const plan = await prisma.plan.upsert({
     where: { code: PlanCode.STANDARD },
-    update: {
-      name: 'Standard',
-      nameTj: 'Стандарт',
-      isActive: true,
-      sortOrder: 1,
-    },
+    update: {},
     create: {
       code: PlanCode.STANDARD,
       name: 'Standard',
-      nameTj: 'Стандарт',
+      nameTj: 'Standard',
       isActive: true,
       sortOrder: 1,
     },
@@ -153,12 +148,7 @@ async function seedStandardPlan() {
 
   await prisma.plan.upsert({
     where: { code: PlanCode.PRO },
-    update: {
-      name: 'Pro',
-      nameTj: 'Pro',
-      isActive: false,
-      sortOrder: 2,
-    },
+    update: {},
     create: {
       code: PlanCode.PRO,
       name: 'Pro',
@@ -183,11 +173,7 @@ async function seedStandardPlan() {
             billingPeriod: price.billingPeriod,
           },
         },
-        update: {
-          amount: price.amount,
-          currency: 'TJS',
-          isActive: true,
-        },
+        update: {},
         create: {
           planId: proPlan.id,
           billingPeriod: price.billingPeriod,
@@ -213,10 +199,7 @@ async function seedStandardPlan() {
             key: feature.key,
           },
         },
-        update: {
-          value: feature.value,
-          valueType: feature.valueType,
-        },
+        update: {},
         create: {
           planId: proPlan.id,
           key: feature.key,
@@ -229,7 +212,7 @@ async function seedStandardPlan() {
 
   await prisma.plan.upsert({
     where: { code: PlanCode.PRO_PLUS },
-    update: { isActive: false },
+    update: {},
     create: {
       code: PlanCode.PRO_PLUS,
       name: 'Pro Plus',
@@ -252,11 +235,7 @@ async function seedStandardPlan() {
           billingPeriod: price.billingPeriod,
         },
       },
-      update: {
-        amount: price.amount,
-        currency: 'TJS',
-        isActive: true,
-      },
+      update: {},
       create: {
         planId: plan.id,
         billingPeriod: price.billingPeriod,
@@ -282,10 +261,7 @@ async function seedStandardPlan() {
           key: feature.key,
         },
       },
-      update: {
-        value: feature.value,
-        valueType: feature.valueType,
-      },
+      update: {},
       create: {
         planId: plan.id,
         key: feature.key,

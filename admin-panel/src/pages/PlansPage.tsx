@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { fetchPlans, updatePlan } from '../api/admin';
+import { bootstrapSystemPlans, fetchPlans, updatePlan } from '../api/admin';
 import { getErrorMessage } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -10,10 +10,17 @@ import {
   t,
 } from '../i18n';
 
-type PlanRow = Awaited<ReturnType<typeof fetchPlans>>[number];
+type PlanRow = Awaited<ReturnType<typeof fetchPlans>>['plans'][number];
 
 function priceForPeriod(plan: PlanRow, period: 'MONTHLY' | 'YEARLY'): string {
   return plan.prices.find((price) => price.billingPeriod === period)?.amount ?? '';
+}
+
+function planHasPrice(plan: PlanRow, period: 'MONTHLY' | 'YEARLY'): boolean {
+  if (period === 'MONTHLY') {
+    return plan.priceConfigured?.monthly ?? Boolean(priceForPeriod(plan, 'MONTHLY'));
+  }
+  return plan.priceConfigured?.yearly ?? Boolean(priceForPeriod(plan, 'YEARLY'));
 }
 
 export function PlansPage() {
@@ -22,16 +29,23 @@ export function PlansPage() {
   const canUpdate = hasPermission('plans:update');
 
   const [plans, setPlans] = useState<PlanRow[]>([]);
+  const [missingCodes, setMissingCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingCode, setSavingCode] = useState<string | null>(null);
+  const [bootstrapping, setBootstrapping] = useState(false);
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [draftPrices, setDraftPrices] = useState<Record<string, { monthly: string; yearly: string }>>({});
+
+  const applyCatalog = (data: Awaited<ReturnType<typeof fetchPlans>>) => {
+    setPlans(data.plans);
+    setMissingCodes(data.missingCanonicalCodes);
+  };
 
   const load = () => {
     setLoading(true);
     fetchPlans()
-      .then(setPlans)
+      .then(applyCatalog)
       .catch((err) => setError(getErrorMessage(err, strings.errors.loadPlans)))
       .finally(() => setLoading(false));
   };
@@ -40,13 +54,26 @@ export function PlansPage() {
     load();
   }, [strings.errors.loadPlans]);
 
+  const restoreCanonical = async () => {
+    if (!canUpdate) return;
+    if (!window.confirm(strings.plans.bootstrapConfirm)) return;
+    setBootstrapping(true);
+    setError('');
+    try {
+      applyCatalog(await bootstrapSystemPlans());
+    } catch (err) {
+      setError(getErrorMessage(err, strings.errors.savePlan));
+    } finally {
+      setBootstrapping(false);
+    }
+  };
+
   const toggleAvailability = async (plan: PlanRow) => {
     if (!canUpdate) return;
     setSavingCode(plan.code);
     setError('');
     try {
-      const updated = await updatePlan(plan.code, { isActive: !plan.isActive });
-      setPlans(updated);
+      applyCatalog(await updatePlan(plan.code, { isActive: !plan.isActive }));
     } catch (err) {
       setError(getErrorMessage(err, strings.errors.savePlan));
     } finally {
@@ -74,13 +101,15 @@ export function PlansPage() {
     setSavingCode(plan.code);
     setError('');
     try {
-      const updated = await updatePlan(plan.code, {
-        prices: [
-          { billingPeriod: 'MONTHLY', amount: draft.monthly },
-          { billingPeriod: 'YEARLY', amount: draft.yearly },
-        ],
-      });
-      setPlans(updated);
+      const prices = [
+        draft.monthly.trim()
+          ? { billingPeriod: 'MONTHLY' as const, amount: draft.monthly.trim() }
+          : null,
+        draft.yearly.trim()
+          ? { billingPeriod: 'YEARLY' as const, amount: draft.yearly.trim() }
+          : null,
+      ].filter((row): row is { billingPeriod: 'MONTHLY' | 'YEARLY'; amount: string } => Boolean(row));
+      applyCatalog(await updatePlan(plan.code, { prices }));
       setEditingCode(null);
     } catch (err) {
       setError(getErrorMessage(err, strings.errors.savePlan));
@@ -91,17 +120,34 @@ export function PlansPage() {
 
   if (loading) return <p>{strings.plans.loading}</p>;
 
+  const emptyCatalog = plans.length === 0;
+
   return (
     <div>
       <h1>{strings.plans.title}</h1>
       <p className="muted">{strings.plans.note}</p>
       {error && <div className="alert error">{error}</div>}
 
+      {emptyCatalog && (
+        <div className="card section">
+          <h2>{strings.plans.emptyTitle}</h2>
+          <p>{strings.plans.emptyBody}</p>
+          {canUpdate && (
+            <button type="button" className="btn-primary" disabled={bootstrapping} onClick={() => void restoreCanonical()}>
+              {bootstrapping ? strings.plans.saving : strings.plans.restoreAll}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="grid cards plan-cards">
         {plans.map((plan) => {
           const editing = editingCode === plan.code;
           const draft = draftPrices[plan.code];
           const busy = savingCode === plan.code;
+          const monthlyConfigured = planHasPrice(plan, 'MONTHLY');
+          const yearlyConfigured = planHasPrice(plan, 'YEARLY');
+          const pricesMissing = !monthlyConfigured || !yearlyConfigured;
 
           return (
             <div key={plan.id} className="card plan-card">
@@ -112,16 +158,28 @@ export function PlansPage() {
                 </span>
               </div>
 
-              <p className="muted">{plan.name}</p>
+              {pricesMissing && <p className="alert warn">{strings.plans.priceNotConfiguredHint}</p>}
 
               <dl className="plan-meta">
                 <div>
                   <dt>{strings.plans.price30}</dt>
-                  <dd>{formatMoney(priceForPeriod(plan, 'MONTHLY'), 'TJS')}</dd>
+                  <dd>
+                    {monthlyConfigured
+                      ? formatMoney(priceForPeriod(plan, 'MONTHLY'), 'TJS')
+                      : strings.plans.priceNotConfigured}
+                  </dd>
                 </div>
                 <div>
                   <dt>{strings.plans.price365}</dt>
-                  <dd>{formatMoney(priceForPeriod(plan, 'YEARLY'), 'TJS')}</dd>
+                  <dd>
+                    {yearlyConfigured
+                      ? formatMoney(priceForPeriod(plan, 'YEARLY'), 'TJS')
+                      : strings.plans.priceNotConfigured}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{strings.plans.maxDevices}</dt>
+                  <dd>{plan.maxDevices ?? '—'}</dd>
                 </div>
                 <div>
                   <dt>{strings.plans.licenses}</dt>
@@ -192,6 +250,26 @@ export function PlansPage() {
             </div>
           );
         })}
+
+        {missingCodes.map((code) => (
+          <div key={code} className="card plan-card">
+            <div className="plan-card-header">
+              <h2>{labelPlanCode(code)}</h2>
+              <span className="badge muted">{strings.plans.notConfigured}</span>
+            </div>
+            <p className="muted">{strings.plans.missingPlanHint}</p>
+            {canUpdate && (
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={bootstrapping}
+                onClick={() => void restoreCanonical()}
+              >
+                {bootstrapping ? strings.plans.saving : strings.plans.createCanonical(labelPlanCode(code))}
+              </button>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

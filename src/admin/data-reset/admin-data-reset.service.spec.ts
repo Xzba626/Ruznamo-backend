@@ -1,8 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
 import { DataResetScope } from '@prisma/client';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
   AdminDataResetService,
   confirmationPhraseForScope,
+  FACTORY_RESET_PRESERVED,
   USER_DATA_RESET_PRESERVED,
 } from './admin-data-reset.service';
 
@@ -29,6 +32,7 @@ describe('AdminDataResetService confirmation + preview', () => {
   };
 
   const auditService = { log: jest.fn() };
+  const planBootstrap = { bootstrapMissingCanonicalPlans: jest.fn() };
 
   let service: AdminDataResetService;
 
@@ -47,7 +51,12 @@ describe('AdminDataResetService confirmation + preview', () => {
     prisma.license.findMany.mockResolvedValue([]);
     prisma.licenseActivation.findMany.mockResolvedValue([]);
     prisma.order.findMany.mockResolvedValue([]);
-    service = new AdminDataResetService(prisma as never, resetPasswordService as never, auditService as never);
+    service = new AdminDataResetService(
+      prisma as never,
+      resetPasswordService as never,
+      auditService as never,
+      planBootstrap as never,
+    );
   });
 
   it('uses operation-specific confirmation phrases', () => {
@@ -63,7 +72,13 @@ describe('AdminDataResetService confirmation + preview', () => {
   it('preserves admin telegram authority in USER_DATA_RESET list', () => {
     expect(USER_DATA_RESET_PRESERVED).toContain('admin_telegram_authority');
     expect(USER_DATA_RESET_PRESERVED).toContain('plans_and_prices');
+    expect(USER_DATA_RESET_PRESERVED).toContain('plan_features');
     expect(USER_DATA_RESET_PRESERVED).toContain('app_releases');
+  });
+
+  it('FACTORY_RESET contract preserves plans and recovers missing canonical catalog', () => {
+    expect(FACTORY_RESET_PRESERVED).toContain('plans_and_prices');
+    expect(FACTORY_RESET_PRESERVED).toContain('plan_features');
   });
 
   it('issues preview token on dry-run and rejects execute without matching preview', async () => {
@@ -110,5 +125,27 @@ describe('AdminDataResetService confirmation + preview', () => {
     ).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'PREVIEW_SCOPE_MISMATCH' }),
     });
+  });
+});
+
+describe('AdminDataResetService plan wipe regression', () => {
+  it('USER_DATA_RESET implementation never deletes Plan / PlanPrice / PlanFeature', () => {
+    const src = readFileSync(join(__dirname, 'admin-data-reset.service.ts'), 'utf8');
+    const userFn = src.slice(
+      src.indexOf('private async applyUserDataReset'),
+      src.indexOf('private async applyFactoryBootstrap'),
+    );
+    expect(userFn).not.toMatch(/plan\.deleteMany/);
+    expect(userFn).not.toMatch(/planPrice\.deleteMany/);
+    expect(userFn).not.toMatch(/planFeature\.deleteMany/);
+  });
+
+  it('FACTORY_RESET no longer deletes plans and bootstraps missing canonical catalog', () => {
+    const src = readFileSync(join(__dirname, 'admin-data-reset.service.ts'), 'utf8');
+    const factoryFn = src.slice(src.indexOf('private async applyFactoryBootstrap'));
+    expect(factoryFn).not.toMatch(/plan\.deleteMany/);
+    expect(factoryFn).not.toMatch(/planPrice\.deleteMany/);
+    expect(factoryFn).not.toMatch(/planFeature\.deleteMany/);
+    expect(factoryFn).toMatch(/bootstrapMissingCanonicalPlans/);
   });
 });

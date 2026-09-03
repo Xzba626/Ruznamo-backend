@@ -22,6 +22,8 @@ const auditActionLabels: Record<string, string> = {
   'admin.app_config.update': 'Обновлена конфигурация приложения',
   'plan.purchaseAvailability.changed': 'Изменена доступность тарифа для покупки',
   'plan.prices.updated': 'Обновлены цены тарифа',
+  'plan.system.bootstrapped': 'Системные тарифы восстановлены',
+  'plan.system.created': 'Тариф создан',
   'user.registered': 'Зарегистрирован новый пользователь',
   'device.registered': 'Зарегистрировано устройство',
   'device.revoked': 'Устройство отозвано',

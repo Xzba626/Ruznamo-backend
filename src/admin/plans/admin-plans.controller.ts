@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentAdmin } from '../decorators/current-admin.decorator';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
@@ -20,6 +20,13 @@ export class AdminPlansController {
   @ApiOperation({ summary: 'List subscription plans for admin management' })
   list() {
     return this.plansService.listPlans();
+  }
+
+  @Post('bootstrap')
+  @RequirePermissions('plans:update')
+  @ApiOperation({ summary: 'Idempotently create missing canonical Standard/Pro/Pro Plus plans' })
+  bootstrap(@CurrentAdmin() admin: AdminJwtPayload) {
+    return this.plansService.bootstrapMissing(admin.sub);
   }
 
   @Patch(':code')

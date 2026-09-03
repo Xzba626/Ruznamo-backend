@@ -52,6 +52,25 @@ describe('OrderService', () => {
     expect(prisma.order.create).not.toHaveBeenCalled();
   });
 
+  it('snapshots amount on create and does not rewrite existing pending orders', async () => {
+    prisma.order.findFirst.mockResolvedValue({
+      id: 'ord_existing',
+      status: OrderStatus.PENDING,
+      amount: '15.00',
+    });
+    paymentConfig.getPlanPrice.mockResolvedValue({
+      planId: 'plan_1',
+      amount: '99.00',
+      currency: 'TJS',
+    });
+
+    const order = await service.findOrCreatePendingOrder('usr_1', 'plan_1', BillingPeriod.MONTHLY);
+
+    expect(order.amount).toBe('15.00');
+    expect(prisma.order.create).not.toHaveBeenCalled();
+    expect(prisma.order.update).not.toHaveBeenCalled();
+  });
+
   it('starts payment flow and cancels only other pending purchases', async () => {
     prisma.order.updateMany.mockResolvedValue({ count: 0 });
     prisma.order.findFirst.mockResolvedValue({ id: 'ord_1', status: OrderStatus.PENDING });

@@ -29,6 +29,7 @@ import { AdminAnalyticsController } from './analytics/admin-analytics.controller
 import { AdminAnalyticsService } from './analytics/admin-analytics.service';
 import { AdminPlansController } from './plans/admin-plans.controller';
 import { AdminPlansService } from './plans/admin-plans.service';
+import { SystemPlanBootstrapService } from './plans/system-plan-bootstrap.service';
 import { AdminUsersController } from './users/admin-users.controller';
 import { AdminUsersService } from './users/admin-users.service';
 import { AdminDataResetController } from './data-reset/admin-data-reset.controller';
@@ -67,6 +68,7 @@ import { AdminReleasesService } from './releases/admin-releases.service';
     AdminAppConfigService,
     AdminAnalyticsService,
     AdminPlansService,
+    SystemPlanBootstrapService,
     AdminDataResetService,
     AdminReleasesService,
   ],

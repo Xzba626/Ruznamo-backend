@@ -8,6 +8,7 @@ import {
 import { AuditActorType, DataResetScope, Prisma, SystemSecurityCredentialType } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { AuditService } from '../../audit/audit.service';
+import { SystemPlanBootstrapService } from '../plans/system-plan-bootstrap.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ResetPasswordService } from '../../security/reset-password.service';
 
@@ -71,10 +72,24 @@ export const USER_DATA_RESET_PRESERVED = [
   'admin_telegram_authority',
   'data_reset_password',
   'plans_and_prices',
+  'plan_features',
   'payment_methods',
   'app_config_and_versions',
   'app_releases',
   'system_security_credentials',
+  'protected_system_audit_logs',
+] as const;
+
+/** FACTORY_RESET preserves commercial plan rows; missing canonical plans are bootstrapped without prices. */
+export const FACTORY_RESET_PRESERVED = [
+  'database_schema_and_migrations',
+  'admin_accounts',
+  'admin_telegram_authority',
+  'data_reset_password',
+  'system_security_credentials',
+  'app_releases',
+  'plans_and_prices',
+  'plan_features',
   'protected_system_audit_logs',
 ] as const;
 
@@ -90,6 +105,7 @@ export class AdminDataResetService {
     private readonly prisma: PrismaService,
     private readonly resetPasswordService: ResetPasswordService,
     private readonly auditService: AuditService,
+    private readonly planBootstrap: SystemPlanBootstrapService,
   ) {}
 
   async getResetPasswordStatus() {
@@ -229,19 +245,12 @@ export class AdminDataResetService {
         scope,
         dryRun: true,
         counts,
-        preserved: [
-          'database_schema_and_migrations',
-          'admin_accounts',
-          'admin_telegram_authority',
-          'data_reset_password',
-          'system_security_credentials',
-          'app_releases',
-          'protected_system_audit_logs',
-        ],
+        preserved: [...FACTORY_RESET_PRESERVED],
         additionalImpact: {
-          plansAndPricing: 'Will reset to bootstrap defaults',
-          paymentMethods: 'Will reset to bootstrap defaults',
-          appConfig: 'Will reset to bootstrap defaults',
+          plansAndPricing:
+            'Plan / PlanPrice / PlanFeature are preserved. Missing Standard / Pro / Pro Plus are bootstrapped without inventing commercial prices.',
+          paymentMethods: 'Payment methods are deleted and must be reconfigured',
+          appConfig: 'Non-lock SystemConfig rows are deleted',
         },
         samples,
         generatedAt: new Date().toISOString(),
@@ -764,14 +773,12 @@ export class AdminDataResetService {
 
   private async applyFactoryBootstrap() {
     await this.prisma.paymentMethod.deleteMany();
-    await this.prisma.planFeature.deleteMany();
-    await this.prisma.planPrice.deleteMany();
-    await this.prisma.plan.deleteMany();
     await this.prisma.appVersion.deleteMany();
     await this.prisma.systemConfig.deleteMany({
       where: {
         key: { notIn: ['DATA_RESET_IN_PROGRESS'] },
       },
     });
+    await this.planBootstrap.bootstrapMissingCanonicalPlans();
   }
 }

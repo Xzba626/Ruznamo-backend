@@ -33,7 +33,7 @@ export function DashboardPage() {
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof fetchDashboardSummary>> | null>(null);
   const [system, setSystem] = useState<Awaited<ReturnType<typeof fetchSystemStatus>> | null>(null);
   const [telegram, setTelegram] = useState<Awaited<ReturnType<typeof fetchTelegramStatus>> | null>(null);
-  const [plans, setPlans] = useState<Awaited<ReturnType<typeof fetchPlans>>>([]);
+  const [plans, setPlans] = useState<Awaited<ReturnType<typeof fetchPlans>>['plans']>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +51,7 @@ export function DashboardPage() {
           setTelegram(telegramResult.value);
         }
         if (plansResult.status === 'fulfilled') {
-          setPlans(plansResult.value);
+          setPlans(plansResult.value.plans);
         }
       })
       .catch((err) => setError(getErrorMessage(err, strings.errors.loadDashboard)))

@@ -98,6 +98,19 @@ export const ru = {
     savePrices: 'Сохранить цены',
     note:
       'Отключение тарифа скрывает его из новых покупок в Telegram. Существующие лицензии и заявки не затрагиваются.',
+    emptyTitle: 'Тарифы не настроены',
+    emptyBody:
+      'В системе отсутствуют базовые тарифы Ruznamo. Восстановите системные тарифы, чтобы настроить цены и продажи.',
+    restoreAll: 'Восстановить системные тарифы',
+    bootstrapConfirm:
+      'Восстановить недостающие тарифы Standard, Pro и Pro Plus? Текущие цены и статусы продажи существующих тарифов не изменятся. Коммерческие цены автоматически не подставляются.',
+    notConfigured: 'Не настроен',
+    missingPlanHint: 'Канонический тариф отсутствует. Создайте его без смены существующих тарифов.',
+    createCanonical: (name: string) => `Создать ${name}`,
+    priceNotConfigured: 'Не настроена',
+    priceNotConfiguredHint:
+      'Для тарифа не указана цена. Покупка в Telegram временно недоступна, пока не сохраните сумму.',
+    maxDevices: 'Устройств одновременно',
   },
   users: {
     title: 'Пользователи',
@@ -380,6 +393,7 @@ export const ru = {
     preserved_admin_telegram_authority: 'Telegram Admin (control-plane)',
     preserved_data_reset_password: 'Пароль очистки',
     preserved_plans_and_prices: 'Тарифы и цены',
+    preserved_plan_features: 'Возможности тарифов',
     preserved_payment_methods: 'Способы оплаты',
     preserved_app_config_and_versions: 'Конфигурация приложения',
     preserved_app_releases: 'Релизы APK',

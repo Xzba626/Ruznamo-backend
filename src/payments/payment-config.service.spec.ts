@@ -80,4 +80,33 @@ describe('PaymentConfigService plan availability', () => {
       service.isPlanPeriodAvailableForPurchase(PlanCode.PRO, BillingPeriod.YEARLY),
     ).resolves.toBe(false);
   });
+
+  it('does not treat Standard as purchasable when prices are missing', async () => {
+    prisma.plan.findMany.mockResolvedValue([
+      {
+        id: 'plan_std',
+        code: PlanCode.STANDARD,
+        name: 'Standard',
+        nameTj: 'Standard',
+        prices: [],
+      },
+    ]);
+    prisma.plan.findUnique.mockResolvedValue({
+      id: 'plan_std',
+      code: PlanCode.STANDARD,
+      isActive: true,
+      prices: [],
+    });
+
+    await expect(service.listPurchaseAvailablePlans()).resolves.toEqual([]);
+    await expect(service.isPlanAvailableForPurchase(PlanCode.STANDARD)).resolves.toBe(false);
+    await expect(
+      service.getPlanPriceForPurchase(PlanCode.STANDARD, BillingPeriod.MONTHLY),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('returns no purchase plans when the catalog is empty', async () => {
+    prisma.plan.findMany.mockResolvedValue([]);
+    await expect(service.listPurchaseAvailablePlans()).resolves.toEqual([]);
+  });
 });

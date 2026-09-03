@@ -14,7 +14,7 @@ export const ru: TelegramI18n = {
     `Ближайшее окончание лицензии: ${expiresAt}`,
   choosePlan: 'Выберите тариф:',
   planUnavailable: 'Этот тариф сейчас недоступен для покупки.',
-  purchaseUnavailable: 'Сейчас покупка лицензий временно недоступна.',
+  purchaseUnavailable: 'Покупка временно недоступна. Попробуйте позже.',
   planStandardLabel: 'Standard',
   planProLabel: 'Pro',
   standardTariffCard: () =>

@@ -97,6 +97,19 @@ export const tj: RuStrings = {
     editPrices: 'Тағйири нархҳо',
     savePrices: 'Захираи нархҳо',
     note: 'Хомӯш кардани тариф онро аз харидҳои нави Telegram пинҳон мекунад. Литсензияҳои мавҷуда таъсир намебинанд.',
+    emptyTitle: 'Тарифҳо танзим нашудаанд',
+    emptyBody:
+      'Дар система тарифҳои асосии Ruznamo нестанд. Онҳоро барқарор кунед, то нарх ва фурӯшро танзим кунед.',
+    restoreAll: 'Барқарор кардани тарифҳои системавӣ',
+    bootstrapConfirm:
+      'Тарифҳои нобудаи Standard, Pro ва Pro Plus барқарор шаванд? Нархҳо ва ҳолати фурӯши тарифҳои мавҷуда тағйир намеёбанд. Нархҳои тиҷорӣ худкор гузошта намешаванд.',
+    notConfigured: 'Танзим нашудааст',
+    missingPlanHint: 'Тарифи низомӣ вуҷуд надорад. Онро бидуни тағйири тарифҳои мавҷуда эҷод кунед.',
+    createCanonical: (name: string) => `Эҷоди ${name}`,
+    priceNotConfigured: 'Танзим нашудааст',
+    priceNotConfiguredHint:
+      'Барои тариф нарх нишон дода нашудааст. Харид дар Telegram то захираи нарх дастрас нест.',
+    maxDevices: 'Дастгоҳҳои ҳамзамон',
   },
   licenses: {
     title: 'Литсензияҳо',
@@ -380,6 +393,7 @@ export const tj: RuStrings = {
     preserved_admin_telegram_authority: 'Telegram Admin (control-plane)',
     preserved_data_reset_password: 'Пароли тозакунӣ',
     preserved_plans_and_prices: 'Тарифҳо ва нархҳо',
+    preserved_plan_features: 'Имкониятҳои тарифҳо',
     preserved_payment_methods: 'Усулҳои пардохт',
     preserved_app_config_and_versions: 'Танзимоти барнома',
     preserved_app_releases: 'Релизҳои APK',

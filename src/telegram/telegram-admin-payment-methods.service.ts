@@ -5,8 +5,11 @@ import { PaymentMethodService } from '../payments/payment-method.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
 import { TelegramBotSessionService } from './telegram-bot-session.service';
 import { InlineKeyboardMarkup } from './telegram.types';
+import { BotScreen } from './nav/bot-screens';
+import { NAV_FLOW } from './nav/nav-context';
+import { CB } from './telegram.messages';
 
-const FLOW = 'admin_payment_method';
+export const ADMIN_PM_FLOW = 'admin_payment_method';
 
 type WizardPayload = {
   mode?: 'add' | 'edit';
@@ -32,13 +35,20 @@ export class TelegramAdminPaymentMethodsService {
     return this.adminTelegramAuth.isTelegramAdmin(telegramUserId);
   }
 
+  /** Persist list screen (wizard cleared). Serverless-safe. */
+  private async persistListScreen(telegramUserId: bigint): Promise<void> {
+    await this.sessions.set(telegramUserId, NAV_FLOW, BotScreen.ADMIN_PAYMENT_METHODS_LIST, {
+      screen: BotScreen.ADMIN_PAYMENT_METHODS_LIST,
+    });
+  }
+
   async handleText(telegramUserId: bigint, chatId: bigint, text: string): Promise<boolean> {
     if (!(await this.isAdmin(telegramUserId))) {
       return false;
     }
 
     if (text === '💳 Реквизиты') {
-      await this.showList(chatId);
+      await this.showList(telegramUserId, chatId);
       return true;
     }
 
@@ -48,7 +58,7 @@ export class TelegramAdminPaymentMethodsService {
     }
 
     const session = await this.sessions.getSession(telegramUserId);
-    if (!session || session.flow !== FLOW) {
+    if (!session || session.flow !== ADMIN_PM_FLOW) {
       return false;
     }
 
@@ -58,29 +68,38 @@ export class TelegramAdminPaymentMethodsService {
     if (text === '❌ Отмена') {
       await this.sessions.clear(telegramUserId);
       await this.botApi.sendPlainMessage(chatId, 'Отменено.');
-      await this.showList(chatId);
+      await this.showList(telegramUserId, chatId);
       return true;
     }
 
     switch (step) {
       case 'name':
         payload.name = text.trim();
-        await this.sessions.set(telegramUserId, FLOW, 'type', payload);
+        await this.sessions.set(telegramUserId, ADMIN_PM_FLOW, 'type', {
+          ...payload,
+          screen: BotScreen.ADMIN_PAYMENT_METHOD_EDIT,
+        });
         await this.botApi.sendMessage(chatId, 'Выберите тип:', this.typeKeyboard());
         return true;
       case 'value':
         payload.paymentValue = text.trim();
-        await this.sessions.set(telegramUserId, FLOW, 'recipient', payload);
+        await this.sessions.set(telegramUserId, ADMIN_PM_FLOW, 'recipient', {
+          ...payload,
+          screen: BotScreen.ADMIN_PAYMENT_METHOD_EDIT,
+        });
         await this.botApi.sendPlainMessage(chatId, 'Введите имя получателя:');
         return true;
       case 'recipient':
         payload.recipientName = text.trim();
-        await this.sessions.set(telegramUserId, FLOW, 'confirm', payload);
-        await this.botApi.sendMessage(
-          chatId,
-          this.previewText(payload),
-          this.confirmKeyboard(),
-        );
+        await this.sessions.set(telegramUserId, ADMIN_PM_FLOW, 'confirm', {
+          ...payload,
+          screen: BotScreen.ADMIN_PAYMENT_METHOD_EDIT,
+        });
+        await this.botApi.sendMessage(chatId, this.previewText(payload), this.confirmKeyboard());
+        return true;
+      case 'done':
+        await this.botApi.sendPlainMessage(chatId, 'Реквизиты уже сохранены. Откройте список кнопками.');
+        await this.showList(telegramUserId, chatId);
         return true;
       default:
         return false;
@@ -97,14 +116,21 @@ export class TelegramAdminPaymentMethodsService {
       return false;
     }
 
+    if (!data.startsWith('admin:pm:')) {
+      return false;
+    }
+
     if (data === 'admin:pm:list') {
       await this.botApi.answerCallbackQuery(callbackQueryId);
-      await this.showList(chatId);
+      await this.showList(telegramUserId, chatId);
       return true;
     }
 
     if (data === 'admin:pm:add') {
-      await this.sessions.set(telegramUserId, FLOW, 'name', { mode: 'add' });
+      await this.sessions.set(telegramUserId, ADMIN_PM_FLOW, 'name', {
+        mode: 'add',
+        screen: BotScreen.ADMIN_PAYMENT_METHOD_EDIT,
+      });
       await this.botApi.answerCallbackQuery(callbackQueryId);
       await this.botApi.sendPlainMessage(chatId, 'Введите название способа оплаты:');
       return true;
@@ -113,13 +139,14 @@ export class TelegramAdminPaymentMethodsService {
     if (data.startsWith('admin:pm:edit:')) {
       const methodId = data.slice('admin:pm:edit:'.length);
       const method = await this.paymentMethods.getById(methodId);
-      await this.sessions.set(telegramUserId, FLOW, 'name', {
+      await this.sessions.set(telegramUserId, ADMIN_PM_FLOW, 'name', {
         mode: 'edit',
         methodId,
         name: method.name,
         type: method.type,
         paymentValue: method.paymentValue,
         recipientName: method.recipientName,
+        screen: BotScreen.ADMIN_PAYMENT_METHOD_EDIT,
       });
       await this.botApi.answerCallbackQuery(callbackQueryId);
       await this.botApi.sendPlainMessage(
@@ -134,7 +161,7 @@ export class TelegramAdminPaymentMethodsService {
       const method = await this.paymentMethods.getById(methodId);
       await this.paymentMethods.setActive(methodId, !method.isActive);
       await this.botApi.answerCallbackQuery(callbackQueryId, method.isActive ? 'Отключено' : 'Включено');
-      await this.showList(chatId);
+      await this.showList(telegramUserId, chatId);
       return true;
     }
 
@@ -142,15 +169,29 @@ export class TelegramAdminPaymentMethodsService {
       const methodId = data.slice('admin:pm:delete:'.length);
       await this.paymentMethods.safeDelete(methodId);
       await this.botApi.answerCallbackQuery(callbackQueryId, 'Удалено/отключено');
-      await this.showList(chatId);
+      await this.showList(telegramUserId, chatId);
+      return true;
+    }
+
+    if (data.startsWith('admin:pm:noop:')) {
+      await this.botApi.answerCallbackQuery(callbackQueryId);
       return true;
     }
 
     if (data === 'admin:pm:type:PHONE' || data === 'admin:pm:type:CARD') {
-      const session = await this.sessions.get<WizardPayload>(telegramUserId, FLOW);
-      if (!session) return false;
+      const full = await this.sessions.getSession(telegramUserId);
+      if (!full || full.flow !== ADMIN_PM_FLOW || full.step === 'done') {
+        await this.botApi.answerCallbackQuery(callbackQueryId, 'Сессия устарела');
+        await this.showList(telegramUserId, chatId);
+        return true;
+      }
+      const session = full.payload as WizardPayload;
       const type = data.endsWith('CARD') ? PaymentMethodType.CARD : PaymentMethodType.PHONE;
-      await this.sessions.set(telegramUserId, FLOW, 'value', { ...session, type });
+      await this.sessions.set(telegramUserId, ADMIN_PM_FLOW, 'value', {
+        ...session,
+        type,
+        screen: BotScreen.ADMIN_PAYMENT_METHOD_EDIT,
+      });
       await this.botApi.answerCallbackQuery(callbackQueryId);
       await this.botApi.sendPlainMessage(
         chatId,
@@ -160,11 +201,50 @@ export class TelegramAdminPaymentMethodsService {
     }
 
     if (data === 'admin:pm:save') {
-      const session = await this.sessions.get<WizardPayload>(telegramUserId, FLOW);
-      if (!session?.name || !session.type || !session.paymentValue || !session.recipientName) {
-        await this.botApi.answerCallbackQuery(callbackQueryId, 'Не хватает данных');
-        return true;
-      }
+      return this.handleSave(telegramUserId, chatId, callbackQueryId);
+    }
+
+    if (data === 'admin:pm:cancel') {
+      await this.sessions.clear(telegramUserId);
+      await this.botApi.answerCallbackQuery(callbackQueryId);
+      await this.showList(telegramUserId, chatId);
+      return true;
+    }
+
+    return false;
+  }
+
+  private async handleSave(
+    telegramUserId: bigint,
+    chatId: bigint,
+    callbackQueryId: string,
+  ): Promise<boolean> {
+    const full = await this.sessions.getSession(telegramUserId);
+    if (!full || full.flow !== ADMIN_PM_FLOW) {
+      await this.botApi.answerCallbackQuery(callbackQueryId, 'Уже сохранено или устарело');
+      await this.showList(telegramUserId, chatId);
+      return true;
+    }
+
+    if (full.step === 'done') {
+      await this.botApi.answerCallbackQuery(callbackQueryId, 'Уже сохранено');
+      await this.showList(telegramUserId, chatId);
+      return true;
+    }
+
+    const session = full.payload as WizardPayload;
+    if (!session?.name || !session.type || !session.paymentValue || !session.recipientName) {
+      await this.botApi.answerCallbackQuery(callbackQueryId, 'Не хватает данных');
+      return true;
+    }
+
+    // Mark done before mutation so double-Save cannot resurrect / duplicate create.
+    await this.sessions.set(telegramUserId, ADMIN_PM_FLOW, 'done', {
+      ...session,
+      screen: BotScreen.ADMIN_PAYMENT_METHODS_LIST,
+    });
+
+    try {
       if (session.mode === 'edit' && session.methodId) {
         await this.paymentMethods.update(session.methodId, {
           name: session.name,
@@ -180,20 +260,24 @@ export class TelegramAdminPaymentMethodsService {
           recipientName: session.recipientName,
         });
       }
-      await this.sessions.clear(telegramUserId);
-      await this.botApi.answerCallbackQuery(callbackQueryId, 'Сохранено');
-      await this.showList(chatId);
+    } catch (error) {
+      this.logger.error({
+        msg: 'admin_pm_save_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await this.sessions.set(telegramUserId, ADMIN_PM_FLOW, 'confirm', {
+        ...session,
+        screen: BotScreen.ADMIN_PAYMENT_METHOD_EDIT,
+      });
+      await this.botApi.answerCallbackQuery(callbackQueryId, 'Ошибка сохранения');
       return true;
     }
 
-    if (data === 'admin:pm:cancel') {
-      await this.sessions.clear(telegramUserId);
-      await this.botApi.answerCallbackQuery(callbackQueryId);
-      await this.showList(chatId);
-      return true;
-    }
-
-    return false;
+    await this.sessions.clear(telegramUserId);
+    await this.persistListScreen(telegramUserId);
+    await this.botApi.answerCallbackQuery(callbackQueryId, 'Сохранено');
+    await this.showList(telegramUserId, chatId);
+    return true;
   }
 
   private previewText(payload: WizardPayload): string {
@@ -230,6 +314,7 @@ export class TelegramAdminPaymentMethodsService {
     };
   }
 
+  /** List Back must go to ADMIN_ROOT — never re-open the list. */
   private listKeyboard(methods: Array<{ id: string; name: string; isActive: boolean }>): InlineKeyboardMarkup {
     const rows = methods.map((method) => [
       {
@@ -245,19 +330,23 @@ export class TelegramAdminPaymentMethodsService {
       inline_keyboard: [
         ...rows,
         [{ text: '➕ Добавить', callback_data: 'admin:pm:add' }],
-        [{ text: '↩️ Назад', callback_data: 'admin:pm:list' }],
+        [{ text: '↩️ Назад', callback_data: CB.ACTION_ADMIN_MENU }],
       ],
     };
   }
 
-  async showList(chatId: bigint): Promise<void> {
+  async showList(telegramUserId: bigint, chatId: bigint): Promise<void> {
+    await this.persistListScreen(telegramUserId);
     const methods = await this.paymentMethods.listAll();
     if (methods.length === 0) {
       await this.botApi.sendMessage(
         chatId,
         'Способы оплаты не настроены.\n\nНажмите «➕ Добавить».',
         {
-          inline_keyboard: [[{ text: '➕ Добавить', callback_data: 'admin:pm:add' }]],
+          inline_keyboard: [
+            [{ text: '➕ Добавить', callback_data: 'admin:pm:add' }],
+            [{ text: '↩️ Назад', callback_data: CB.ACTION_ADMIN_MENU }],
+          ],
         },
       );
       return;
@@ -272,7 +361,6 @@ export class TelegramAdminPaymentMethodsService {
   }
 
   async showPendingOrders(chatId: bigint): Promise<void> {
-    // lightweight summary; detailed review stays in receipt messages
     await this.botApi.sendPlainMessage(
       chatId,
       '📋 Заявки на проверку приходят сюда автоматически при отправке чека пользователем.',

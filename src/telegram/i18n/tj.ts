@@ -12,7 +12,7 @@ export const tj: TelegramI18n = {
   welcomeActiveLicense: (expiresAt) => `Иҷозатномаҳои фаъол. Анҷоми наздиктарин: ${expiresAt}`,
   choosePlan: 'Тарифро интихоб кунед:',
   planUnavailable: 'Ин тариф ҳоло барои харид дастрас нест.',
-  purchaseUnavailable: 'Ҳоло харидани иҷозатнома муваққатан дастрас нест.',
+  purchaseUnavailable: 'Харид муваққатан дастрас нест. Баъдтар кӯшиш кунед.',
   planStandardLabel: 'Standard',
   planProLabel: 'Pro',
   standardTariffCard: () =>
