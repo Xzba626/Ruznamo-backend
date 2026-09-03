@@ -180,7 +180,7 @@ export class AdminReleasesService {
       throw new BadRequestException({ code: 'UPLOAD_ID_REQUIRED', message: 'uploadId is required' });
     }
 
-    const pathname = this.storage.buildApkObjectKey(uploadId);
+    const pathname = this.storage.buildApkObjectKey(uploadId.trim());
     const objectHead = await this.storage.head(pathname);
     if (!objectHead.exists) {
       throw new BadRequestException({

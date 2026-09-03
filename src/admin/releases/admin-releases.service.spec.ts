@@ -1,4 +1,4 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { AdminReleasesService } from './admin-releases.service';
 
 describe('AdminReleasesService Blob upload path', () => {
@@ -94,5 +94,77 @@ describe('AdminReleasesService Blob upload path', () => {
     expect(result.pathname).toMatch(/^healthchecks\/releases\//);
     expect(storage.putObject).toHaveBeenCalled();
     expect(storage.delete).toHaveBeenCalled();
+  });
+
+  it('finalizes a Blob object into DRAFT without production signer', async () => {
+    storage.isConfigured.mockReturnValue(true);
+    storage.isSigningPolicyConfigured.mockReturnValue(false);
+    storage.head.mockResolvedValue({ exists: true, size: 12 });
+    storage.getBuffer.mockResolvedValue(Buffer.from('apk-bytes'));
+    inspector.inspect.mockResolvedValue({
+      packageName: 'com.Tajroot.Ruznamo',
+      versionName: '1.0.12',
+      versionCode: 13,
+      sha256: 'abc',
+      fileSize: 12,
+      signingCertificateSha256: 'debugcert',
+    });
+    prisma.appRelease.findFirst.mockResolvedValue(null);
+    prisma.appRelease.findUnique.mockResolvedValue(null);
+    prisma.appRelease.upsert.mockResolvedValue({
+      id: 'rel_draft_1',
+      platform: 'ANDROID',
+      versionName: '1.0.12',
+      versionCode: 13,
+      packageName: 'com.Tajroot.Ruznamo',
+      signingCertificateSha256: 'debugcert',
+      objectKey: 'releases/android/abc/Ruznamo.apk',
+      fileSize: BigInt(12),
+      sha256: 'abc',
+      status: 'DRAFT',
+      mandatory: false,
+      changelogRu: null,
+      changelogTg: null,
+      createdAt: new Date(),
+      publishedAt: null,
+      archivedAt: null,
+    });
+
+    const result = await service.finalizeUpload('admin-1', 'abc');
+    expect(result.status).toBe('DRAFT');
+    expect(result.versionCode).toBe(13);
+    expect(result.packageName).toBe('com.Tajroot.Ruznamo');
+    expect(storage.buildApkObjectKey).toHaveBeenCalledWith('abc');
+    expect(storage.getBuffer).toHaveBeenCalledWith('releases/android/abc/Ruznamo.apk');
+  });
+
+  it('rejects publish when production signer is not configured', async () => {
+    storage.isSigningPolicyConfigured.mockReturnValue(false);
+    await expect(service.publish('rel_draft_1')).rejects.toBeInstanceOf(BadRequestException);
+    await service.publish('rel_draft_1').catch((error: BadRequestException) => {
+      expect(error.getResponse()).toMatchObject({ code: 'SIGNING_POLICY_NOT_CONFIGURED' });
+    });
+    expect(prisma.appRelease.update).not.toHaveBeenCalled();
+  });
+
+  it('deletes DRAFT and Blob object', async () => {
+    storage.isConfigured.mockReturnValue(true);
+    prisma.appRelease.findUnique.mockResolvedValue({
+      id: 'rel_draft_1',
+      status: 'DRAFT',
+      objectKey: 'releases/android/abc/Ruznamo.apk',
+    });
+    prisma.appRelease.delete.mockResolvedValue({});
+    storage.delete.mockResolvedValue(undefined);
+
+    const result = await service.deleteDraft('rel_draft_1');
+    expect(result).toEqual({ deleted: true, id: 'rel_draft_1' });
+    expect(storage.delete).toHaveBeenCalledWith('releases/android/abc/Ruznamo.apk');
+  });
+
+  it('rejects malformed finalize without uploadId', async () => {
+    storage.isConfigured.mockReturnValue(true);
+    await expect(service.finalizeUpload('admin-1', '   ')).rejects.toBeInstanceOf(BadRequestException);
+    expect(storage.getBuffer).not.toHaveBeenCalled();
   });
 });

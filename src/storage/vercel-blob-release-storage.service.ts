@@ -174,29 +174,79 @@ export class VercelBlobReleaseStorageService implements ReleaseStorageService {
 
   async getBuffer(pathname: string): Promise<Buffer> {
     this.assertConfigured();
-    const result = await get(pathname, {
-      access: 'private',
-      useCache: false,
-      ...(this.token ? { token: this.token } : {}),
-    });
-    if (!result?.stream) {
+    const fromSdk = await this.tryGetViaSdk(pathname);
+    if (fromSdk) {
+      return fromSdk;
+    }
+
+    const objectHead = await this.head(pathname);
+    if (objectHead.url) {
+      const fromUrl = await this.tryGetViaSdk(objectHead.url);
+      if (fromUrl) {
+        return fromUrl;
+      }
+    }
+
+    const auth = await this.createDownloadAuthorization(pathname, { expiresInSeconds: 120 });
+    const response = await fetch(auth.downloadUrl);
+    if (!response.ok) {
       throw new ServiceUnavailableException({
-        code: 'BLOB_OBJECT_NOT_FOUND',
-        message: 'APK object not found in Blob storage',
+        code: 'BLOB_GET_FAILED',
+        message: 'Could not read APK object from Blob storage',
       });
     }
-    const chunks: Buffer[] = [];
-    const reader = result.stream.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  private async tryGetViaSdk(urlOrPathname: string): Promise<Buffer | null> {
+    try {
+      const result = await get(urlOrPathname, {
+        access: 'private',
+        useCache: false,
+        ...(this.token ? { token: this.token } : {}),
+      });
+      if (!result || result.statusCode !== 200 || !result.stream) {
+        return null;
       }
-      if (value) {
-        chunks.push(Buffer.from(value));
-      }
+      return await this.readStreamToBuffer(result.stream);
+    } catch {
+      return null;
     }
-    return Buffer.concat(chunks);
+  }
+
+  private async readStreamToBuffer(stream: ReadableStream<Uint8Array> | AsyncIterable<unknown>): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    const webStream = stream as ReadableStream<Uint8Array>;
+    if (webStream && typeof webStream.getReader === 'function') {
+      const reader = webStream.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        if (value) {
+          chunks.push(Buffer.from(value));
+        }
+      }
+      return Buffer.concat(chunks);
+    }
+
+    const iterable = stream as AsyncIterable<unknown>;
+    if (iterable && typeof (iterable as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function') {
+      for await (const chunk of iterable) {
+        if (Buffer.isBuffer(chunk)) {
+          chunks.push(chunk);
+        } else if (chunk instanceof Uint8Array) {
+          chunks.push(Buffer.from(chunk));
+        }
+      }
+      return Buffer.concat(chunks);
+    }
+
+    throw new ServiceUnavailableException({
+      code: 'BLOB_STREAM_UNSUPPORTED',
+      message: 'Blob get() did not return a readable stream',
+    });
   }
 
   async getStream(pathname: string): Promise<Readable> {

@@ -66,6 +66,29 @@ describe('AppUpdateService', () => {
     expect(storage.createDownloadAuthorization).not.toHaveBeenCalled();
   });
 
+  it('does not treat DRAFT as an available client update', async () => {
+    prisma.appRelease.findFirst.mockResolvedValue(null);
+    const result = await service.checkUpdate({ versionCode: 1, locale: 'ru' });
+    expect(result.updateAvailable).toBe(false);
+    expect(prisma.appRelease.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: AppReleaseStatus.PUBLISHED }),
+      }),
+    );
+  });
+
+  it('refuses download authorization for DRAFT', async () => {
+    prisma.appRelease.findUnique.mockResolvedValue({
+      id: 'rel_draft',
+      status: AppReleaseStatus.DRAFT,
+      objectKey: 'releases/android/x/Ruznamo.apk',
+    });
+    await expect(service.authorizeDownload('rel_draft')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'RELEASE_NOT_DOWNLOADABLE' }),
+    });
+    expect(storage.createDownloadAuthorization).not.toHaveBeenCalled();
+  });
+
   it('issues a fresh signed URL only on download authorization', async () => {
     prisma.appRelease.findUnique.mockResolvedValue({
       id: 'rel_2',
