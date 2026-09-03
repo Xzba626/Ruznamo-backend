@@ -21,12 +21,26 @@ USER_ROOT
 ```
 ADMIN_ROOT
 ├── ADMIN_ORDERS_LIST → ADMIN_ORDER_DETAIL → approve/reject confirms
-├── ADMIN_PAYMENT_METHODS_LIST → detail → edit wizard
+├── ADMIN_PAYMENT_METHODS_LIST
+│     ├── ➕ add / ✏️ edit → ADMIN_PAYMENT_METHOD_EDIT wizard (text steps)
+│     ├── Save → clear wizard → ADMIN_PAYMENT_METHODS_LIST (no success-stuck state)
+│     └── Back → ADMIN_ROOT (`action:admin_menu`; never `admin:pm:list`)
 ├── ADMIN_SUPPORT_LIST → ADMIN_SUPPORT_CONVERSATION → ADMIN_SUPPORT_REPLY
 ├── ADMIN_LICENSES_LIST → ADMIN_LICENSE_DETAIL → devices / revoke confirm
-├── ADMIN_CREATE_LICENSE_PLAN → DURATION → CONFIRM → SUCCESS
+├── ADMIN_CREATE_LICENSE_PLAN → DURATION → CONFIRM → SUCCESS (Back from SUCCESS → licenses list)
 └── ADMIN_LANGUAGE
 ```
+
+### Admin requisites Back contract
+
+| Screen / moment | Back target | Callback |
+|-----------------|-------------|----------|
+| `ADMIN_PAYMENT_METHODS_LIST` | `ADMIN_ROOT` | `action:admin_menu` (stale alias `admin:pm:back`) |
+| After successful Save | list shown; wizard flow cleared | — |
+| Cancel mid-wizard | `ADMIN_PAYMENT_METHODS_LIST` | `admin:pm:cancel` |
+| `ADMIN_PAYMENT_METHOD_EDIT` (canonical parent) | `ADMIN_PAYMENT_METHODS_LIST` | (Cancel / Save) |
+
+There is no separate live DETAIL screen in v1: list row actions edit/toggle/delete directly.
 
 ## 3. Deep-link tree
 

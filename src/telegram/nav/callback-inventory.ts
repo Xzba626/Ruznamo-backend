@@ -63,6 +63,8 @@ export const CALLBACK_INVENTORY: CallbackInventoryEntry[] = [
   { pattern: 'admin:create_license', kind: 'exact', role: 'admin', emitsFrom: 'adminRoot', handlerHint: 'createLicense' },
   { pattern: 'admin:lic:create:', kind: 'prefix', role: 'admin', emitsFrom: 'createLicense', handlerHint: 'createWizard' },
   { pattern: 'admin:support:', kind: 'prefix', role: 'admin', emitsFrom: 'adminSupport', handlerHint: 'adminSupport' },
+  { pattern: 'action:admin_menu', kind: 'exact', role: 'admin', emitsFrom: 'adminRoot', handlerHint: 'showAdminMenu' },
+  { pattern: 'admin:pm:back', kind: 'exact', role: 'admin', emitsFrom: 'requisites', handlerHint: 'adminRootFromList' },
   { pattern: 'admin:pm:', kind: 'prefix', role: 'admin', emitsFrom: 'requisites', handlerHint: 'paymentMethods' },
 ];
 

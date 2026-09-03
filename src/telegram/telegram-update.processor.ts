@@ -335,7 +335,7 @@ export class TelegramUpdateProcessor {
       return true;
     }
     if (text === ADMIN_REPLY_PAYMENT_METHODS) {
-      await this.adminPaymentMethodsService.showList(chatId);
+      await this.adminPaymentMethodsService.showList(telegramId, chatId);
       return true;
     }
     if (text === ADMIN_REPLY_ORDERS) {
@@ -366,6 +366,14 @@ export class TelegramUpdateProcessor {
       BOT_FLOW.ADMIN_SUPPORT_REPLY,
     );
     if (!replyState?.conversationId) {
+      const session = await this.sessionService.getSession(telegramId);
+      if (session?.flow === 'admin_payment_method' && session.step !== 'done') {
+        await this.botApi.sendPlainMessage(
+          chatId,
+          'Ожидается текстовый ввод для реквизитов. Отправьте текст или нажмите «Отмена».',
+        );
+        return true;
+      }
       const resolved = await this.telegramAccountService.resolveTelegramUser({
         telegramId,
         chatId,
@@ -1416,20 +1424,6 @@ export class TelegramUpdateProcessor {
       return;
     }
 
-    if (data === 'admin:pm:back' || data === CB.ACTION_ADMIN_MENU) {
-      await this.botApi.answerCallbackQuery(query.id);
-      if (!(await this.isAdmin(telegramId))) {
-        await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
-        return;
-      }
-      const session = await this.sessionService.getSession(telegramId);
-      if (session?.flow === 'admin_payment_method') {
-        await this.sessionService.clear(telegramId);
-      }
-      await this.showAdminMenu(resolved, chatId);
-      return;
-    }
-
     const adminHandled = await this.adminPaymentMethodsService.handleCallback(
       telegramId,
       chatId,
@@ -1437,16 +1431,6 @@ export class TelegramUpdateProcessor {
       query.id,
     );
     if (adminHandled) {
-      return;
-    }
-
-    if (data === CB.ACTION_ADMIN_MENU) {
-      await this.botApi.answerCallbackQuery(query.id);
-      if (!(await this.isAdmin(telegramId))) {
-        await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
-        return;
-      }
-      await this.showAdminMenu(resolved, chatId);
       return;
     }
 
@@ -1571,11 +1555,15 @@ export class TelegramUpdateProcessor {
       return;
     }
 
-    if (data === CB.ACTION_ADMIN_MENU) {
+    if (data === CB.ACTION_ADMIN_MENU || data === 'admin:pm:back') {
       await this.botApi.answerCallbackQuery(query.id);
       if (!(await this.isAdmin(telegramId))) {
         await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
         return;
+      }
+      const session = await this.sessionService.getSession(telegramId);
+      if (session?.flow === 'admin_payment_method') {
+        await this.sessionService.clear(telegramId);
       }
       await this.showAdminMenu(resolved, chatId);
       return;

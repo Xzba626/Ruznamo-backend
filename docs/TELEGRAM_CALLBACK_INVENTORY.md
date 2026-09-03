@@ -26,6 +26,8 @@ Source of truth in code: `src/telegram/nav/callback-inventory.ts`.
 | `link:*` / `repl:*` | user | deeplink | confirm/cancel |
 | `payment:approve:*` / `payment:reject:*` | admin | orders | payment decision |
 | `admin:orders` | admin | ADMIN_ROOT | pending orders |
+| `admin:pm:list` | admin | requisites | open payment methods list |
+| `admin:pm:back` / `action:admin_menu` | admin | requisites list Back | ADMIN_ROOT |
 | `admin:pm:*` | admin | requisites | payment methods wizard |
 | `admin:support:*` | admin | support | inbox / reply / close |
 | `admin:licenses` / `admin:lic:*` | admin | licenses | list/detail/devices/revoke |
