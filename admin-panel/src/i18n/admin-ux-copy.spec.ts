@@ -20,6 +20,17 @@ describe('admin production UX copy', () => {
     expect(tj.profile.currentPassword).toMatch(/[а-яА-ЯёЁҷӣӯҳқғ]/);
   });
 
+  it('TJ nav does not keep Russian Обзор/Система', () => {
+    expect(tj.nav.dashboard).not.toBe('Обзор');
+    expect(tj.nav.system).not.toBe('Система');
+    expect(tj.system.title).not.toBe('Система');
+  });
+
+  it('RU preserved labels have no English security/audit tokens', () => {
+    expect(ru.dataReset.preserved_system_security_credentials.toLowerCase()).not.toContain('security');
+    expect(ru.dataReset.preserved_protected_system_audit_logs.toLowerCase()).not.toMatch(/\baudit\b/);
+  });
+
   it('updates empty/history/storage strings exist in RU and TJ', () => {
     expect(ru.updates.noCurrentTitle).toBeTruthy();
     expect(ru.updates.historyEmpty).toBeTruthy();

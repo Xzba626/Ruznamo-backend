@@ -5,7 +5,7 @@ export const tj: RuStrings = {
   ...ru,
   brand: 'Ruznamo — Админ',
   nav: {
-    dashboard: 'Обзор',
+    dashboard: 'Шарҳ',
     users: 'Корбарон',
     licenses: 'Литсензияҳо',
     devices: 'Дастгоҳҳо',
@@ -16,7 +16,7 @@ export const tj: RuStrings = {
     analytics: 'Таҳлил',
     updates: 'Навсозиҳо',
     requisites: 'Реквизитҳо',
-    system: 'Система',
+    system: 'Низоми',
     profile: 'Профил',
     plans: 'Тарифҳо',
     support: 'Дастгирӣ',
@@ -32,6 +32,7 @@ export const tj: RuStrings = {
   common: {
     ...ru.common,
     loading: 'Бор шуда истодааст…',
+    loadingSession: 'Боркунии сессия…',
     noData: 'Маълумот нест',
     confirm: 'Тасдиқ',
     cancel: 'Бекор',
@@ -44,7 +45,7 @@ export const tj: RuStrings = {
   },
   system: {
     ...ru.system,
-    title: 'Система',
+    title: 'Низоми',
     deviceVersions: 'Версияҳои барнома',
     noDeviceVersions: 'Ҳоло маълумот нест',
     dataManagement: 'Идоракунии маълумот',
