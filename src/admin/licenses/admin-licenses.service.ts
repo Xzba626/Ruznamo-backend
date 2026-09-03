@@ -3,6 +3,7 @@ import { AuditActorType, BillingPeriod, LicenseIssueSource, LicenseStatus, PlanC
 import { AuditService } from '../../audit/audit.service';
 import { readMaxDevicesFromFeatures } from '../common/plan-features.util';
 import { LicenseIssuanceService } from '../../licenses/license-issuance.service';
+import { revokeDeviceInstallation } from '../../devices/revoke-device-installation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginateMeta, PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreateManualLicenseDto } from './dto/create-manual-license.dto';
@@ -270,10 +271,7 @@ export class AdminLicensesService {
 
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await tx.deviceInstallation.update({
-        where: { id: deviceId },
-        data: { revokedAt: now },
-      });
+      await revokeDeviceInstallation(tx, deviceId, now);
       await tx.licenseEvent.create({
         data: {
           licenseId,

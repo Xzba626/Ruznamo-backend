@@ -54,6 +54,11 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
 
   const auditService = { log: jest.fn() };
 
+  const adminTelegramAuthService = {
+    isTelegramAdmin: jest.fn().mockResolvedValue(true),
+    listActiveAdminTelegramIds: jest.fn().mockResolvedValue(['999']),
+  };
+
   const processor = new TelegramUpdateProcessor(
     prisma as never,
     configService as never,
@@ -72,6 +77,7 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
     { listActive: jest.fn().mockResolvedValue([]) } as never,
     { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
     adminTelegramService as never,
+    adminTelegramAuthService as never,
     supportRelay as never,
     sessionService as never,
     commandsService as never,
@@ -86,6 +92,8 @@ describe('TelegramUpdateProcessor pairing and relay', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sessionService.getSession.mockResolvedValue(null);
+    adminTelegramAuthService.isTelegramAdmin.mockImplementation(async (id: bigint) => id === 999n);
+    adminTelegramAuthService.listActiveAdminTelegramIds.mockResolvedValue(['999']);
   });
 
   it('handles plain admin pairing code before relay', async () => {
@@ -277,6 +285,11 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
 
   const auditService = { log: jest.fn() };
 
+  const adminTelegramAuthService = {
+    isTelegramAdmin: jest.fn().mockResolvedValue(true),
+    listActiveAdminTelegramIds: jest.fn().mockResolvedValue(['999']),
+  };
+
   const processor = new TelegramUpdateProcessor(
     prisma as never,
     configService as never,
@@ -288,6 +301,7 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
     { listActive: jest.fn().mockResolvedValue([]) } as never,
     { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
     { tryCompleteLinkFromBot: jest.fn() } as never,
+    adminTelegramAuthService as never,
     { relayFreeText: jest.fn() } as never,
     sessionService as never,
     commandsService as never,
@@ -302,6 +316,8 @@ describe('TelegramUpdateProcessor admin callbacks', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sessionService.getSession.mockResolvedValue(null);
+    adminTelegramAuthService.isTelegramAdmin.mockImplementation(async (id: bigint) => id === 999n);
+    adminTelegramAuthService.listActiveAdminTelegramIds.mockResolvedValue(['999']);
   });
 
   it('rejects approve callback from non-admin telegram user', async () => {

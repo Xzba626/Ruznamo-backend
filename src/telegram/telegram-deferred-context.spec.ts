@@ -60,6 +60,11 @@ describe('TelegramUpdateProcessor deferred context and Standard card', () => {
 
   const auditService = { log: jest.fn() };
 
+  const adminTelegramAuthService = {
+    isTelegramAdmin: jest.fn().mockResolvedValue(false),
+    listActiveAdminTelegramIds: jest.fn().mockResolvedValue([]),
+  };
+
   const processor = new TelegramUpdateProcessor(
     prisma as never,
     configService as never,
@@ -71,6 +76,7 @@ describe('TelegramUpdateProcessor deferred context and Standard card', () => {
     { listActive: jest.fn().mockResolvedValue([]) } as never,
     { handleText: jest.fn().mockResolvedValue(false), handleCallback: jest.fn().mockResolvedValue(false) } as never,
     { tryCompleteLinkFromBot: jest.fn() } as never,
+    adminTelegramAuthService as never,
     { relayFreeText: jest.fn() } as never,
     sessionService as never,
     commandsService as never,

@@ -61,13 +61,6 @@ export class AuthService {
     });
 
     if (existing) {
-      if (existing.revokedAt) {
-        throw new ForbiddenException({
-          code: 'DEVICE_REVOKED',
-          message: 'This device installation has been revoked',
-        });
-      }
-
       if (existing.user.status === UserStatus.SUSPENDED) {
         throw new ForbiddenException({
           code: 'USER_SUSPENDED',
@@ -104,10 +97,10 @@ export class AuthService {
       await this.auditService.log({
         actorType: AuditActorType.USER,
         actorId: existing.userId,
-        action: 'mobile.login',
+        action: existing.revokedAt ? 'mobile.login_revoked_device' : 'mobile.login',
         entityType: 'DeviceInstallation',
         entityId: device.id,
-        metadata: { installationId: dto.installationId, returning: true },
+        metadata: { installationId: dto.installationId, returning: true, revoked: Boolean(existing.revokedAt) },
         ipAddress: meta.ipAddress,
         userAgent: meta.userAgent,
       });
@@ -235,7 +228,7 @@ export class AuthService {
     }
 
     const device = stored.device;
-    if (!device || device.revokedAt) {
+    if (!device) {
       throw new ForbiddenException({
         code: 'DEVICE_REVOKED',
         message: 'No active device found for this session',

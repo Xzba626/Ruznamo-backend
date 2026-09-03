@@ -11,9 +11,11 @@ import {
   TelegramLanguage,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { AdminTelegramAuthService } from '../admin/telegram/admin-telegram-auth.service';
 import { AdminTelegramService } from '../admin/telegram/admin-telegram.service';
 import {
   extractAdminLinkCodeFromStart,
+  extractAdminRebindTokenFromStart,
   normalizeAdminLinkCode,
 } from '../admin/telegram/admin-link-code.util';
 import { PaymentMethodService } from '../payments/payment-method.service';
@@ -97,6 +99,7 @@ export class TelegramUpdateProcessor {
     private readonly paymentMethodService: PaymentMethodService,
     private readonly adminPaymentMethodsService: TelegramAdminPaymentMethodsService,
     private readonly adminTelegramService: AdminTelegramService,
+    private readonly adminTelegramAuthService: AdminTelegramAuthService,
     private readonly supportRelay: TelegramSupportRelayService,
     private readonly sessionService: TelegramBotSessionService,
     private readonly commandsService: TelegramCommandsService,
@@ -133,9 +136,8 @@ export class TelegramUpdateProcessor {
     }
   }
 
-  private isAdmin(telegramUserId: bigint): boolean {
-    const ids = this.configService.get<string[]>('telegram.adminTelegramIds', []);
-    return ids.includes(telegramUserId.toString());
+  private async isAdmin(telegramUserId: bigint): Promise<boolean> {
+    return this.adminTelegramAuthService.isTelegramAdmin(telegramUserId);
   }
 
   private i18n(user: ResolvedTelegramUser) {
@@ -458,21 +460,21 @@ export class TelegramUpdateProcessor {
         await this.botApi.sendMessage(chatId, msgs.languageSelect, languageKeyboard(msgs));
         return true;
       case 'admin':
-        if (!this.isAdmin(telegramId)) {
+        if (!(await this.isAdmin(telegramId))) {
           await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
           return true;
         }
         await this.showAdminMenu(resolved, chatId);
         return true;
       case 'requisites':
-        if (!this.isAdmin(telegramId)) {
+        if (!(await this.isAdmin(telegramId))) {
           await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
           return true;
         }
         await this.adminPaymentMethodsService.showList(chatId);
         return true;
       case 'orders':
-        if (!this.isAdmin(telegramId)) {
+        if (!(await this.isAdmin(telegramId))) {
           await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
           return true;
         }
@@ -493,14 +495,14 @@ export class TelegramUpdateProcessor {
     const telegramId = BigInt(from.id);
     const chatId = BigInt(message.chat.id);
 
-    if (message.reply_to_message && this.isAdmin(telegramId)) {
+    if (message.reply_to_message && (await this.isAdmin(telegramId))) {
       const adminReplyHandled = await this.handleAdminSupportReply(message, telegramId, chatId);
       if (adminReplyHandled) {
         return;
       }
     }
 
-    if (this.isAdmin(telegramId)) {
+    if (await this.isAdmin(telegramId)) {
       if (message.photo?.length || message.document) {
         const adminMediaHandled = await this.handleAdminMediaMessage(message, telegramId, chatId);
         if (adminMediaHandled) {
@@ -576,7 +578,7 @@ export class TelegramUpdateProcessor {
       }
     }
 
-    if (this.isAdmin(telegramId)) {
+    if (await this.isAdmin(telegramId)) {
       const handled = await this.handleAdminTextMessage(text, telegramId, chatId, from);
       if (handled) {
         return;
@@ -729,6 +731,41 @@ export class TelegramUpdateProcessor {
     await this.sendUserMessage(chatId, resolved, msgs.receiptReceived);
   }
 
+  private async tryAdminRebind(
+    token: string,
+    telegramId: bigint,
+    chatId: bigint,
+  ): Promise<void> {
+    const result = await this.adminTelegramService.tryIssueRebindOtpFromBot({
+      token,
+      telegramUserId: telegramId,
+    });
+
+    if (!result.ok) {
+      if (result.reason === 'expired') {
+        await this.botApi.sendMessage(
+          chatId,
+          'Ссылка для привязки истекла. Создайте новую в профиле админ-панели.',
+        );
+      } else {
+        await this.botApi.sendMessage(chatId, 'Ссылка для привязки недействительна.');
+      }
+      return;
+    }
+
+    const expiresLabel = result.expiresAt.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const text =
+      'Привязка Telegram администратора Ruznamo\n\n' +
+      `Код: ${result.otp}\n\n` +
+      `Действует до ${expiresLabel} (5 минут).\n\n` +
+      'Введите этот код в админ-панели. Никому не сообщайте код.';
+
+    await this.botApi.sendMessage(chatId, text, copyCodeButton('📋 Копировать код', result.otp));
+  }
+
   private async tryAdminPairing(
     code: string,
     telegramId: bigint,
@@ -764,6 +801,16 @@ export class TelegramUpdateProcessor {
     username?: string,
     firstName?: string,
   ): Promise<void> {
+    const rebindToken = extractAdminRebindTokenFromStart(text);
+    if (rebindToken) {
+      this.logger.log({
+        telegramUserId: telegramId.toString(),
+        handler: 'admin_rebind_start',
+      });
+      await this.tryAdminRebind(rebindToken, telegramId, chatId);
+      return;
+    }
+
     const startCode = extractAdminLinkCodeFromStart(text);
     if (startCode) {
       this.logger.log({
@@ -813,7 +860,7 @@ export class TelegramUpdateProcessor {
       entityId: resolved.userId,
     });
 
-    if (this.isAdmin(telegramId)) {
+    if (await this.isAdmin(telegramId)) {
       await this.botApi.removeReplyKeyboard(chatId);
       await this.commandsService.registerAdminCommandsForChat(chatId);
     }
@@ -845,7 +892,7 @@ export class TelegramUpdateProcessor {
     telegramUserId: bigint,
     firstName?: string,
   ): Promise<void> {
-    if (this.isAdmin(telegramUserId)) {
+    if (await this.isAdmin(telegramUserId)) {
       await this.sendAdminRootMenu(resolved, chatId);
       return;
     }
@@ -918,10 +965,10 @@ export class TelegramUpdateProcessor {
     await this.sendRootMenu(resolved, chatId, telegramUserId, firstName);
   }
 
-  private mainMenuKeyboard(
+  private async mainMenuKeyboard(
     msgs: ReturnType<typeof getTelegramI18n>,
     telegramUserId: bigint,
-  ): InlineKeyboardMarkup {
+  ): Promise<InlineKeyboardMarkup> {
     const rows: InlineKeyboardMarkup['inline_keyboard'] = [
       [{ text: msgs.replyBuyLicense, callback_data: CB.ACTION_GET_KEY }],
       [{ text: msgs.replyMyLicenses, callback_data: CB.ACTION_MY_SUB }],
@@ -930,7 +977,7 @@ export class TelegramUpdateProcessor {
       [{ text: msgs.replySupport, callback_data: CB.ACTION_SUPPORT }],
       [{ text: msgs.replyLanguage, callback_data: CB.ACTION_LANGUAGE }],
     ];
-    if (this.isAdmin(telegramUserId)) {
+    if (await this.isAdmin(telegramUserId)) {
       rows.push([{ text: msgs.replyAdminMenu, callback_data: CB.ACTION_ADMIN_MENU }]);
     }
     return { inline_keyboard: rows };
@@ -1383,7 +1430,7 @@ export class TelegramUpdateProcessor {
 
     if (data === CB.ACTION_ADMIN_MENU) {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
         return;
       }
@@ -1393,7 +1440,7 @@ export class TelegramUpdateProcessor {
 
     if (data === 'admin:support:list') {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         return;
       }
       await this.showAdminSupportInbox(chatId);
@@ -1402,7 +1449,7 @@ export class TelegramUpdateProcessor {
 
     if (data.startsWith('admin:support:open:')) {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         return;
       }
       const conversationId = data.slice('admin:support:open:'.length);
@@ -1412,7 +1459,7 @@ export class TelegramUpdateProcessor {
 
     if (data.startsWith('admin:support:reply:')) {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         return;
       }
       const conversationId = data.slice('admin:support:reply:'.length);
@@ -1438,7 +1485,7 @@ export class TelegramUpdateProcessor {
 
     if (data.startsWith('admin:support:close:')) {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         return;
       }
       const conversationId = data.slice('admin:support:close:'.length);
@@ -1461,7 +1508,7 @@ export class TelegramUpdateProcessor {
 
     if (data === 'admin:create_license') {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         return;
       }
       const adminMsgs = getTelegramI18n(TelegramLanguage.RU);
@@ -1477,7 +1524,7 @@ export class TelegramUpdateProcessor {
 
     if (data.startsWith('admin:lic:create:plan:')) {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         return;
       }
       const planCode = data.slice('admin:lic:create:plan:'.length);
@@ -1495,7 +1542,7 @@ export class TelegramUpdateProcessor {
 
     if (data.startsWith('admin:lic:create:dur:')) {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         return;
       }
       const billingPeriod = data.slice('admin:lic:create:dur:'.length);
@@ -1524,7 +1571,7 @@ export class TelegramUpdateProcessor {
 
     if (data === 'admin:lic:create:confirm') {
       await this.botApi.answerCallbackQuery(query.id);
-      if (!this.isAdmin(telegramId)) {
+      if (!(await this.isAdmin(telegramId))) {
         return;
       }
       const session = await this.sessionService.get<AdminCreateLicensePayload>(
@@ -1567,7 +1614,7 @@ export class TelegramUpdateProcessor {
 
     if (data === 'admin:orders') {
       await this.botApi.answerCallbackQuery(query.id);
-      if (this.isAdmin(telegramId)) {
+      if (await this.isAdmin(telegramId)) {
         await this.showPendingOrders(chatId);
       }
       return;
@@ -1637,12 +1684,20 @@ export class TelegramUpdateProcessor {
       if (licenseId && deviceId) {
         await this.botApi.answerCallbackQuery(query.id);
         try {
-          await this.telegramLicenseLink.revokeDeviceAsHolder(
+          const result = await this.telegramLicenseLink.revokeDeviceAsHolder(
             resolved.telegramAccountId,
             licenseId,
             deviceId,
           );
-          await this.sendUserMessage(chatId, resolved, msgs.deviceRevoked);
+          await this.sendUserMessage(
+            chatId,
+            resolved,
+            msgs.deviceRevokedUsage(
+              result.devicesUsedBefore,
+              result.deviceLimit,
+              result.devicesUsedAfter,
+            ),
+          );
         } catch {
           await this.sendUserMessage(chatId, resolved, msgs.adminUnauthorized);
         }
@@ -1885,7 +1940,7 @@ export class TelegramUpdateProcessor {
       ],
     };
 
-    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+    const adminIds = await this.adminTelegramAuthService.listActiveAdminTelegramIds();
     for (const adminId of adminIds) {
       const chat = BigInt(adminId);
       try {
@@ -1915,7 +1970,7 @@ export class TelegramUpdateProcessor {
     const userLang = resolved?.user.telegramAccount?.language;
     const userMsgs = getTelegramI18n(userLang ?? null);
 
-    if (!this.isAdmin(telegramId)) {
+    if (!(await this.isAdmin(telegramId))) {
       await this.auditService.log({
         actorType: AuditActorType.TELEGRAM_BOT,
         action: 'telegram.admin.unauthorized',
@@ -2333,3 +2388,4 @@ export class TelegramUpdateProcessor {
     );
   }
 }
+

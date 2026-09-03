@@ -79,42 +79,52 @@ export class EntitlementService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSnapshot(userId: string, installationId?: string): Promise<EntitlementSnapshot> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        trialGrant: true,
-        licenses: {
-          where: {
-            status: { in: [LicenseStatus.ACTIVE, LicenseStatus.PENDING] },
+    const [user, currentDevice] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          trialGrant: true,
+          licenses: {
+            where: {
+              status: { in: [LicenseStatus.ACTIVE, LicenseStatus.PENDING] },
+            },
+            orderBy: { expiresAt: 'desc' },
+            include: { plan: { include: { features: true } } },
           },
-          orderBy: { expiresAt: 'desc' },
-          include: { plan: { include: { features: true } } },
-        },
-        devices: {
-          where: { revokedAt: null },
-          include: {
-            activations: {
-              include: {
-                license: {
-                  include: { plan: { include: { features: true } } },
+          devices: {
+            where: { revokedAt: null },
+            include: {
+              activations: {
+                include: {
+                  license: {
+                    include: { plan: { include: { features: true } } },
+                  },
                 },
               },
             },
           },
         },
-      },
-    });
+      }),
+      installationId
+        ? this.prisma.deviceInstallation.findFirst({
+            where: { userId, installationId },
+            select: { id: true, installationId: true, revokedAt: true },
+          })
+        : Promise.resolve(null),
+    ]);
 
     if (!user) {
       throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
     }
 
+    const currentDeviceRevoked = Boolean(currentDevice?.revokedAt);
+
     if (user.status === UserStatus.SUSPENDED) {
-      return this.buildSnapshot(user, null, null, 'SUSPENDED', 'NONE', false, installationId, 0);
+      return this.buildSnapshot(user, null, null, 'SUSPENDED', 'NONE', false, installationId, 0, currentDeviceRevoked);
     }
 
     if (user.status === UserStatus.DELETED) {
-      return this.buildSnapshot(user, null, null, 'NONE', 'NONE', false, installationId, 0);
+      return this.buildSnapshot(user, null, null, 'NONE', 'NONE', false, installationId, 0, currentDeviceRevoked);
     }
 
     const now = new Date();
@@ -125,15 +135,27 @@ export class EntitlementService {
 
     if (activeLicense) {
       const activationCount = await this.countActiveLicenseActivations(activeLicense.id);
+      const deviceEntitled =
+        !currentDeviceRevoked &&
+        Boolean(
+          installationId &&
+            (await this.currentDeviceHasActiveLicenseActivation(
+              userId,
+              installationId,
+              activeLicense.id,
+            )),
+        );
+
       return this.buildSnapshot(
         user,
         activeLicense,
         null,
         'ACTIVE',
         'LICENSE',
-        true,
+        deviceEntitled,
         installationId,
         activationCount,
+        currentDeviceRevoked,
       );
     }
 
@@ -144,7 +166,20 @@ export class EntitlementService {
       trial.expiresAt > now;
 
     if (trialActive) {
-      return this.buildSnapshot(user, null, trial, 'TRIAL', 'TRIAL', true, installationId, 0);
+      const trialDeviceEntitled =
+        !currentDeviceRevoked &&
+        (!installationId || Boolean(currentDevice && !currentDevice.revokedAt));
+      return this.buildSnapshot(
+        user,
+        null,
+        trial,
+        'TRIAL',
+        'TRIAL',
+        trialDeviceEntitled,
+        installationId,
+        0,
+        currentDeviceRevoked,
+      );
     }
 
     const trialExpired = trial && trial.expiresAt <= now;
@@ -157,6 +192,7 @@ export class EntitlementService {
       false,
       installationId,
       0,
+      currentDeviceRevoked,
     );
   }
 
@@ -238,6 +274,24 @@ export class EntitlementService {
     })[0];
   }
 
+  private async currentDeviceHasActiveLicenseActivation(
+    userId: string,
+    installationId: string,
+    licenseId: string,
+  ): Promise<boolean> {
+    const activation = await this.prisma.licenseActivation.findFirst({
+      where: {
+        licenseId,
+        device: {
+          userId,
+          installationId,
+          revokedAt: null,
+        },
+      },
+    });
+    return Boolean(activation);
+  }
+
   private async countActiveLicenseActivations(licenseId: string): Promise<number> {
     return this.prisma.licenseActivation.count({
       where: {
@@ -263,18 +317,30 @@ export class EntitlementService {
     access: boolean,
     installationId: string | undefined,
     licenseActivationCount: number,
+    currentDeviceRevoked: boolean,
   ): EntitlementSnapshot {
     const userDeviceCount = user.devices.filter((device) => !device.revokedAt).length;
     const features = license
       ? this.parsePlanFeatures(license.plan.features)
       : { ...DEFAULT_FEATURES };
 
-    const currentInstallationActive = installationId
-      ? user.devices.some((device) => device.installationId === installationId && !device.revokedAt)
-      : false;
+    const currentInstallationActive =
+      !currentDeviceRevoked &&
+      Boolean(
+        installationId &&
+          user.devices.some(
+            (device) => device.installationId === installationId && !device.revokedAt,
+          ),
+      );
 
     const devicesActiveCount =
       source === 'LICENSE' && license ? licenseActivationCount : userDeviceCount;
+
+    const installationHasLicenseActivation =
+      source === 'LICENSE' && license && installationId
+        ? currentInstallationActive &&
+          this.deviceHasLicenseActivation(user, installationId, license.id)
+        : currentInstallationActive;
 
     return {
       access,
@@ -307,10 +373,7 @@ export class EntitlementService {
       devices: {
         activeCount: devicesActiveCount,
         max: features.max_devices,
-        currentInstallationActive:
-          source === 'LICENSE' && license && installationId
-            ? this.deviceHasLicenseActivation(user, installationId, license.id)
-            : currentInstallationActive,
+        currentInstallationActive: installationHasLicenseActivation,
       },
       features,
       evaluatedAt: new Date(),

@@ -157,6 +157,11 @@ enum DataResetScope {
   FACTORY_RESET
 }
 
+enum AdminTelegramIdentityStatus {
+  ACTIVE
+  REVOKED
+}
+
 // ---------------------------------------------------------------------------
 // Users & identity
 // ---------------------------------------------------------------------------
@@ -663,8 +668,9 @@ model AdminUser {
 
   roles                 AdminUserRole[]
   refreshTokens         AdminRefreshToken[]
-  telegramIdentity      AdminTelegramIdentity?
-  telegramLinkTokens    AdminTelegramLinkToken[]
+  telegramIdentity         AdminTelegramIdentity?
+  telegramLinkTokens       AdminTelegramLinkToken[]
+  telegramRebindChallenges AdminTelegramRebindChallenge[]
   approvedOrders        Order[]                  @relation("OrderApprovedBy")
   reviewedReceipts      Receipt[]                @relation("ReceiptReviewedBy")
   issuedLicenses        License[]                @relation("LicenseIssuedByAdmin")
@@ -691,21 +697,48 @@ model AdminRefreshToken {
 }
 
 model AdminTelegramIdentity {
-  id             String    @id @default(cuid())
-  adminUserId    String    @unique
-  telegramUserId BigInt    @unique
+  id             String                      @id @default(cuid())
+  adminUserId    String                      @unique
+  telegramUserId BigInt                      @unique
   chatId         BigInt?
   username       String?
   firstName      String?
-  isVerified     Boolean   @default(false)
-  verifiedAt     DateTime? @db.Timestamptz(3)
-  lastSeenAt     DateTime? @db.Timestamptz(3)
-  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  isVerified     Boolean                     @default(false)
+  status         AdminTelegramIdentityStatus @default(ACTIVE)
+  verifiedAt     DateTime?                   @db.Timestamptz(3)
+  revokedAt      DateTime?                   @db.Timestamptz(3)
+  lastSeenAt     DateTime?                   @db.Timestamptz(3)
+  createdAt      DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                    @updatedAt @db.Timestamptz(3)
 
   adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
   @@index([isVerified])
+  @@index([status])
+}
+
+model AdminTelegramRevokedId {
+  telegramUserId       BigInt   @id
+  revokedAt            DateTime @default(now()) @db.Timestamptz(3)
+  revokedByAdminUserId String?
+
+  @@index([revokedAt])
+}
+
+model AdminTelegramRebindChallenge {
+  id             String    @id @default(cuid())
+  adminUserId    String
+  tokenHash      String    @unique
+  otpHash        String?
+  telegramUserId BigInt?
+  expiresAt      DateTime  @db.Timestamptz(3)
+  consumedAt     DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([expiresAt])
 }
 
 model AdminTelegramLinkToken {

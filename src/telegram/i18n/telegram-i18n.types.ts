@@ -107,6 +107,7 @@ export interface TelegramI18n {
   revokeDeviceButton: string;
   revokeDeviceConfirm: string;
   deviceRevoked: string;
+  deviceRevokedUsage: (before: number, max: number, after: number) => string;
   licenseControlSection: string;
   telegramAuthOtp: (code: string) => string;
   telegramAuthChallengeUsed: string;

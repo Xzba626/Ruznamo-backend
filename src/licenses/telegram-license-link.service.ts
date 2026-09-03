@@ -14,6 +14,8 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { PrismaService } from '../prisma/prisma.service';
+import { readMaxDevicesFromFeatures } from '../admin/common/plan-features.util';
+import { revokeDeviceInstallation } from '../devices/revoke-device-installation';
 import {
   buildLicenseLinkStartPayload,
   generateOpaqueToken,
@@ -261,8 +263,17 @@ export class TelegramLicenseLinkService {
     holderTelegramAccountId: string,
     licenseId: string,
     deviceId: string,
-  ): Promise<void> {
-    const license = await this.prisma.license.findUnique({ where: { id: licenseId } });
+  ): Promise<{
+    licenseId: string;
+    deviceId: string;
+    devicesUsedBefore: number;
+    devicesUsedAfter: number;
+    deviceLimit: number;
+  }> {
+    const license = await this.prisma.license.findUnique({
+      where: { id: licenseId },
+      include: { plan: { include: { features: true } } },
+    });
     if (!license) {
       throw new NotFoundException('License not found');
     }
@@ -282,12 +293,14 @@ export class TelegramLicenseLinkService {
       throw new BadRequestException('Device is not active on this license');
     }
 
+    const devicesUsedBefore = await this.prisma.licenseActivation.count({
+      where: { licenseId, device: { revokedAt: null } },
+    });
+    const deviceLimit = readMaxDevicesFromFeatures(license.plan.features) ?? 1;
     const now = new Date();
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.deviceInstallation.update({
-        where: { id: deviceId },
-        data: { revokedAt: now },
-      });
+      await revokeDeviceInstallation(tx, deviceId, now);
       await tx.licenseEvent.create({
         data: {
           licenseId,
@@ -299,14 +312,24 @@ export class TelegramLicenseLinkService {
       });
     });
 
+    const devicesUsedAfter = devicesUsedBefore - 1;
+
     await this.auditService.log({
       actorType: AuditActorType.TELEGRAM_BOT,
       actorId: holderTelegramAccountId,
       action: 'license.device.revoked_by_holder',
       entityType: 'LicenseActivation',
       entityId: activation.id,
-      metadata: { licenseId, deviceId },
+      metadata: { licenseId, deviceId, devicesUsedBefore, devicesUsedAfter, deviceLimit },
     });
+
+    return {
+      licenseId,
+      deviceId,
+      devicesUsedBefore,
+      devicesUsedAfter,
+      deviceLimit,
+    };
   }
 
   private async loadValidChallenge(token: string) {

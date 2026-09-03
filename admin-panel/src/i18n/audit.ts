@@ -11,6 +11,9 @@ const auditActionLabels: Record<string, string> = {
   'admin.login.failed': 'Неудачная попытка входа',
   'admin.telegram.link_token.created': 'Создан код привязки Telegram',
   'admin.telegram.linked': 'Telegram привязан к администратору',
+  'admin.telegram.rebind.started': 'Начата смена Telegram администратора',
+  'admin.telegram.replaced': 'Изменён Telegram администратора',
+  'admin.sessions.revoked_others': 'Завершены другие сеансы администратора',
   'admin.license.revoke': 'Лицензия отозвана администратором',
   'admin.token.refresh': 'Обновление сессии администратора',
   'admin.logout': 'Выход администратора',
@@ -48,7 +51,7 @@ const entityTypeLabels: Record<string, string> = {
   TelegramCallback: 'Telegram',
 };
 
-export const UNKNOWN_AUDIT_ACTION_LABEL = 'Неизвестное системное событие';
+export const UNKNOWN_AUDIT_ACTION_LABEL = 'Системное событие';
 export const UNKNOWN_ENTITY_LABEL = 'Неизвестный объект';
 
 export interface AuditActionPresentation {

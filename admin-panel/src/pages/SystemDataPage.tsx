@@ -117,7 +117,7 @@ export function SystemDataPage() {
             <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           </label>
           <label>
-            {strings.profile.newPassword}
+            {strings.dataReset.repeatPassword}
             <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
           </label>
         </div>
@@ -130,7 +130,7 @@ export function SystemDataPage() {
         <h2>{strings.system.dataManagement}</h2>
         <div className="form-grid">
           <label>
-            Scope
+            {strings.dataReset.scopeLabel}
             <select value={scope} onChange={(e) => setScope(e.target.value as Scope)}>
               <option value="TEST_DATA_CLEANUP">{strings.dataReset.scopeTest}</option>
               <option value="USER_DATA_RESET">{strings.dataReset.scopeUser}</option>

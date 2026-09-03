@@ -10,7 +10,8 @@ import { EntitlementService } from './entitlement.service';
 describe('EntitlementService', () => {
   const prisma = {
     user: { findUnique: jest.fn() },
-    licenseActivation: { count: jest.fn() },
+    licenseActivation: { count: jest.fn(), findFirst: jest.fn() },
+    deviceInstallation: { findFirst: jest.fn() },
   };
 
   const service = new EntitlementService(prisma as never);
@@ -18,9 +19,16 @@ describe('EntitlementService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.licenseActivation.count.mockResolvedValue(0);
+    prisma.licenseActivation.findFirst.mockResolvedValue(null);
+    prisma.deviceInstallation.findFirst.mockResolvedValue(null);
   });
 
   it('returns trial access for active trial', async () => {
+    prisma.deviceInstallation.findFirst.mockResolvedValue({
+      id: 'dev_1',
+      installationId: 'inst-1',
+      revokedAt: null,
+    });
     prisma.user.findUnique.mockResolvedValue({
       status: UserStatus.ACTIVE,
       trialGrant: {
@@ -61,6 +69,12 @@ describe('EntitlementService', () => {
 
   it('returns license access when the mobile user has a device activation', async () => {
     prisma.licenseActivation.count.mockResolvedValue(1);
+    prisma.licenseActivation.findFirst.mockResolvedValue({ id: 'act_1' });
+    prisma.deviceInstallation.findFirst.mockResolvedValue({
+      id: 'dev_1',
+      installationId: 'inst-1',
+      revokedAt: null,
+    });
     prisma.user.findUnique.mockResolvedValue({
       status: UserStatus.ACTIVE,
       trialGrant: null,
@@ -104,7 +118,88 @@ describe('EntitlementService', () => {
     expect(snapshot.devices.currentInstallationActive).toBe(true);
   });
 
-  it('returns license access when license is owned directly by the user', async () => {
+  it('denies device entitlement when license is owned but current device has no activation', async () => {
+    prisma.licenseActivation.count.mockResolvedValue(0);
+    prisma.deviceInstallation.findFirst.mockResolvedValue({
+      id: 'dev_1',
+      installationId: 'inst-1',
+      revokedAt: null,
+    });
+    prisma.user.findUnique.mockResolvedValue({
+      status: UserStatus.ACTIVE,
+      trialGrant: null,
+      licenses: [
+        {
+          id: 'lic_1',
+          status: LicenseStatus.ACTIVE,
+          keyPrefix: 'RZ-ABCD',
+          startsAt: new Date(Date.now() - 3600000),
+          expiresAt: new Date(Date.now() + 86400000),
+          revokedAt: null,
+          plan: {
+            code: PlanCode.PRO,
+            name: 'Pro',
+            features: [
+              { key: 'planning_horizon_days', value: '90', valueType: 'INT' },
+              { key: 'max_devices', value: '2', valueType: 'INT' },
+              { key: 'cloud_sync', value: 'true', valueType: 'BOOL' },
+              { key: 'advanced_analytics', value: 'true', valueType: 'BOOL' },
+            ],
+          },
+        },
+      ],
+      devices: [{ installationId: 'inst-1', revokedAt: null, activations: [] }],
+    });
+
+    const snapshot = await service.getSnapshot('usr_1', 'inst-1');
+
+    expect(snapshot.access).toBe(false);
+    expect(snapshot.source).toBe('LICENSE');
+    expect(snapshot.license?.id).toBe('lic_1');
+    expect(snapshot.devices.currentInstallationActive).toBe(false);
+  });
+
+  it('denies entitlement on revoked installation even when license is active', async () => {
+    prisma.licenseActivation.count.mockResolvedValue(1);
+    prisma.deviceInstallation.findFirst.mockResolvedValue({
+      id: 'dev_1',
+      installationId: 'inst-revoked',
+      revokedAt: new Date(),
+    });
+    prisma.user.findUnique.mockResolvedValue({
+      status: UserStatus.ACTIVE,
+      trialGrant: null,
+      licenses: [
+        {
+          id: 'lic_1',
+          status: LicenseStatus.ACTIVE,
+          keyPrefix: 'RZ-ABCD',
+          startsAt: new Date(Date.now() - 3600000),
+          expiresAt: new Date(Date.now() + 86400000),
+          revokedAt: null,
+          plan: {
+            code: PlanCode.PRO,
+            name: 'Pro',
+            features: [
+              { key: 'planning_horizon_days', value: '90', valueType: 'INT' },
+              { key: 'max_devices', value: '2', valueType: 'INT' },
+              { key: 'cloud_sync', value: 'true', valueType: 'BOOL' },
+              { key: 'advanced_analytics', value: 'true', valueType: 'BOOL' },
+            ],
+          },
+        },
+      ],
+      devices: [],
+    });
+
+    const snapshot = await service.getSnapshot('usr_1', 'inst-revoked');
+
+    expect(snapshot.access).toBe(false);
+    expect(snapshot.license?.id).toBe('lic_1');
+    expect(snapshot.devices.currentInstallationActive).toBe(false);
+  });
+
+  it('returns license metadata without device entitlement when license is owned but no installation context', async () => {
     prisma.licenseActivation.count.mockResolvedValue(0);
     prisma.user.findUnique.mockResolvedValue({
       status: UserStatus.ACTIVE,
@@ -134,7 +229,7 @@ describe('EntitlementService', () => {
 
     const snapshot = await service.getSnapshot('usr_1');
 
-    expect(snapshot.access).toBe(true);
+    expect(snapshot.access).toBe(false);
     expect(snapshot.source).toBe('LICENSE');
     expect(snapshot.devices.max).toBe(2);
   });

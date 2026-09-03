@@ -148,6 +148,8 @@ export const ru: TelegramI18n = {
   revokeDeviceButton: 'Отключить устройство',
   revokeDeviceConfirm: 'Подтвердите отключение устройства с этой лицензии.',
   deviceRevoked: '✅ Устройство отключено.',
+  deviceRevokedUsage: (before, max, after) =>
+    `✅ Устройство отключено.\n\nБыло: ${before} из ${max}\nСтало: ${after} из ${max}`,
   licenseControlSection: '🔐 Управление лицензией',
   telegramAuthOtp: (code) =>
     `Код подтверждения:\n\n${code}\n\nКод действует 5 минут.\nНикому его не сообщайте.`,

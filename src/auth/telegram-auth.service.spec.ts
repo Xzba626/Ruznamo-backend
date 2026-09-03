@@ -79,6 +79,29 @@ describe('TelegramAuthService', () => {
     );
   });
 
+  it('creates RECOVERY challenge on revoked device session', async () => {
+    prisma.deviceInstallation.findFirst.mockResolvedValue({
+      id: 'device_1',
+      revokedAt: new Date(),
+    });
+    prisma.telegramAuthChallenge.create.mockResolvedValue({ id: 'challenge_1' });
+
+    const result = await service.createChallenge(mobileUser, TelegramAuthPurpose.RECOVERY);
+
+    expect(result.challengeId).toBe('challenge_1');
+  });
+
+  it('rejects LINK_ACCOUNT challenge on revoked device', async () => {
+    prisma.deviceInstallation.findFirst.mockResolvedValue({
+      id: 'device_1',
+      revokedAt: new Date(),
+    });
+
+    await expect(
+      service.createChallenge(mobileUser, TelegramAuthPurpose.LINK_ACCOUNT, 'lic_1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('locks challenge after max wrong OTP attempts', async () => {
     const otpHash = (service as unknown as { hashOtp: (c: string) => string }).hashOtp('123456');
     const challenge = {

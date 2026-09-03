@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PaymentMethodType } from '@prisma/client';
+import { AdminTelegramAuthService } from '../admin/telegram/admin-telegram-auth.service';
 import { PaymentMethodService } from '../payments/payment-method.service';
 import { TelegramBotApiService } from './telegram-bot-api.service';
 import { TelegramBotSessionService } from './telegram-bot-session.service';
@@ -25,16 +25,15 @@ export class TelegramAdminPaymentMethodsService {
     private readonly paymentMethods: PaymentMethodService,
     private readonly sessions: TelegramBotSessionService,
     private readonly botApi: TelegramBotApiService,
-    private readonly configService: ConfigService,
+    private readonly adminTelegramAuth: AdminTelegramAuthService,
   ) {}
 
-  private isAdmin(telegramUserId: bigint): boolean {
-    const ids = this.configService.get<string[]>('telegram.adminTelegramIds', []);
-    return ids.includes(telegramUserId.toString());
+  private async isAdmin(telegramUserId: bigint): Promise<boolean> {
+    return this.adminTelegramAuth.isTelegramAdmin(telegramUserId);
   }
 
   async handleText(telegramUserId: bigint, chatId: bigint, text: string): Promise<boolean> {
-    if (!this.isAdmin(telegramUserId)) {
+    if (!(await this.isAdmin(telegramUserId))) {
       return false;
     }
 
@@ -94,7 +93,7 @@ export class TelegramAdminPaymentMethodsService {
     data: string,
     callbackQueryId: string,
   ): Promise<boolean> {
-    if (!this.isAdmin(telegramUserId)) {
+    if (!(await this.isAdmin(telegramUserId))) {
       return false;
     }
 

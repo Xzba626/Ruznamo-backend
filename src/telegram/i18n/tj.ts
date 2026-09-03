@@ -137,6 +137,8 @@ export const tj: TelegramI18n = {
   revokeDeviceButton: 'Хомӯш кардан',
   revokeDeviceConfirm: 'Хомӯш кардани дастгоҳро тасдиқ кунед.',
   deviceRevoked: '✅ Хомӯш шуд.',
+  deviceRevokedUsage: (before, max, after) =>
+    `✅ Дастгоҳ хомӯш шуд.\n\nБуд: ${before} аз ${max}\nШуд: ${after} аз ${max}`,
   licenseControlSection: '🔐 Идора',
   telegramAuthOtp: (code) =>
     `Рамзи тасдиқ:\n\n${code}\n\n5 дақиқа эътибор дорад.\nБа касе надиҳед.`,

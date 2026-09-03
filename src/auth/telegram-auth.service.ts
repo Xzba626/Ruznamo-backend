@@ -32,6 +32,13 @@ export interface RecoveryGrantContext {
   expiresAt: Date;
 }
 
+const RECOVERY_ALLOWED_ON_REVOKED_DEVICE: TelegramAuthPurpose[] = [
+  TelegramAuthPurpose.RECOVERY,
+  TelegramAuthPurpose.DEVICE_REPLACEMENT,
+  TelegramAuthPurpose.KEY_REVEAL,
+  TelegramAuthPurpose.LOGIN,
+];
+
 @Injectable()
 export class TelegramAuthService {
   constructor(
@@ -53,9 +60,14 @@ export class TelegramAuthService {
     }
 
     const device = await this.prisma.deviceInstallation.findFirst({
-      where: { id: user.deviceId, userId: user.sub, revokedAt: null },
+      where: { id: user.deviceId, userId: user.sub },
     });
     if (!device) {
+      throw new ForbiddenException({ code: 'DEVICE_NOT_FOUND', message: 'Device session not found' });
+    }
+
+    const allowsRevokedDevice = RECOVERY_ALLOWED_ON_REVOKED_DEVICE.includes(purpose);
+    if (device.revokedAt && !allowsRevokedDevice) {
       throw new ForbiddenException({ code: 'DEVICE_REVOKED', message: 'Current device is not active' });
     }
 

@@ -288,6 +288,65 @@ export class AdminAuthService {
     });
   }
 
+  async listSessions(adminId: string, currentRefreshToken?: string) {
+    const tokens = await this.prisma.adminRefreshToken.findMany({
+      where: { adminUserId: adminId, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        createdAt: true,
+        expiresAt: true,
+        userAgent: true,
+        ipAddress: true,
+        tokenHash: true,
+      },
+    });
+
+    const currentHash = currentRefreshToken
+      ? this.tokenHashService.hashToken(currentRefreshToken)
+      : null;
+
+    return tokens.map((token) => ({
+      id: token.id,
+      createdAt: token.createdAt,
+      expiresAt: token.expiresAt,
+      userAgent: token.userAgent,
+      ipAddress: token.ipAddress,
+      isCurrent: currentHash ? token.tokenHash === currentHash : false,
+    }));
+  }
+
+  async revokeOtherSessions(
+    adminId: string,
+    currentRefreshToken: string | undefined,
+    meta: RequestMeta,
+  ): Promise<number> {
+    const keepHash = currentRefreshToken
+      ? this.tokenHashService.hashToken(currentRefreshToken)
+      : null;
+
+    const result = await this.prisma.adminRefreshToken.updateMany({
+      where: {
+        adminUserId: adminId,
+        revokedAt: null,
+        ...(keepHash ? { NOT: { tokenHash: keepHash } } : {}),
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    await this.auditService.log({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminId,
+      action: 'admin.sessions.revoked_others',
+      entityType: 'AdminRefreshToken',
+      metadata: { count: result.count },
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    return result.count;
+  }
+
   private async issueTokenPair(
     adminUserId: string,
     email: string,

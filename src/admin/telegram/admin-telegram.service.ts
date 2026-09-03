@@ -1,12 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AuditActorType } from '@prisma/client';
-import { randomBytes } from 'crypto';
+import { AdminTelegramIdentityStatus, AuditActorType } from '@prisma/client';
+import { createHash, randomBytes, randomInt } from 'crypto';
 import { AuditService } from '../../audit/audit.service';
+import { PasswordService } from '../../security/password.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeAdminLinkCode } from './admin-link-code.util';
 
 const LINK_CODE_TTL_MINUTES = 15;
+const REBIND_TTL_MINUTES = 5;
 
 export type AdminLinkFailureReason = 'invalid' | 'expired' | 'unauthorized';
 
@@ -31,12 +38,23 @@ export interface AdminTelegramStatus {
   lastSeenAt: Date | null;
 }
 
+export interface AdminTelegramRebindStartResult {
+  expiresAt: Date;
+  deepLink: string | null;
+  instructions: string;
+}
+
+export type RebindOtpBotResult =
+  | { ok: true; otp: string; expiresAt: Date }
+  | { ok: false; reason: 'invalid' | 'expired' };
+
 @Injectable()
 export class AdminTelegramService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly passwordService: PasswordService,
   ) {}
 
   async createConnectToken(adminUserId: string): Promise<AdminTelegramConnectResult> {
@@ -44,11 +62,7 @@ export class AdminTelegramService {
     const expiresAt = new Date(Date.now() + LINK_CODE_TTL_MINUTES * 60 * 1000);
 
     await this.prisma.adminTelegramLinkToken.create({
-      data: {
-        adminUserId,
-        code,
-        expiresAt,
-      },
+      data: { adminUserId, code, expiresAt },
     });
 
     const botUsername = this.configService.get<string>('telegram.botUsername');
@@ -71,19 +85,181 @@ export class AdminTelegramService {
     };
   }
 
+  async startTelegramRebind(
+    adminUserId: string,
+    currentPassword: string,
+  ): Promise<AdminTelegramRebindStartResult> {
+    const admin = await this.prisma.adminUser.findUnique({ where: { id: adminUserId } });
+    if (!admin?.isActive) {
+      throw new UnauthorizedException('Admin account not found');
+    }
+
+    const valid = await this.passwordService.verify(currentPassword, admin.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const plainToken = randomBytes(24).toString('base64url');
+    const tokenHash = this.hashOpaqueToken(plainToken);
+    const expiresAt = new Date(Date.now() + REBIND_TTL_MINUTES * 60 * 1000);
+
+    await this.prisma.adminTelegramRebindChallenge.create({
+      data: { adminUserId, tokenHash, expiresAt },
+    });
+
+    const botUsername = this.configService.get<string>('telegram.botUsername');
+    const startPayload = `admin_link_${plainToken}`;
+    const deepLink = botUsername
+      ? `https://t.me/${botUsername}?start=${encodeURIComponent(startPayload)}`
+      : null;
+
+    await this.auditService.log({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminUserId,
+      action: 'admin.telegram.rebind.started',
+      entityType: 'AdminTelegramRebindChallenge',
+    });
+
+    return {
+      expiresAt,
+      deepLink,
+      instructions:
+        'Откройте Telegram, подтвердите привязку в боте и введите одноразовый код в админ-панели. Код действует 5 минут.',
+    };
+  }
+
+  async tryIssueRebindOtpFromBot(input: {
+    token: string;
+    telegramUserId: bigint;
+  }): Promise<RebindOtpBotResult> {
+    const tokenHash = this.hashOpaqueToken(input.token);
+    const challenge = await this.prisma.adminTelegramRebindChallenge.findUnique({
+      where: { tokenHash },
+    });
+
+    if (!challenge || challenge.consumedAt) {
+      return { ok: false, reason: 'invalid' };
+    }
+    if (challenge.expiresAt < new Date()) {
+      return { ok: false, reason: 'expired' };
+    }
+
+    const otp = String(randomInt(100000, 1000000));
+    const otpHash = await this.passwordService.hash(otp);
+
+    await this.prisma.adminTelegramRebindChallenge.update({
+      where: { id: challenge.id },
+      data: {
+        otpHash,
+        telegramUserId: input.telegramUserId,
+      },
+    });
+
+    return { ok: true, otp, expiresAt: challenge.expiresAt };
+  }
+
+  async verifyTelegramRebind(adminUserId: string, otp: string): Promise<AdminTelegramStatus> {
+    const challenge = await this.prisma.adminTelegramRebindChallenge.findFirst({
+      where: {
+        adminUserId,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+        otpHash: { not: null },
+        telegramUserId: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!challenge?.otpHash || !challenge.telegramUserId) {
+      throw new BadRequestException('No pending Telegram confirmation. Open the bot link first.');
+    }
+
+    const otpValid = await this.passwordService.verify(otp.trim(), challenge.otpHash);
+    if (!otpValid) {
+      throw new UnauthorizedException('Invalid confirmation code');
+    }
+
+    const existingIdentity = await this.prisma.adminTelegramIdentity.findUnique({
+      where: { adminUserId },
+    });
+    const oldTelegramId = existingIdentity?.telegramUserId ?? null;
+    const newTelegramId = challenge.telegramUserId;
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      if (oldTelegramId && oldTelegramId !== newTelegramId) {
+        await tx.adminTelegramRevokedId.upsert({
+          where: { telegramUserId: oldTelegramId },
+          create: {
+            telegramUserId: oldTelegramId,
+            revokedAt: now,
+            revokedByAdminUserId: adminUserId,
+          },
+          update: { revokedAt: now, revokedByAdminUserId: adminUserId },
+        });
+      }
+
+      await tx.adminTelegramRebindChallenge.update({
+        where: { id: challenge.id },
+        data: { consumedAt: now },
+      });
+
+      await tx.adminTelegramIdentity.upsert({
+        where: { adminUserId },
+        create: {
+          adminUserId,
+          telegramUserId: newTelegramId,
+          status: AdminTelegramIdentityStatus.ACTIVE,
+          isVerified: true,
+          verifiedAt: now,
+          lastSeenAt: now,
+        },
+        update: {
+          telegramUserId: newTelegramId,
+          status: AdminTelegramIdentityStatus.ACTIVE,
+          isVerified: true,
+          verifiedAt: now,
+          revokedAt: null,
+          lastSeenAt: now,
+        },
+      });
+
+      await tx.adminUser.update({
+        where: { id: adminUserId },
+        data: { telegramId: newTelegramId },
+      });
+    });
+
+    await this.auditService.log({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminUserId,
+      action: 'admin.telegram.replaced',
+      entityType: 'AdminTelegramIdentity',
+      metadata: {
+        oldTelegramUserId: oldTelegramId?.toString() ?? null,
+        newTelegramUserId: newTelegramId.toString(),
+      },
+    });
+
+    return this.getStatus(adminUserId);
+  }
+
   async getStatus(adminUserId: string): Promise<AdminTelegramStatus> {
     const identity = await this.prisma.adminTelegramIdentity.findUnique({
       where: { adminUserId },
     });
 
+    const active =
+      identity?.status === AdminTelegramIdentityStatus.ACTIVE && identity.isVerified;
+
     return {
-      connected: Boolean(identity),
-      isVerified: identity?.isVerified ?? false,
-      telegramUserId: identity?.telegramUserId?.toString() ?? null,
-      username: identity?.username ?? null,
-      firstName: identity?.firstName ?? null,
-      verifiedAt: identity?.verifiedAt ?? null,
-      lastSeenAt: identity?.lastSeenAt ?? null,
+      connected: Boolean(active),
+      isVerified: Boolean(active),
+      telegramUserId: active ? identity!.telegramUserId.toString() : null,
+      username: active ? identity!.username : null,
+      firstName: active ? identity!.firstName : null,
+      verifiedAt: active ? identity!.verifiedAt : null,
+      lastSeenAt: active ? identity!.lastSeenAt : null,
     };
   }
 
@@ -103,34 +279,36 @@ export class AdminTelegramService {
       where: { code: normalizedCode },
     });
 
-    if (!token) {
+    if (!token || token.usedAt) {
       return { ok: false, reason: 'invalid' };
     }
-
-    if (token.usedAt) {
-      return { ok: false, reason: 'invalid' };
-    }
-
     if (token.expiresAt < new Date()) {
       return { ok: false, reason: 'expired' };
     }
 
-    const envIds = this.configService
-      .get<string[]>('telegram.adminTelegramIds', [])
-      .map((id) => id.trim())
-      .filter(Boolean);
-    const telegramIdStr = input.telegramUserId.toString();
-    const envAllowed = envIds.length === 0 || envIds.includes(telegramIdStr);
-
-    if (!envAllowed) {
-      return { ok: false, reason: 'unauthorized' };
-    }
+    const existingIdentity = await this.prisma.adminTelegramIdentity.findUnique({
+      where: { adminUserId: token.adminUserId },
+    });
+    const oldTelegramId = existingIdentity?.telegramUserId ?? null;
+    const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.adminTelegramLinkToken.update({
         where: { id: token.id },
-        data: { usedAt: new Date() },
+        data: { usedAt: now },
       });
+
+      if (oldTelegramId && oldTelegramId !== input.telegramUserId) {
+        await tx.adminTelegramRevokedId.upsert({
+          where: { telegramUserId: oldTelegramId },
+          create: {
+            telegramUserId: oldTelegramId,
+            revokedAt: now,
+            revokedByAdminUserId: token.adminUserId,
+          },
+          update: { revokedAt: now, revokedByAdminUserId: token.adminUserId },
+        });
+      }
 
       await tx.adminTelegramIdentity.upsert({
         where: { adminUserId: token.adminUserId },
@@ -141,8 +319,9 @@ export class AdminTelegramService {
           username: input.username,
           firstName: input.firstName,
           isVerified: true,
-          verifiedAt: new Date(),
-          lastSeenAt: new Date(),
+          status: AdminTelegramIdentityStatus.ACTIVE,
+          verifiedAt: now,
+          lastSeenAt: now,
         },
         update: {
           telegramUserId: input.telegramUserId,
@@ -150,8 +329,10 @@ export class AdminTelegramService {
           username: input.username,
           firstName: input.firstName,
           isVerified: true,
-          verifiedAt: new Date(),
-          lastSeenAt: new Date(),
+          status: AdminTelegramIdentityStatus.ACTIVE,
+          revokedAt: null,
+          verifiedAt: now,
+          lastSeenAt: now,
         },
       });
 
@@ -166,7 +347,7 @@ export class AdminTelegramService {
       actorId: token.adminUserId,
       action: 'admin.telegram.linked',
       entityType: 'AdminTelegramIdentity',
-      metadata: { telegramUserId: telegramIdStr },
+      metadata: { telegramUserId: input.telegramUserId.toString() },
     });
 
     return { ok: true };
@@ -186,10 +367,18 @@ export class AdminTelegramService {
   }
 
   async isVerifiedTelegramUser(telegramUserId: bigint): Promise<boolean> {
-    const identity = await this.prisma.adminTelegramIdentity.findUnique({
-      where: { telegramUserId },
+    const identity = await this.prisma.adminTelegramIdentity.findFirst({
+      where: {
+        telegramUserId,
+        status: AdminTelegramIdentityStatus.ACTIVE,
+        isVerified: true,
+      },
     });
-    return Boolean(identity?.isVerified);
+    return Boolean(identity);
+  }
+
+  private hashOpaqueToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   async processAdminBotUpdate(update: TelegramUpdate): Promise<void> {
@@ -251,7 +440,7 @@ export class AdminTelegramService {
     if (text === '/status') {
       const authorized = await this.isVerifiedTelegramUser(telegramUserId);
       if (!authorized) {
-        await this.sendBotMessage(chatId, 'Сначала подключите Telegram через админ-панель.');
+        await this.sendBotMessage(chatId, 'Сначала подключите Telegram через админ-pанель.');
         return;
       }
       await this.sendBotMessage(chatId, 'Статус системы: см. Админ-панель → Система.');

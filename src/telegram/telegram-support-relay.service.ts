@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuditActorType, SupportMessageContentType, TelegramLanguage } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { AdminTelegramAuthService } from '../admin/telegram/admin-telegram-auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { getTelegramI18n } from './i18n';
 import { SupportConversationService } from './support-conversation.service';
@@ -56,6 +57,7 @@ export class TelegramSupportRelayService {
     private readonly auditService: AuditService,
     private readonly prisma: PrismaService,
     private readonly supportConversation: SupportConversationService,
+    private readonly adminTelegramAuth: AdminTelegramAuthService,
   ) {}
 
   async relayFreeText(input: SupportRelayInput): Promise<'sent' | 'no_admins' | 'failed'> {
@@ -69,7 +71,7 @@ export class TelegramSupportRelayService {
       });
     }
 
-    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+    const adminIds = await this.adminTelegramAuth.listActiveAdminTelegramIds();
     if (adminIds.length === 0) {
       this.logger.warn('Support relay skipped: ADMIN_TELEGRAM_IDS is empty');
       await this.auditService.log({
@@ -142,7 +144,7 @@ export class TelegramSupportRelayService {
       });
     }
 
-    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+    const adminIds = await this.adminTelegramAuth.listActiveAdminTelegramIds();
     if (adminIds.length === 0) {
       this.logger.warn('Support media relay skipped: ADMIN_TELEGRAM_IDS is empty');
       await this.auditService.log({
@@ -196,7 +198,7 @@ export class TelegramSupportRelayService {
   }
 
   async deliverAdminReply(input: AdminSupportReplyInput): Promise<AdminSupportReplyResult> {
-    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+    const adminIds = await this.adminTelegramAuth.listActiveAdminTelegramIds();
     if (!adminIds.includes(input.adminTelegramId.toString())) {
       return 'not_authorized';
     }
@@ -258,7 +260,7 @@ export class TelegramSupportRelayService {
     photoFileId?: string;
     documentFileId?: string;
   }): Promise<'delivered' | 'empty_content' | 'not_authorized'> {
-    const adminIds = this.configService.get<string[]>('telegram.adminTelegramIds', []);
+    const adminIds = await this.adminTelegramAuth.listActiveAdminTelegramIds();
     if (!adminIds.includes(input.adminTelegramId.toString())) {
       return 'not_authorized';
     }

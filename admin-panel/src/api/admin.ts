@@ -63,8 +63,31 @@ export function fetchTelegramStatus() {
     connected: boolean;
     isVerified: boolean;
     telegramUserId: string | null;
+    username: string | null;
+    firstName: string | null;
     verifiedAt: string | null;
+    lastSeenAt: string | null;
   }>('/api/v1/admin/telegram/status');
+}
+
+export function startTelegramRebind(currentPassword: string) {
+  return apiRequest<{ expiresAt: string; deepLink: string | null; instructions: string }>(
+    '/api/v1/admin/telegram/rebind/start',
+    { method: 'POST', body: JSON.stringify({ currentPassword }) },
+  );
+}
+
+export function verifyTelegramRebind(otp: string) {
+  return apiRequest<{
+    connected: boolean;
+    isVerified: boolean;
+    telegramUserId: string | null;
+    username: string | null;
+    verifiedAt: string | null;
+  }>('/api/v1/admin/telegram/rebind/verify', {
+    method: 'POST',
+    body: JSON.stringify({ otp }),
+  });
 }
 
 export function createTelegramConnect() {

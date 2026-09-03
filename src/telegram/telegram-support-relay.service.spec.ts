@@ -3,7 +3,12 @@ import { TelegramSupportRelayService } from './telegram-support-relay.service';
 
 describe('TelegramSupportRelayService', () => {
   const configService = {
-    get: jest.fn((key: string) => (key === 'telegram.adminTelegramIds' ? ['999'] : undefined)),
+    get: jest.fn(),
+  };
+
+  const adminTelegramAuth = {
+    listActiveAdminTelegramIds: jest.fn().mockResolvedValue(['999']),
+    isTelegramAdmin: jest.fn().mockResolvedValue(true),
   };
 
   const botApi = {
@@ -35,13 +40,13 @@ describe('TelegramSupportRelayService', () => {
     auditService as never,
     prisma as never,
     supportConversation as never,
+    adminTelegramAuth as never,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
-    configService.get.mockImplementation((key: string) =>
-      key === 'telegram.adminTelegramIds' ? ['999'] : undefined,
-    );
+    adminTelegramAuth.listActiveAdminTelegramIds.mockResolvedValue(['999']);
+    adminTelegramAuth.isTelegramAdmin.mockResolvedValue(true);
   });
 
   it('relays free text to configured admin ids and stores mapping', async () => {
@@ -67,8 +72,8 @@ describe('TelegramSupportRelayService', () => {
     });
   });
 
-  it('returns no_admins when ADMIN_TELEGRAM_IDS empty', async () => {
-    configService.get.mockReturnValueOnce([]);
+  it('returns no_admins when no active admin telegram ids', async () => {
+    adminTelegramAuth.listActiveAdminTelegramIds.mockResolvedValueOnce([]);
     const result = await service.relayFreeText({
       telegramUserId: 111n,
       chatId: 111n,

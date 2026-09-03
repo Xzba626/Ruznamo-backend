@@ -37,3 +37,25 @@ export async function updateProfile(displayName: string) {
     body: JSON.stringify({ displayName }),
   });
 }
+
+export async function fetchSessions(refreshToken?: string) {
+  const q = refreshToken ? `?refreshToken=${encodeURIComponent(refreshToken)}` : '';
+  return apiRequest<
+    Array<{
+      id: string;
+      createdAt: string;
+      expiresAt: string;
+      userAgent: string | null;
+      ipAddress: string | null;
+      isCurrent: boolean;
+    }>
+  >(`/api/v1/admin/auth/sessions${q}`);
+}
+
+export async function revokeOtherSessions(refreshToken?: string) {
+  const data = await apiRequest<{ revoked: number }>('/api/v1/admin/auth/sessions/revoke-others', {
+    method: 'POST',
+    body: JSON.stringify({ refreshToken }),
+  });
+  return data.revoked;
+}

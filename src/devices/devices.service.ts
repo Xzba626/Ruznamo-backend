@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { EntitlementService } from '../entitlements/entitlement.service';
 import { buildDeviceMetadataUpdate } from './device-metadata.util';
+import { revokeDeviceInstallation } from './revoke-device-installation';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDeviceMetadataDto } from './dto/register-device-metadata.dto';
 
@@ -125,17 +126,8 @@ export class DevicesService {
 
     const revokedAt = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.deviceInstallation.update({
-        where: { id: device.id },
-        data: { revokedAt },
-      });
-
-      await tx.refreshToken.updateMany({
-        where: { deviceId: device.id, revokedAt: null },
-        data: { revokedAt },
-      });
-
-      return result;
+      await revokeDeviceInstallation(tx, device.id, revokedAt);
+      return tx.deviceInstallation.findUniqueOrThrow({ where: { id: device.id } });
     });
 
     await this.auditService.log({

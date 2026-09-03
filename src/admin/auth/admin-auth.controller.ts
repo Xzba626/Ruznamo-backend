@@ -20,6 +20,7 @@ import { AdminLoginDto } from './dto/admin-login.dto';
 import { AdminLogoutDto, AdminRefreshDto } from './dto/admin-refresh.dto';
 import { AdminChangePasswordDto } from './dto/admin-change-password.dto';
 import { AdminUpdateProfileDto } from './dto/admin-update-profile.dto';
+import { AdminRevokeSessionsDto } from './dto/admin-revoke-sessions.dto';
 import { AdminJwtAuthGuard } from '../guards/admin-jwt-auth.guard';
 
 @ApiTags('admin-auth')
@@ -92,6 +93,34 @@ export class AdminAuthController {
       body.newPassword,
       this.meta(req),
     );
+  }
+
+  @Get('sessions')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List active admin sessions' })
+  async sessions(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Req() req: Request,
+  ) {
+    const refreshToken = typeof req.query.refreshToken === 'string' ? req.query.refreshToken : undefined;
+    return this.adminAuthService.listSessions(admin.sub, refreshToken);
+  }
+
+  @Post('sessions/revoke-others')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke all admin sessions except current' })
+  async revokeOtherSessions(
+    @CurrentAdmin() admin: AdminJwtPayload,
+    @Body() body: AdminRevokeSessionsDto,
+    @Req() req: Request,
+  ) {
+    const count = await this.adminAuthService.revokeOtherSessions(
+      admin.sub,
+      body.refreshToken,
+      this.meta(req),
+    );
+    return { revoked: count };
   }
 
   private meta(req: Request): { ipAddress?: string; userAgent?: string } {
