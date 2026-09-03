@@ -43,6 +43,7 @@ export const tj: RuStrings = {
     confirm: 'Тасдиқ',
     cancel: 'Бекор',
     save: 'Захира',
+    actions: 'Амалҳо',
     logout: 'Баромад',
     yes: 'Бале',
     no: 'Не',
