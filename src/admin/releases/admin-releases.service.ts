@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { ApkInspectorService } from '../../apk/apk-inspector.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ReleaseStorageFacade } from '../../storage/release-storage.facade';
+import { ReleaseManifestSignerService } from '../../app-update/release-manifest/release-manifest.signer.service';
 import { formatAppVersionLabel } from '../../devices/device-metadata.util';
 
 @Injectable()
@@ -17,6 +18,7 @@ export class AdminReleasesService {
     private readonly prisma: PrismaService,
     private readonly storage: ReleaseStorageFacade,
     private readonly apkInspector: ApkInspectorService,
+    private readonly manifestSigner: ReleaseManifestSignerService,
   ) {}
 
   async getOverview(platform: Platform = Platform.ANDROID) {
@@ -40,9 +42,13 @@ export class AdminReleasesService {
       : { count: 0, percent: 0 };
 
     const diagnostics = this.storage.getStorageDiagnostics();
+    const manifestStatus = this.manifestSigner.getStatus();
     return {
       storageConfigured: this.storage.isConfigured(),
       signingConfigured: this.storage.isSigningPolicyConfigured(),
+      manifestSigningConfigured: manifestStatus.configured,
+      manifestSigningKeyId: manifestStatus.keyId,
+      manifestSignatureAlgorithm: manifestStatus.signatureAlgorithm,
       storageProvider: this.storage.providerName(),
       functionApkProxy: false,
       storageDiagnostics: {
@@ -330,6 +336,9 @@ export class AdminReleasesService {
         message: 'Configure production signing certificate before publishing releases',
       });
     }
+
+    // Fail closed: Android expects a signed release manifest for every PUBLISHED update.
+    this.manifestSigner.assertCanSign();
 
     const release = await this.prisma.appRelease.findUnique({ where: { id: releaseId } });
     if (!release) {

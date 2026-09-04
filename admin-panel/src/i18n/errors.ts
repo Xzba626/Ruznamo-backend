@@ -33,6 +33,10 @@ const errorCodeLabels: Record<string, string> = {
   BLOB_SMOKE_FAILED: 'Проверка хранилища не удалась.',
   SIGNING_POLICY_NOT_CONFIGURED:
     'APK загружен и проверен, но production-подпись ещё не настроена. Публикация недоступна.',
+  MANIFEST_SIGNING_NOT_CONFIGURED:
+    'Подпись release-manifest ещё не настроена. Публикация недоступна.',
+  MANIFEST_SIGNING_FAILED: 'Не удалось подписать release-manifest. Проверьте ключ на сервере.',
+  RELEASE_NOT_PUBLISHABLE: 'Релиз не может быть опубликован при текущей конфигурации безопасности.',
   RELEASE_NOT_DRAFT: 'Операция доступна только для черновика.',
   RELEASE_NOT_FOUND: 'Релиз не найден.',
   RELEASE_NOT_DOWNLOADABLE: 'Этот релиз недоступен для скачивания.',

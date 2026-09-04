@@ -97,6 +97,8 @@ export function UpdatesPage() {
 
   const storageConfigured = overview?.storageConfigured ?? false;
   const signingConfigured = overview?.signingConfigured ?? false;
+  const manifestSigningConfigured = overview?.manifestSigningConfigured ?? false;
+  const publishReady = signingConfigured && manifestSigningConfigured;
 
   const selectFile = (file: File | null) => {
     if (!file) return;
@@ -224,7 +226,7 @@ export function UpdatesPage() {
   };
 
   const handlePublish = async (id: string) => {
-    if (!signingConfigured) return;
+    if (!publishReady) return;
     const versionLabel =
       draft && 'versionLabel' in draft && typeof draft.versionLabel === 'string'
         ? draft.versionLabel
@@ -348,6 +350,20 @@ export function UpdatesPage() {
           <div className="alert warn">
             <strong>{strings.updates.signingNotConfigured}</strong>
             <p className="muted">{strings.updates.signingNotConfiguredHint}</p>
+          </div>
+        )}
+
+        {manifestSigningConfigured ? (
+          <div className="alert success">
+            <strong>{strings.updates.manifestConfiguredLabel}</strong>
+            {overview?.manifestSigningKeyId ? (
+              <p className="muted mono">keyId: {overview.manifestSigningKeyId}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="alert warn">
+            <strong>{strings.updates.manifestNotConfigured}</strong>
+            <p className="muted">{strings.updates.manifestNotConfiguredHint}</p>
           </div>
         )}
 
@@ -571,7 +587,7 @@ export function UpdatesPage() {
             <button
               type="button"
               className="btn-primary"
-              disabled={!signingConfigured || publishing}
+              disabled={!publishReady || publishing}
               onClick={() => void handlePublish(draft.id)}
             >
               {publishing ? strings.updates.publishing : strings.updates.publish}
@@ -622,7 +638,7 @@ export function UpdatesPage() {
                         <button
                           type="button"
                           className="btn-secondary"
-                          disabled={!signingConfigured || publishing}
+                          disabled={!publishReady || publishing}
                           onClick={() => void handlePublish(row.id)}
                         >
                           {strings.updates.publish}

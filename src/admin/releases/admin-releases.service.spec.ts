@@ -32,8 +32,23 @@ describe('AdminReleasesService Blob upload path', () => {
     putObject: jest.fn(),
   };
   const inspector = { inspect: jest.fn() };
+  const manifestSigner = {
+    getStatus: jest.fn().mockReturnValue({
+      configured: false,
+      keyId: null,
+      signatureAlgorithm: 'Ed25519',
+    }),
+    isConfigured: jest.fn().mockReturnValue(false),
+    assertCanSign: jest.fn(),
+    signRelease: jest.fn(),
+  };
 
-  const service = new AdminReleasesService(prisma as never, storage as never, inspector as never);
+  const service = new AdminReleasesService(
+    prisma as never,
+    storage as never,
+    inspector as never,
+    manifestSigner as never,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -155,6 +170,23 @@ describe('AdminReleasesService Blob upload path', () => {
     await expect(service.publish('rel_draft_1')).rejects.toBeInstanceOf(BadRequestException);
     await service.publish('rel_draft_1').catch((error: BadRequestException) => {
       expect(error.getResponse()).toMatchObject({ code: 'SIGNING_POLICY_NOT_CONFIGURED' });
+    });
+    expect(manifestSigner.assertCanSign).not.toHaveBeenCalled();
+    expect(prisma.appRelease.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects publish when manifest signing is not configured', async () => {
+    storage.isSigningPolicyConfigured.mockReturnValue(true);
+    manifestSigner.assertCanSign.mockImplementation(() => {
+      throw new ServiceUnavailableException({
+        code: 'MANIFEST_SIGNING_NOT_CONFIGURED',
+        message: 'Release manifest signing key is not configured',
+      });
+    });
+
+    await expect(service.publish('rel_draft_1')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await service.publish('rel_draft_1').catch((error: ServiceUnavailableException) => {
+      expect(error.getResponse()).toMatchObject({ code: 'MANIFEST_SIGNING_NOT_CONFIGURED' });
     });
     expect(prisma.appRelease.update).not.toHaveBeenCalled();
   });

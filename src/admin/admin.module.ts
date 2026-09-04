@@ -6,6 +6,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { StorageModule } from '../storage/storage.module';
 import { ApkModule } from '../apk/apk.module';
 import { SecurityModule } from '../security/security.module';
+import { AppUpdateModule } from '../app-update/app-update.module';
 import { AdminAuthModule } from './auth/admin-auth.module';
 import { AdminAuditController } from './audit/admin-audit.controller';
 import { AdminAuditService } from './audit/admin-audit.service';
@@ -38,7 +39,17 @@ import { AdminReleasesController } from './releases/admin-releases.controller';
 import { AdminReleasesService } from './releases/admin-releases.service';
 
 @Module({
-  imports: [AdminAuthModule, AuditModule, TerminusModule, PaymentsModule, LicensesModule, StorageModule, ApkModule, SecurityModule],
+  imports: [
+    AdminAuthModule,
+    AuditModule,
+    TerminusModule,
+    PaymentsModule,
+    LicensesModule,
+    StorageModule,
+    ApkModule,
+    SecurityModule,
+    AppUpdateModule,
+  ],
   controllers: [
     AdminTelegramController,
     AdminTelegramWebhookController,

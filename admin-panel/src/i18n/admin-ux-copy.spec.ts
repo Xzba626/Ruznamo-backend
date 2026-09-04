@@ -45,12 +45,15 @@ describe('admin production UX copy', () => {
     expect(ru.updates.storageNotConfigured).toMatch(/Хранилище/);
     expect(ru.updates.storageConfiguredLabel).toMatch(/настроено/);
     expect(ru.updates.signingNotConfigured).toMatch(/не настроена/);
+    expect(ru.updates.manifestNotConfigured).toMatch(/не настроена/);
+    expect(ru.updates.manifestConfiguredLabel).toMatch(/настроена/);
     expect(ru.updates.uploadAuthFailed).toMatch(/подготовить/);
     expect(ru.updates.resumeFinalize).toMatch(/обработку/);
     expect(tj.updates.historyEmpty).toBeTruthy();
     expect(tj.updates.storageNotConfigured).toMatch(/Захирагоҳ/);
     expect(tj.updates.storageConfiguredLabel).toMatch(/танзим/);
     expect(tj.updates.signingNotConfigured).toMatch(/танзим нашудааст/);
+    expect(tj.updates.manifestNotConfigured).toMatch(/танзим нашудааст/);
     expect(tj.updates.blobWriteFailed).toMatch(/захирагоҳ/i);
   });
 

@@ -315,6 +315,10 @@ export const ru = {
     signingNotConfigured: 'Production-подпись: не настроена',
     signingNotConfiguredHint:
       'Публикация недоступна, пока на сервере не задан отпечаток сертификата production-подписи.',
+    manifestConfiguredLabel: 'Manifest-подпись: настроена',
+    manifestNotConfigured: 'Manifest-подпись: не настроена',
+    manifestNotConfiguredHint:
+      'Публикация недоступна, пока на backend не настроен отдельный Ed25519 ключ подписи release-manifest.',
     validationTitle: 'Проверка APK',
     validationPackage: 'Package',
     validationVersion: 'Version',

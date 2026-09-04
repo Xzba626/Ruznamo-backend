@@ -1,5 +1,7 @@
 import { AppUpdateService } from './app-update.service';
 import { AppReleaseStatus, Platform } from '@prisma/client';
+import { generateEphemeralEd25519KeyPair } from './release-manifest/release-manifest.crypto';
+import { ReleaseManifestSignerService } from './release-manifest/release-manifest.signer.service';
 
 describe('AppUpdateService', () => {
   const prisma = {
@@ -18,11 +20,21 @@ describe('AppUpdateService', () => {
       provider: 'vercel_blob',
     }),
   };
+  const keys = generateEphemeralEd25519KeyPair();
+  const manifestSigner = new ReleaseManifestSignerService();
 
-  const service = new AppUpdateService(prisma as never, storage as never);
+  const service = new AppUpdateService(prisma as never, storage as never, manifestSigner);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    manifestSigner.resetCacheForTests();
+    process.env.ANDROID_RELEASE_MANIFEST_PRIVATE_KEY = keys.privateKeyPkcs8Pem;
+    process.env.ANDROID_RELEASE_MANIFEST_KEY_ID = 'rmk_test_1';
+  });
+
+  afterAll(() => {
+    delete process.env.ANDROID_RELEASE_MANIFEST_PRIVATE_KEY;
+    delete process.env.ANDROID_RELEASE_MANIFEST_KEY_ID;
   });
 
   it('returns no update when client is current', async () => {
@@ -37,9 +49,10 @@ describe('AppUpdateService', () => {
     const result = await service.checkUpdate({ versionCode: 10, locale: 'ru' });
     expect(result.updateAvailable).toBe(false);
     expect(result.latest).toBeNull();
+    expect(result.signedManifest).toBeNull();
   });
 
-  it('returns metadata without a download URL when a newer release exists', async () => {
+  it('returns metadata + signedManifest without a download URL when a newer release exists', async () => {
     prisma.appRelease.findFirst.mockResolvedValue({
       id: 'rel_2',
       versionCode: 11,
@@ -51,7 +64,7 @@ describe('AppUpdateService', () => {
       signingCertificateSha256: 'def',
       changelogRu: 'ru notes',
       changelogTg: 'tj notes',
-      publishedAt: new Date(),
+      publishedAt: new Date('2026-09-04T12:00:00.000Z'),
       objectKey: 'key',
       status: AppReleaseStatus.PUBLISHED,
       platform: Platform.ANDROID,
@@ -63,6 +76,11 @@ describe('AppUpdateService', () => {
     expect(result.latest?.versionCode).toBe(11);
     expect(result.latest?.changelog).toBe('tj notes');
     expect(result.latest).not.toHaveProperty('downloadUrl');
+    expect(result.signedManifest?.keyId).toBe('rmk_test_1');
+    expect(result.signedManifest?.signatureAlgorithm).toBe('Ed25519');
+    expect(result.signedManifest?.manifest.releaseId).toBe('rel_2');
+    expect(result.signedManifest?.signature).toBeTruthy();
+    expect(JSON.stringify(result)).not.toMatch(/BEGIN PRIVATE KEY/);
     expect(storage.createDownloadAuthorization).not.toHaveBeenCalled();
   });
 
@@ -89,7 +107,7 @@ describe('AppUpdateService', () => {
     expect(storage.createDownloadAuthorization).not.toHaveBeenCalled();
   });
 
-  it('issues a fresh signed URL only on download authorization', async () => {
+  it('issues a fresh signed URL bound to the same releaseId/object', async () => {
     prisma.appRelease.findUnique.mockResolvedValue({
       id: 'rel_2',
       status: AppReleaseStatus.PUBLISHED,
@@ -102,7 +120,39 @@ describe('AppUpdateService', () => {
     });
 
     const auth = await service.authorizeDownload('rel_2');
+    expect(auth.releaseId).toBe('rel_2');
+    expect(auth.objectBound).toBe(true);
     expect(auth.downloadUrl).toContain('https://blob.example/signed');
-    expect(storage.createDownloadAuthorization).toHaveBeenCalled();
+    expect(storage.createDownloadAuthorization).toHaveBeenCalledWith(
+      'releases/android/rel_2/Ruznamo.apk',
+      expect.any(Object),
+    );
+  });
+
+  it('fails closed when update exists but manifest signing is not configured', async () => {
+    delete process.env.ANDROID_RELEASE_MANIFEST_PRIVATE_KEY;
+    delete process.env.ANDROID_RELEASE_MANIFEST_KEY_ID;
+    manifestSigner.resetCacheForTests();
+
+    prisma.appRelease.findFirst.mockResolvedValue({
+      id: 'rel_2',
+      versionCode: 11,
+      versionName: '1.0.10',
+      mandatory: false,
+      fileSize: BigInt(2000),
+      sha256: 'abc',
+      packageName: 'com.Tajroot.Ruznamo',
+      signingCertificateSha256: 'def',
+      changelogRu: 'ru',
+      changelogTg: 'tj',
+      publishedAt: new Date(),
+      objectKey: 'key',
+      status: AppReleaseStatus.PUBLISHED,
+      platform: Platform.ANDROID,
+    });
+
+    await expect(service.checkUpdate({ versionCode: 1 })).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'MANIFEST_SIGNING_NOT_CONFIGURED' }),
+    });
   });
 });

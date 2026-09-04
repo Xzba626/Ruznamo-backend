@@ -309,6 +309,9 @@ export function fetchReleasesOverview() {
   return apiRequest<{
     storageConfigured: boolean;
     signingConfigured: boolean;
+    manifestSigningConfigured?: boolean;
+    manifestSigningKeyId?: string | null;
+    manifestSignatureAlgorithm?: string;
     storageProvider?: string;
     functionApkProxy?: boolean;
     storageDiagnostics?: {

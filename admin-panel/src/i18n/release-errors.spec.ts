@@ -6,6 +6,7 @@ describe('release upload error localization', () => {
     expect(localizeError('APK_INSPECT_FAILED')).toMatch(/проверить|обработку/i);
     expect(localizeError('APK_PACKAGE_MISMATCH')).toMatch(/Пакет/);
     expect(localizeError('SIGNING_POLICY_NOT_CONFIGURED')).toMatch(/подпись/);
+    expect(localizeError('MANIFEST_SIGNING_NOT_CONFIGURED')).toMatch(/manifest/i);
     expect(localizeError('OBJECT_STORAGE_NOT_CONFIGURED')).toMatch(/Хранилище/);
     expect(localizeError('BLOB_GET_FAILED')).toMatch(/прочитать|хранилищ/i);
   });

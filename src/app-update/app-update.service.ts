@@ -2,12 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { AppReleaseStatus, Platform, TelegramLanguage } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReleaseStorageFacade } from '../storage/release-storage.facade';
+import { ReleaseManifestSignerService } from './release-manifest/release-manifest.signer.service';
 
 @Injectable()
 export class AppUpdateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: ReleaseStorageFacade,
+    private readonly manifestSigner: ReleaseManifestSignerService,
   ) {}
 
   async checkUpdate(params: {
@@ -29,8 +31,12 @@ export class AppUpdateService {
         updateAvailable: false,
         currentVersionCode: currentCode,
         latest: null,
+        signedManifest: null,
       };
     }
+
+    // Fail closed: never hand Android unsigned authoritative metadata.
+    const signedManifest = this.manifestSigner.signRelease(latest);
 
     const changelog =
       locale === 'tj' || locale === TelegramLanguage.TJ.toLowerCase()
@@ -54,6 +60,15 @@ export class AppUpdateService {
         signingCertificateSha256: latest.signingCertificateSha256,
         changelog,
         publishedAt: latest.publishedAt?.toISOString() ?? null,
+      },
+      signedManifest: {
+        manifest: signedManifest.manifest,
+        signature: signedManifest.signature,
+        signatureAlgorithm: signedManifest.signatureAlgorithm,
+        keyId: signedManifest.keyId,
+        // signedPayload is included so Android can verify without re-implementing
+        // serialization bugs; algorithm docs still define how to rebuild it.
+        signedPayload: signedManifest.signedPayload,
       },
     };
   }
@@ -84,6 +99,7 @@ export class AppUpdateService {
       });
     }
 
+    // Bind download to the same DB release identity Android verified via signed manifest.
     const auth = await this.storage.createDownloadAuthorization(release.objectKey, {
       expiresInSeconds: 300,
     });
@@ -95,6 +111,7 @@ export class AppUpdateService {
       fileSize: Number(release.fileSize),
       sha256: release.sha256,
       packageName: release.packageName,
+      objectBound: true,
       downloadUrl: auth.downloadUrl,
       expiresAt: auth.expiresAt,
     };

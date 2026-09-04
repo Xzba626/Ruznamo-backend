@@ -315,6 +315,10 @@ export const tj: RuStrings = {
     signingNotConfigured: 'Имзои production: танзим нашудааст',
     signingNotConfiguredHint:
       'Нашр дастнорас аст, то дар сервер изи сертификати имзои production муқаррар шавад.',
+    manifestConfiguredLabel: 'Имзои Manifest: танзим шудааст',
+    manifestNotConfigured: 'Имзои Manifest: танзим нашудааст',
+    manifestNotConfiguredHint:
+      'Нашр дастнорас аст, то дар backend калиди алоҳидаи Ed25519 барои имзои release-manifest танзим шавад.',
     validationTitle: 'Санҷиши APK',
     validationPackage: 'Package',
     validationVersion: 'Version',
