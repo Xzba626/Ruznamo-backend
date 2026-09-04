@@ -1,7 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import AdmZipImport from 'adm-zip';
-import AppInfoParserImport from 'app-info-parser';
 import { createHash } from 'crypto';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -11,16 +9,38 @@ import {
   sha256HexOfDerCertificate,
 } from './apk-signing-cert';
 
-/** CJS packages may expose constructor on module or `.default` after Nest/Vercel bundling. */
-function resolveCjsConstructor<T>(mod: T | { default: T }): T {
-  if (mod && typeof (mod as { default?: unknown }).default === 'function') {
-    return (mod as { default: T }).default;
+/**
+ * Nest/Vercel CJS interop may wrap constructors as `.default` (sometimes nested).
+ * Prefer require() so adm-zip / app-info-parser resolve to a callable constructor.
+ */
+function resolveCjsConstructor<T>(mod: unknown, label: string): T {
+  let current: unknown = mod;
+  for (let i = 0; i < 5; i += 1) {
+    if (typeof current === 'function') {
+      return current as T;
+    }
+    if (current && typeof current === 'object' && 'default' in (current as object)) {
+      current = (current as { default: unknown }).default;
+      continue;
+    }
+    break;
   }
-  return mod as T;
+  throw new BadRequestException({
+    code: 'APK_INSPECTOR_UNAVAILABLE',
+    message: `Could not load ${label} constructor`,
+  });
 }
 
-const AdmZip = resolveCjsConstructor(AdmZipImport);
-const AppInfoParser = resolveCjsConstructor(AppInfoParserImport);
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const AdmZip = resolveCjsConstructor<new (file?: string | Buffer) => { getEntries: () => Array<{ entryName: string; getData: () => Buffer }> }>(
+  require('adm-zip'),
+  'adm-zip',
+);
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const AppInfoParser = resolveCjsConstructor<new (path: string) => { parse: () => Promise<Record<string, unknown>> }>(
+  require('app-info-parser'),
+  'app-info-parser',
+);
 
 export interface ApkInspectionResult {
   packageName: string;
