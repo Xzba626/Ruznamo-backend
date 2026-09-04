@@ -167,7 +167,21 @@ export function OrdersPage() {
         <button type="submit" className="btn-secondary">{strings.common.search}</button>
       </form>
       {loading && <p>{strings.orders.loading}</p>}
-      {error && <div className="alert error">{error}</div>}
+      {error && (
+        <div className="alert error section-error">
+          {error}
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              setError('');
+              load();
+            }}
+          >
+            {strings.common.retry}
+          </button>
+        </div>
+      )}
       {!loading && data && data.items.length === 0 && <p className="muted">{strings.orders.empty}</p>}
       {!loading && data && data.items.length > 0 && (
         <>

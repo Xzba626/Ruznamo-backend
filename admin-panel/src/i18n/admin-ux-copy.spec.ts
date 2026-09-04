@@ -57,6 +57,12 @@ describe('admin production UX copy', () => {
     expect(tj.updates.blobWriteFailed).toMatch(/захирагоҳ/i);
   });
 
+  it('system telegram error labels distinguish historical vs current', () => {
+    expect(ru.system.lastError).toBeTruthy();
+    expect(ru.system.lastRegisteredError).toMatch(/зарегистрированн/i);
+    expect(tj.system.lastRegisteredError).toBeTruthy();
+  });
+
   it('execute remains gated by password and preview copy', () => {
     expect(ru.dataReset.executeDisabledNoPassword).toMatch(/парол/i);
     expect(ru.dataReset.executeDisabledNoPreview).toMatch(/предварительн/i);

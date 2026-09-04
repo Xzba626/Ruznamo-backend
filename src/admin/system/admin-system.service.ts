@@ -7,6 +7,7 @@ import { maskSecret, normalizeTelegramBotUsername } from '../../config/telegram-
 import { formatAppVersionLabel } from '../../devices/device-metadata.util';
 import { customerDeviceWhere } from '../../devices/probe-device-filter.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { evaluateTelegramWebhookHealth } from './telegram-webhook-health';
 
 type ServiceStatus = 'healthy' | 'warning' | 'error' | 'not_configured' | 'info';
 
@@ -136,7 +137,7 @@ export class AdminSystemService {
         enabled,
         misconfigured,
         botUsername,
-        webhook: { status: 'not_configured' as ServiceStatus, lastError: null },
+        webhook: { status: 'not_configured' as ServiceStatus, lastError: null, lastErrorAt: null, lastErrorHistorical: false },
       };
     }
 
@@ -164,13 +165,15 @@ export class AdminSystemService {
   private async probeWebhookHealth(token: string): Promise<{
     status: ServiceStatus;
     lastError: string | null;
+    lastErrorAt?: string | null;
+    lastErrorHistorical?: boolean;
     pendingUpdateCount?: number;
     url?: string | null;
   }> {
     try {
       const response = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
       if (!response.ok) {
-        return { status: 'error', lastError: `HTTP ${response.status}` };
+        return { status: 'error', lastError: `HTTP ${response.status}`, lastErrorAt: null, lastErrorHistorical: false };
       }
 
       const json = (await response.json()) as {
@@ -178,23 +181,33 @@ export class AdminSystemService {
         result?: {
           url?: string;
           last_error_message?: string;
+          last_error_date?: number;
           pending_update_count?: number;
         };
       };
 
       if (!json.ok || !json.result) {
-        return { status: 'error', lastError: 'telegram_api_error' };
+        return {
+          status: 'error',
+          lastError: 'telegram_api_error',
+          lastErrorAt: null,
+          lastErrorHistorical: false,
+        };
       }
 
-      const lastError = json.result.last_error_message ?? null;
-      return {
-        status: lastError ? 'warning' : 'healthy',
-        lastError,
-        pendingUpdateCount: json.result.pending_update_count,
+      return evaluateTelegramWebhookHealth({
         url: json.result.url ?? null,
-      };
+        lastErrorMessage: json.result.last_error_message ?? null,
+        lastErrorDateUnix: json.result.last_error_date ?? null,
+        pendingUpdateCount: json.result.pending_update_count ?? 0,
+      });
     } catch {
-      return { status: 'error', lastError: 'probe_failed' };
+      return {
+        status: 'error',
+        lastError: 'probe_failed',
+        lastErrorAt: null,
+        lastErrorHistorical: false,
+      };
     }
   }
 

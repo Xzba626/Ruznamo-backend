@@ -112,6 +112,38 @@ describe('AdminOrdersService', () => {
     expect(result.status).toBe('REJECTED');
   });
 
+  it('getById returns null rejectionReasonCode for legacy rejected orders', async () => {
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'ord_old',
+      status: 'REJECTED',
+      billingPeriod: 'MONTHLY',
+      amount: { toString: () => '20' },
+      currency: 'TJS',
+      createdAt: new Date(),
+      approvedAt: null,
+      rejectedAt: new Date(),
+      rejectionReason: 'admin_rejected',
+      rejectionReasonCode: null,
+      paymentMethodName: 'Alif',
+      paymentMethodType: 'PHONE',
+      paymentMethodValue: '+992',
+      paymentMethodRecipient: 'X',
+      user: {
+        id: 'usr_1',
+        displayName: 'Buyer',
+        email: null,
+        telegramAccount: null,
+      },
+      plan: { code: 'STANDARD', name: 'Standard', features: [] },
+      receipts: [],
+      license: null,
+    });
+
+    const result = await service.getById('ord_old');
+    expect(result.rejectionReasonCode).toBeNull();
+    expect(result.rejectionReason).toBe('admin_rejected');
+  });
+
   it('getById throws when order missing', async () => {
     prisma.order.findUnique.mockResolvedValue(null);
     await expect(service.getById('missing')).rejects.toBeInstanceOf(NotFoundException);

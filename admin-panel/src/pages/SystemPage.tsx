@@ -73,7 +73,16 @@ export function SystemPage() {
           )}
           <div className="card-meta">{strings.system.webhook}: {labelServiceStatus(status.telegram.webhook.status)}</div>
           {status.telegram.webhook.lastError && (
-            <div className="card-meta warn">{strings.system.lastError}: {status.telegram.webhook.lastError}</div>
+            <div className={`card-meta ${status.telegram.webhook.lastErrorHistorical ? 'muted' : 'warn'}`}>
+              {status.telegram.webhook.lastErrorHistorical
+                ? strings.system.lastRegisteredError
+                : strings.system.lastError}
+              :{' '}
+              {status.telegram.webhook.lastErrorAt
+                ? `${formatDateTime(status.telegram.webhook.lastErrorAt)} — `
+                : ''}
+              {status.telegram.webhook.lastError}
+            </div>
           )}
         </div>
 

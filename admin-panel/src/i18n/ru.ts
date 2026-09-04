@@ -242,6 +242,7 @@ export const ru = {
     colDevices: 'Устройств',
     webhook: 'Webhook',
     lastError: 'Последняя ошибка',
+    lastRegisteredError: 'Последняя зарегистрированная ошибка Telegram',
     noDeviceVersions: 'Нет данных о версиях устройств',
     forceUpdate: 'Принудительное обновление',
     enabled: 'Включён',

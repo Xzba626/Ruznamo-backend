@@ -51,7 +51,14 @@ export function fetchSystemStatus() {
       enabled: boolean;
       misconfigured: boolean;
       botUsername: string | null;
-      webhook: { status: string; lastError: string | null; pendingUpdateCount?: number; url?: string | null };
+      webhook: {
+        status: string;
+        lastError: string | null;
+        lastErrorAt?: string | null;
+        lastErrorHistorical?: boolean;
+        pendingUpdateCount?: number;
+        url?: string | null;
+      };
     };
     adminPanel: { status: string; note: string };
   }>('/api/v1/admin/system/status');

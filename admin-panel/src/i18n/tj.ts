@@ -240,6 +240,7 @@ export const tj: RuStrings = {
     botUsername: 'Бот',
     webhook: 'Webhook',
     lastError: 'Хатои охирин',
+    lastRegisteredError: 'Хатои охирини сабтшудаи Telegram',
     backend: 'Backend',
     database: 'Пойгоҳи додаҳо',
     readiness: 'Омодагӣ',
