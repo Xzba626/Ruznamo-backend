@@ -22,6 +22,34 @@ type UploadPhase =
   | 'DRAFT_READY'
   | 'ERROR';
 
+const PENDING_UPLOAD_KEY = 'ruznamo_pending_apk_upload';
+
+type PendingUpload = {
+  uploadId: string;
+  fileName: string;
+  fileSize: number;
+};
+
+function readPendingUpload(): PendingUpload | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_UPLOAD_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PendingUpload;
+    if (!parsed?.uploadId || !parsed.fileName) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingUpload(pending: PendingUpload | null) {
+  if (!pending) {
+    sessionStorage.removeItem(PENDING_UPLOAD_KEY);
+    return;
+  }
+  sessionStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify(pending));
+}
+
 function formatBytes(size: number): string {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
@@ -38,6 +66,7 @@ export function UpdatesPage() {
   const [uploadError, setUploadError] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<Awaited<ReturnType<typeof finalizeReleaseUpload>> | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(() => readPendingUpload());
   const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const [changelogRu, setChangelogRu] = useState('');
   const [changelogTg, setChangelogTg] = useState('');
@@ -90,27 +119,97 @@ export function UpdatesPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const startUpload = async () => {
+  const clearPending = () => {
+    writePendingUpload(null);
+    setPendingUpload(null);
+  };
+
+  const rememberPending = (next: PendingUpload) => {
+    writePendingUpload(next);
+    setPendingUpload(next);
+  };
+
+  const mapUploadError = (err: unknown, phase: UploadPhase): string => {
+    const fallback =
+      phase === 'REQUESTING_UPLOAD_AUTH'
+        ? strings.updates.uploadAuthFailed
+        : phase === 'UPLOADING'
+          ? strings.updates.blobWriteFailed
+          : phase === 'VALIDATING'
+            ? strings.updates.validationFailed
+            : strings.updates.finalizeFailed;
+    return getErrorMessage(err, fallback);
+  };
+
+  const finalizeExistingUpload = async (uploadId: string) => {
+    setUploadPhase('VALIDATING');
+    const uploaded = await finalizeReleaseUpload(uploadId);
+    setDraft(uploaded);
+    setUploadPhase('DRAFT_READY');
+    clearPending();
+    try {
+      await updateReleaseDraft(uploaded.id, { changelogRu, changelogTg, mandatory });
+    } catch {
+      // Draft already exists; changelog can be edited later. Do not undo success.
+    }
+    await loadOverview({ soft: true });
+  };
+
+  const startUpload = async (opts?: { resumeOnly?: boolean }) => {
+    const resumeOnly = Boolean(opts?.resumeOnly);
+    const resumable =
+      pendingUpload &&
+      (!selectedFile ||
+        (selectedFile.name === pendingUpload.fileName &&
+          selectedFile.size === pendingUpload.fileSize));
+
+    if (resumeOnly || (resumable && pendingUpload && !selectedFile)) {
+      if (!pendingUpload) return;
+      setUploadError('');
+      setUploadProgress(null);
+      try {
+        await finalizeExistingUpload(pendingUpload.uploadId);
+      } catch (err) {
+        setUploadPhase('ERROR');
+        setUploadError(mapUploadError(err, 'VALIDATING'));
+      }
+      return;
+    }
+
     if (!selectedFile || !storageConfigured) return;
     setUploadError('');
     setUploadProgress(null);
+    let phase: UploadPhase = 'REQUESTING_UPLOAD_AUTH';
     try {
+      if (resumable && pendingUpload) {
+        await finalizeExistingUpload(pendingUpload.uploadId);
+        return;
+      }
+
       setUploadPhase('REQUESTING_UPLOAD_AUTH');
+      phase = 'REQUESTING_UPLOAD_AUTH';
       const auth = await requestReleaseUploadAuthorization(selectedFile.size);
+
       setUploadPhase('UPLOADING');
+      phase = 'UPLOADING';
       await uploadApkToBlob(auth.uploadUrl, selectedFile, auth.headers, (loaded, total) => {
         setUploadProgress({ loaded, total });
       });
-      setUploadPhase('VALIDATING');
-      const uploaded = await finalizeReleaseUpload(auth.uploadId);
-      setDraft(uploaded);
-      setUploadPhase('DRAFT_READY');
-      await updateReleaseDraft(uploaded.id, { changelogRu, changelogTg, mandatory });
-      loadOverview({ soft: true });
+      rememberPending({
+        uploadId: auth.uploadId,
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+      });
+
+      phase = 'VALIDATING';
+      await finalizeExistingUpload(auth.uploadId);
     } catch (err) {
-      setDraft(null);
       setUploadPhase('ERROR');
-      setUploadError(getErrorMessage(err, strings.updates.uploadFailed));
+      setUploadError(mapUploadError(err, phase));
+      // Keep pendingUpload only after a successful Blob PUT (resume finalize).
+      if (phase === 'REQUESTING_UPLOAD_AUTH' || phase === 'UPLOADING') {
+        clearPending();
+      }
     }
   };
 
@@ -349,11 +448,31 @@ export function UpdatesPage() {
           </div>
         )}
 
+        {pendingUpload && uploadPhase !== 'DRAFT_READY' && (
+          <div className="alert warn">
+            <strong>{strings.updates.resumeFinalize}</strong>
+            <p className="muted">
+              {pendingUpload.fileName} · {formatBytes(pendingUpload.fileSize)}.{' '}
+              {strings.updates.pendingUploadHint}
+            </p>
+            <button type="button" className="btn-secondary" onClick={() => void startUpload({ resumeOnly: true })}>
+              {strings.updates.resumeFinalize}
+            </button>
+          </div>
+        )}
+
         {uploadError && (
           <div className="alert error section-error">
             {uploadError}
-            <button type="button" className="btn-secondary" onClick={() => setUploadError('')}>
-              {strings.common.retry}
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setUploadError('');
+                void startUpload({ resumeOnly: Boolean(pendingUpload) });
+              }}
+            >
+              {pendingUpload ? strings.updates.resumeFinalize : strings.common.retry}
             </button>
           </div>
         )}

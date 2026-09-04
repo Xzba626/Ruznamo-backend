@@ -281,6 +281,12 @@ export const tj: RuStrings = {
     preparingUpload: 'Омодасозии боркунӣ…',
     validatingApk: 'APK бор шуд. Файлро месанҷем…',
     uploadFailed: 'Бор кардани APK муяссар нашуд.',
+    uploadAuthFailed: 'Омода кардани боркунии APK муяссар нашуд.',
+    blobWriteFailed: 'Бор кардани APK ба захирагоҳ муяссар нашуд.',
+    finalizeFailed: 'APK бор шуд, аммо анҷоми коркард муяссар нашуд.',
+    validationFailed: 'Санҷиши APK муяссар нашуд.',
+    resumeFinalize: 'Коркарди APK-и боршударо такрор кунед',
+    pendingUploadHint: 'Файл аллакай дар захирагоҳ аст. Такрор 25 MB-ро аз нав бор намекунад.',
     deleteDraft: 'Нест кардани намуна',
     publishConfirm: (version: string) =>
       `Ruznamo ${version}-ро нашр кунем?\n\nПас аз нашр ин версия барои навсозии дастгоҳҳо дастрас мешавад.`,

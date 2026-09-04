@@ -282,6 +282,12 @@ export const ru = {
     preparingUpload: 'Подготовка загрузки…',
     validatingApk: 'APK загружен. Проверяем файл…',
     uploadFailed: 'Не удалось загрузить APK.',
+    uploadAuthFailed: 'Не удалось подготовить загрузку APK.',
+    blobWriteFailed: 'Не удалось загрузить APK в хранилище.',
+    finalizeFailed: 'APK загружен, но не удалось завершить обработку.',
+    validationFailed: 'Не удалось проверить APK.',
+    resumeFinalize: 'Повторить обработку загруженного APK',
+    pendingUploadHint: 'Файл уже в хранилище. Повтор не будет загружать 25 MB заново.',
     deleteDraft: 'Удалить черновик',
     publishConfirm: (version: string) =>
       `Опубликовать Ruznamo ${version}?\n\nПосле публикации эта версия станет доступна для обновления устройств.`,

@@ -14,6 +14,29 @@ const errorCodeLabels: Record<string, string> = {
   LICENSE_EXPIRED: 'Срок действия лицензии истёк.',
   MAINTENANCE_MODE: 'Сервис временно недоступен (техническое обслуживание).',
   HTTP_ERROR: 'Ошибка HTTP-запроса.',
+  // Releases / APK upload pipeline
+  OBJECT_STORAGE_NOT_CONFIGURED: 'Хранилище APK не настроено.',
+  UPLOAD_ID_REQUIRED: 'Не удалось завершить обработку: отсутствует идентификатор загрузки.',
+  APK_FILE_MISSING: 'APK не найден в хранилище после загрузки. Повторите загрузку.',
+  APK_SIZE_MISMATCH: 'Размер загруженного файла не совпадает с содержимым APK.',
+  VERSION_CODE_NOT_INCREASING: 'versionCode должен быть больше уже опубликованной версии.',
+  VERSION_CODE_EXISTS: 'Релиз с таким versionCode уже существует.',
+  INVALID_APK: 'Файл не является корректным APK.',
+  INVALID_APK_METADATA: 'Не удалось прочитать package/version из APK.',
+  APK_PACKAGE_MISMATCH: 'Пакет приложения не совпадает с Ruznamo.',
+  APK_SIGNING_MISMATCH: 'Подпись APK не совпадает с настроенной production-подписью.',
+  APK_INSPECT_FAILED: 'APK загружен, но не удалось проверить файл. Можно повторить обработку без повторной загрузки.',
+  APK_INSPECTOR_UNAVAILABLE: 'Проверка APK временно недоступна на сервере. Повторите попытку позже.',
+  BLOB_GET_FAILED: 'Не удалось прочитать APK из хранилища. Повторите обработку.',
+  BLOB_OBJECT_NOT_FOUND: 'Объект APK не найден в хранилище.',
+  BLOB_STREAM_UNSUPPORTED: 'Не удалось прочитать поток APK из хранилища.',
+  BLOB_SMOKE_FAILED: 'Проверка хранилища не удалась.',
+  SIGNING_POLICY_NOT_CONFIGURED:
+    'APK загружен и проверен, но production-подпись ещё не настроена. Публикация недоступна.',
+  RELEASE_NOT_DRAFT: 'Операция доступна только для черновика.',
+  RELEASE_NOT_FOUND: 'Релиз не найден.',
+  RELEASE_NOT_DOWNLOADABLE: 'Этот релиз недоступен для скачивания.',
+  CHANGELOG_REQUIRED: 'Перед публикацией укажите «Что нового» на русском и тоҷикӣ.',
 };
 
 const englishFallbackPatterns: Array<{ pattern: RegExp; message: string }> = [
