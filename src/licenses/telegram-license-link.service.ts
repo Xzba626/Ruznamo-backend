@@ -43,6 +43,7 @@ export class TelegramLicenseLinkService {
       where: {
         licenseId,
         deviceId: user.deviceId,
+        revokedAt: null,
         device: { userId: user.sub, revokedAt: null },
       },
       include: {

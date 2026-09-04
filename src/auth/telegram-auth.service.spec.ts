@@ -1,10 +1,14 @@
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
-import { TelegramAuthPurpose } from '@prisma/client';
+import { LicenseStatus, TelegramAuthPurpose } from '@prisma/client';
 import { TelegramAuthService } from './telegram-auth.service';
 
 describe('TelegramAuthService', () => {
   const prisma = {
     deviceInstallation: { findFirst: jest.fn() },
+    licenseActivation: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+    },
     telegramAuthChallenge: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -89,6 +93,50 @@ describe('TelegramAuthService', () => {
     const result = await service.createChallenge(mobileUser, TelegramAuthPurpose.RECOVERY);
 
     expect(result.challengeId).toBe('challenge_1');
+  });
+
+  it('rejects LINK_ACCOUNT without licenseId when device has no active license', async () => {
+    prisma.licenseActivation = {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn(),
+    };
+
+    await expect(
+      service.createChallenge(mobileUser, TelegramAuthPurpose.LINK_ACCOUNT),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(
+      service.createChallenge(mobileUser, TelegramAuthPurpose.LINK_ACCOUNT),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'LICENSE_ID_REQUIRED' }),
+    });
+  });
+
+  it('auto-resolves LINK_ACCOUNT licenseId when exactly one active license is on device', async () => {
+    prisma.licenseActivation = {
+      findMany: jest.fn().mockResolvedValue([{ licenseId: 'lic_only' }]),
+      findFirst: jest.fn().mockResolvedValue({
+        licenseId: 'lic_only',
+        license: {
+          status: LicenseStatus.ACTIVE,
+          revokedAt: null,
+          expiresAt: null,
+        },
+      }),
+    };
+    prisma.telegramAuthChallenge.create.mockResolvedValue({ id: 'challenge_link' });
+
+    const result = await service.createChallenge(mobileUser, TelegramAuthPurpose.LINK_ACCOUNT);
+
+    expect(result.challengeId).toBe('challenge_link');
+    expect(prisma.telegramAuthChallenge.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          purpose: TelegramAuthPurpose.LINK_ACCOUNT,
+          contextLicenseId: 'lic_only',
+        }),
+      }),
+    );
   });
 
   it('rejects challenge on globally blocked device', async () => {

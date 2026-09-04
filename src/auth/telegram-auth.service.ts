@@ -59,17 +59,44 @@ export class TelegramAuthService {
       throw new ForbiddenException({ code: 'DEVICE_REVOKED', message: 'Current device is not active' });
     }
 
+    let resolvedLicenseId = licenseId?.trim() || undefined;
+
     if (purpose === TelegramAuthPurpose.LINK_ACCOUNT) {
-      if (!licenseId) {
-        throw new BadRequestException({
-          code: 'LICENSE_ID_REQUIRED',
-          message: 'licenseId is required for LINK_ACCOUNT',
+      if (!resolvedLicenseId) {
+        // Android may omit licenseId when UI status is ACTIVE/TRIAL but local id lagged.
+        // Resolve the single active license on this device when unambiguous.
+        const onDevice = await this.prisma.licenseActivation.findMany({
+          where: {
+            deviceId: user.deviceId,
+            revokedAt: null,
+            device: { userId: user.sub, revokedAt: null },
+            license: {
+              status: { in: [LicenseStatus.ACTIVE, LicenseStatus.PENDING] },
+              revokedAt: null,
+            },
+          },
+          select: { licenseId: true },
+          distinct: ['licenseId'],
+          take: 2,
         });
+        if (onDevice.length === 1) {
+          resolvedLicenseId = onDevice[0].licenseId;
+        } else {
+          throw new BadRequestException({
+            code: 'LICENSE_ID_REQUIRED',
+            message:
+              onDevice.length === 0
+                ? 'Activate a license on this device before linking Telegram'
+                : 'licenseId is required when multiple licenses are active on this device',
+          });
+        }
       }
+
       const activation = await this.prisma.licenseActivation.findFirst({
         where: {
-          licenseId,
+          licenseId: resolvedLicenseId,
           deviceId: user.deviceId,
+          revokedAt: null,
           device: { userId: user.sub, revokedAt: null },
         },
         include: { license: true },
@@ -99,7 +126,8 @@ export class TelegramAuthService {
         requestingDeviceId: device.id,
         requestingMobileUserId: user.sub,
         purpose,
-        contextLicenseId: purpose === TelegramAuthPurpose.LINK_ACCOUNT ? licenseId : null,
+        contextLicenseId:
+          purpose === TelegramAuthPurpose.LINK_ACCOUNT ? resolvedLicenseId ?? null : null,
         maxAttempts: MAX_OTP_ATTEMPTS,
         expiresAt,
       },
