@@ -194,8 +194,33 @@ export class AdminReleasesService {
     try {
       inspected = await this.apkInspector.inspect(buffer);
     } catch (error) {
-      await this.storage.delete(pathname).catch(() => undefined);
-      throw error;
+      const isClientApkError =
+        error instanceof BadRequestException &&
+        typeof error.getResponse() === 'object' &&
+        error.getResponse() !== null &&
+        String((error.getResponse() as { code?: string }).code ?? '').startsWith('APK_');
+      const isInvalid =
+        error instanceof BadRequestException &&
+        typeof error.getResponse() === 'object' &&
+        error.getResponse() !== null &&
+        ['INVALID_APK', 'INVALID_APK_METADATA', 'APK_PACKAGE_MISMATCH', 'APK_SIGNING_MISMATCH'].includes(
+          String((error.getResponse() as { code?: string }).code ?? ''),
+        );
+
+      if (isInvalid || isClientApkError) {
+        await this.storage.delete(pathname).catch(() => undefined);
+        throw error;
+      }
+
+      // Keep Blob object for resume when inspector/runtime fails unexpectedly.
+      throw new ServiceUnavailableException({
+        code: 'APK_INSPECT_FAILED',
+        message:
+          error instanceof Error
+            ? `APK inspection failed: ${error.message}`
+            : 'APK inspection failed',
+        details: { pathname, uploadId: uploadId.trim(), orphanRetained: true },
+      });
     }
 
     if (objectHead.size > 0 && objectHead.size !== inspected.fileSize) {

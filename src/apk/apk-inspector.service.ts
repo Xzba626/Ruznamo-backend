@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import AdmZip from 'adm-zip';
-import AppInfoParser from 'app-info-parser';
+import AdmZipImport from 'adm-zip';
+import AppInfoParserImport from 'app-info-parser';
 import { createHash } from 'crypto';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -10,6 +10,17 @@ import {
   extractApkSigningBlockCertificateDer,
   sha256HexOfDerCertificate,
 } from './apk-signing-cert';
+
+/** CJS packages may expose constructor on module or `.default` after Nest/Vercel bundling. */
+function resolveCjsConstructor<T>(mod: T | { default: T }): T {
+  if (mod && typeof (mod as { default?: unknown }).default === 'function') {
+    return (mod as { default: T }).default;
+  }
+  return mod as T;
+}
+
+const AdmZip = resolveCjsConstructor(AdmZipImport);
+const AppInfoParser = resolveCjsConstructor(AppInfoParserImport);
 
 export interface ApkInspectionResult {
   packageName: string;

@@ -138,6 +138,18 @@ describe('AdminReleasesService Blob upload path', () => {
     expect(storage.getBuffer).toHaveBeenCalledWith('releases/android/abc/Ruznamo.apk');
   });
 
+  it('keeps Blob orphan when inspector throws unexpected runtime error', async () => {
+    storage.isConfigured.mockReturnValue(true);
+    storage.head.mockResolvedValue({ exists: true, size: 12 });
+    storage.getBuffer.mockResolvedValue(Buffer.from('apk-bytes'));
+    inspector.inspect.mockRejectedValue(new Error('adm_zip_1.default is not a constructor'));
+
+    await expect(service.finalizeUpload('admin-1', 'abc')).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+
   it('rejects publish when production signer is not configured', async () => {
     storage.isSigningPolicyConfigured.mockReturnValue(false);
     await expect(service.publish('rel_draft_1')).rejects.toBeInstanceOf(BadRequestException);
