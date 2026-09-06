@@ -33,6 +33,8 @@ const PERMISSIONS = [
   { code: 'system:reset', name: 'Execute data reset' },
   { code: 'releases:read', name: 'Read app releases' },
   { code: 'releases:manage', name: 'Manage app releases' },
+  { code: 'content:read', name: 'Read content (privacy policy)' },
+  { code: 'content:manage', name: 'Manage content (privacy policy)' },
 ] as const;
 
 const ROLE_PERMISSIONS: Record<AdminRoleCode, string[]> = {
@@ -59,6 +61,8 @@ const ROLE_PERMISSIONS: Record<AdminRoleCode, string[]> = {
     'system:read',
     'releases:read',
     'releases:manage',
+    'content:read',
+    'content:manage',
   ],
   SUPPORT: [
     'users:read',

@@ -15,6 +15,7 @@ export const tj: RuStrings = {
     audit: 'Журнали аудит',
     analytics: 'Таҳлил',
     updates: 'Навсозиҳо',
+    privacy: 'Махфият',
     requisites: 'Реквизитҳо',
     system: 'Низоми',
     profile: 'Профил',

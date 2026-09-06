@@ -151,6 +151,12 @@ enum AppReleaseStatus {
   PURGED
 }
 
+enum PrivacyPolicyStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum DataResetScope {
   TEST_DATA_CLEANUP
   USER_DATA_RESET
@@ -699,6 +705,8 @@ model AdminUser {
   issuedLicenses        License[]                @relation("LicenseIssuedByAdmin")
   appReleasesCreated    AppRelease[]             @relation("AppReleaseCreatedBy")
   appReleasesArtifactDeleted AppRelease[]        @relation("AppReleaseArtifactDeletedBy")
+  privacyPoliciesCreated PrivacyPolicyRevision[] @relation("PrivacyPolicyCreatedBy")
+  privacyPoliciesUpdated PrivacyPolicyRevision[] @relation("PrivacyPolicyUpdatedBy")
 
   @@index([isActive])
 }
@@ -878,6 +886,28 @@ model AppRelease {
 
   @@unique([platform, versionCode])
   @@index([platform, status])
+  @@index([publishedAt])
+}
+
+/// Official privacy policy revisions (RU + TJ). Max one PUBLISHED at a time.
+model PrivacyPolicyRevision {
+  id               String              @id @default(cuid())
+  revision         Int
+  contentRu        String              @db.Text
+  contentTg        String              @db.Text
+  status           PrivacyPolicyStatus @default(DRAFT)
+  createdByAdminId String?
+  updatedByAdminId String?
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
+  publishedAt      DateTime?           @db.Timestamptz(3)
+  archivedAt       DateTime?           @db.Timestamptz(3)
+
+  createdBy AdminUser? @relation("PrivacyPolicyCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  updatedBy AdminUser? @relation("PrivacyPolicyUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@unique([revision])
+  @@index([status])
   @@index([publishedAt])
 }
 

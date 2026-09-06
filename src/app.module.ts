@@ -11,6 +11,7 @@ import { AppConfigModule } from './app-config/app-config.module';
 import { AdminModule } from './admin/admin.module';
 import { MobileModule } from './mobile/mobile.module';
 import { AppUpdateModule } from './app-update/app-update.module';
+import { PrivacyModule } from './privacy/privacy.module';
 import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
@@ -62,6 +63,7 @@ import { TelegramModule } from './telegram/telegram.module';
     HealthModule,
     AppConfigModule,
     AppUpdateModule,
+    PrivacyModule,
     AdminModule,
     MobileModule,
     TelegramModule,

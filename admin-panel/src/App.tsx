@@ -16,6 +16,7 @@ import { PlansPage } from './pages/PlansPage';
 import { SystemPage } from './pages/SystemPage';
 import { SystemDataPage } from './pages/SystemDataPage';
 import { UpdatesPage } from './pages/UpdatesPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 export function App() {
@@ -42,6 +43,7 @@ export function App() {
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="plans" element={<PlansPage />} />
             <Route path="updates" element={<UpdatesPage />} />
+            <Route path="privacy" element={<PrivacyPage />} />
             <Route path="system" element={<SystemPage />} />
             <Route path="system/data" element={<SystemDataPage />} />
             <Route path="profile" element={<ProfilePage />} />

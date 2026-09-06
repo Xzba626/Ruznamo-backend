@@ -7,6 +7,7 @@ import { StorageModule } from '../storage/storage.module';
 import { ApkModule } from '../apk/apk.module';
 import { SecurityModule } from '../security/security.module';
 import { AppUpdateModule } from '../app-update/app-update.module';
+import { PrivacyModule } from '../privacy/privacy.module';
 import { AdminAuthModule } from './auth/admin-auth.module';
 import { AdminAuditController } from './audit/admin-audit.controller';
 import { AdminAuditService } from './audit/admin-audit.service';
@@ -37,6 +38,7 @@ import { AdminDataResetController } from './data-reset/admin-data-reset.controll
 import { AdminDataResetService } from './data-reset/admin-data-reset.service';
 import { AdminReleasesController } from './releases/admin-releases.controller';
 import { AdminReleasesService } from './releases/admin-releases.service';
+import { AdminPrivacyPolicyController } from './privacy/admin-privacy-policy.controller';
 
 @Module({
   imports: [
@@ -49,6 +51,7 @@ import { AdminReleasesService } from './releases/admin-releases.service';
     ApkModule,
     SecurityModule,
     AppUpdateModule,
+    PrivacyModule,
   ],
   controllers: [
     AdminTelegramController,
@@ -65,6 +68,7 @@ import { AdminReleasesService } from './releases/admin-releases.service';
     AdminPlansController,
     AdminDataResetController,
     AdminReleasesController,
+    AdminPrivacyPolicyController,
   ],
   providers: [
     AdminTelegramAuthService,

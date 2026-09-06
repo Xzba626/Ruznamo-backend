@@ -26,7 +26,8 @@ export class AdminPermissionsGuard implements CanActivate {
     }
 
     const hasAll = required.every((permission) => admin.permissions.includes(permission));
-    if (!hasAll) {
+    const isSuperAdmin = Array.isArray(admin.roles) && admin.roles.includes('SUPER_ADMIN');
+    if (!hasAll && !isSuperAdmin) {
       throw new ForbiddenException('Insufficient permissions');
     }
 

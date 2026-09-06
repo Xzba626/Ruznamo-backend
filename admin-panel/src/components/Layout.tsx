@@ -10,6 +10,7 @@ const primaryNav = [
   { to: '/devices', labelKey: 'devices' as const, permission: 'devices:read' },
   { to: '/analytics', labelKey: 'analytics' as const, permission: 'dashboard:read' },
   { to: '/updates', labelKey: 'updates' as const, permission: 'releases:read' },
+  { to: '/privacy', labelKey: 'privacy' as const, permission: 'content:read' },
   { to: '/plans', labelKey: 'plans' as const, permission: 'plans:read' },
   { to: '/system', labelKey: 'system' as const },
 ];
@@ -43,7 +44,15 @@ export function Layout() {
         <div className="brand">{strings.brand}</div>
         <nav>
           {primaryNav
-            .filter((item) => !item.permission || hasPermission(item.permission))
+            .filter((item) => {
+              if (!item.permission) return true;
+              if (hasPermission(item.permission)) return true;
+              // Privacy: allow until JWT refreshed after content:* bootstrap
+              if (item.labelKey === 'privacy') {
+                return hasPermission('releases:manage') || hasPermission('config:read');
+              }
+              return false;
+            })
             .map((item) => (
               <NavLink key={item.to} to={item.to} end={item.to === '/'}>
                 {strings.nav[item.labelKey]}

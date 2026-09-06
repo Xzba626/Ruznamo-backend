@@ -472,3 +472,29 @@ export function purgeReleaseApk(id: string) {
     body: JSON.stringify({}),
   });
 }
+
+export function fetchPrivacyOverview() {
+  return apiRequest<{
+    current: Record<string, unknown> | null;
+    draft: Record<string, unknown> | null;
+    history: Array<Record<string, unknown>>;
+  }>('/api/v1/admin/privacy-policy');
+}
+
+export function savePrivacyDraft(body: {
+  id?: string;
+  contentRu?: string;
+  contentTg?: string;
+}) {
+  return apiRequest('/api/v1/admin/privacy-policy/draft', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export function publishPrivacyDraft(id: string) {
+  return apiRequest(`/api/v1/admin/privacy-policy/${id}/publish`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}

@@ -278,7 +278,15 @@ export class AdminReleasesService {
       await this.storage.delete(pathname).catch(() => undefined);
       throw new BadRequestException({
         code: 'VERSION_CODE_NOT_INCREASING',
-        message: `versionCode must be greater than ${latestPublished.versionCode}`,
+        message: `Версия ${inspected.versionName} (${inspected.versionCode}) уже не новее опубликованной ${latestPublished.versionName} (${latestPublished.versionCode}). Опубликованный APK нельзя заменить другим файлом с тем же versionCode.`,
+        currentPublished: {
+          versionName: latestPublished.versionName,
+          versionCode: latestPublished.versionCode,
+        },
+        attempted: {
+          versionName: inspected.versionName,
+          versionCode: inspected.versionCode,
+        },
       });
     }
 
@@ -427,7 +435,15 @@ export class AdminReleasesService {
     if (latestPublished && release.versionCode <= latestPublished.versionCode) {
       throw new BadRequestException({
         code: 'VERSION_CODE_NOT_INCREASING',
-        message: `versionCode must be greater than ${latestPublished.versionCode}`,
+        message: `Версия ${release.versionName} (${release.versionCode}) уже не новее опубликованной ${latestPublished.versionName} (${latestPublished.versionCode}). Опубликованный APK нельзя заменить другим файлом с тем же versionCode.`,
+        currentPublished: {
+          versionName: latestPublished.versionName,
+          versionCode: latestPublished.versionCode,
+        },
+        attempted: {
+          versionName: release.versionName,
+          versionCode: release.versionCode,
+        },
       });
     }
 
