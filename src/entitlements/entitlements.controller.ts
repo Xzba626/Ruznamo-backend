@@ -25,15 +25,22 @@ export class EntitlementsController {
     @Query() query: DeviceTelemetryQueryDto,
     @Req() req: Request,
   ) {
-    if (
+    const hasTelemetry =
       query.appVersion ||
       query.appVersionName ||
       query.appVersionCode ||
       query.appLocale ||
+      query.appLanguage ||
       query.deviceManufacturer ||
       query.deviceModel ||
-      query.androidOsVersion
-    ) {
+      query.androidOsVersion ||
+      query.sdkLevel ||
+      query.themeMode ||
+      query.packageName ||
+      query.localLicenseState ||
+      query.localAccessState;
+
+    if (hasTelemetry) {
       await this.deviceTelemetry.syncByInstallationId(user.installationId, query, req.ip);
     } else {
       await this.deviceTelemetry.touchLastSeen(user.deviceId, req.ip);

@@ -12,7 +12,9 @@ export class DeviceTelemetryService {
     ipAddress?: string,
   ): Promise<void> {
     const metadata = buildDeviceMetadataUpdate(input);
-    const hasUpdates = Object.values(metadata).some((value) => value !== undefined);
+    const hasUpdates = Object.entries(metadata).some(
+      ([, value]) => value !== undefined && value !== null,
+    );
     if (!hasUpdates) {
       return;
     }

@@ -16,6 +16,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { buildDeviceMetadataUpdate } from '../devices/device-metadata.util';
 import { DeviceTelemetryService } from '../devices/device-telemetry.service';
+import { resolveUserCategory } from '../devices/resolve-user-category.util';
 import { TokenHashService } from '../security/token-hash.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDeviceDto } from './dto/register-device.dto';
@@ -83,15 +84,29 @@ export class AuthService {
       }
 
       const metadata = buildDeviceMetadataUpdate(dto);
-      const device = await this.prisma.deviceInstallation.update({
-        where: { id: existing.id },
-        data: {
-          ...metadata,
-          deviceName: dto.deviceName ?? metadata.deviceName,
-          platform: dto.platform,
-          lastSeenAt: new Date(),
-          lastSeenIp: meta.ipAddress,
-        },
+      const profilePatch = this.buildProfilePatch(dto);
+      const [device, user] = await this.prisma.$transaction(async (tx) => {
+        if (Object.keys(profilePatch).length > 0) {
+          await tx.user.update({
+            where: { id: existing.userId },
+            data: profilePatch,
+          });
+        }
+        const updatedDevice = await tx.deviceInstallation.update({
+          where: { id: existing.id },
+          data: {
+            ...metadata,
+            deviceName: dto.deviceName ?? metadata.deviceName,
+            platform: dto.platform,
+            lastSeenAt: new Date(),
+            lastSeenIp: meta.ipAddress,
+          },
+        });
+        const updatedUser = await tx.user.findUniqueOrThrow({
+          where: { id: existing.userId },
+          include: { trialGrant: true },
+        });
+        return [updatedDevice, updatedUser] as const;
       });
 
       const tokens = await this.issueTokenPair(
@@ -112,14 +127,19 @@ export class AuthService {
         userAgent: meta.userAgent,
       });
 
-      return this.buildRegisterResponse(existing.user, device, existing.user.trialGrant, tokens);
+      return this.buildRegisterResponse(user, device, user.trialGrant, tokens);
     }
+
+    const resolvedCategory =
+      resolveUserCategory(dto.category, dto.roleId) ?? UserCategory.PERSONAL;
+    const displayName = dto.displayName?.trim() || undefined;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
-          category: dto.category ?? UserCategory.PERSONAL,
+          category: resolvedCategory,
           status: UserStatus.ACTIVE,
+          ...(displayName ? { displayName } : {}),
         },
       });
 
@@ -361,6 +381,22 @@ export class AuthService {
       expiresIn: accessExpiresIn,
       tokenType: 'Bearer',
     };
+  }
+
+  private buildProfilePatch(dto: RegisterDeviceDto): {
+    displayName?: string;
+    category?: UserCategory;
+  } {
+    const patch: { displayName?: string; category?: UserCategory } = {};
+    const name = dto.displayName?.trim();
+    if (name) {
+      patch.displayName = name.slice(0, 80);
+    }
+    const category = resolveUserCategory(dto.category, dto.roleId);
+    if (category) {
+      patch.category = category;
+    }
+    return patch;
   }
 
   private buildRegisterResponse(

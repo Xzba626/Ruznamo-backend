@@ -85,14 +85,72 @@ const receiptStatusLabels: LocaleMap = {
 
 const trialStatusLabels: LocaleMap = {
   ru: {
-    ACTIVE: 'Активен',
+    ACTIVE: 'Пробный период',
     EXPIRED: 'Истёк',
     REVOKED: 'Отозван',
   },
   tj: {
-    ACTIVE: 'Фаъол',
+    ACTIVE: 'Давраи озмоишӣ',
     EXPIRED: 'Мӯҳлаташ гузашт',
     REVOKED: 'Бозпас гирифта шуд',
+  },
+};
+
+const integrityStatusLabels: LocaleMap = {
+  ru: {
+    NORMAL: 'Норма',
+    REVIEW: 'Требует проверки',
+  },
+  tj: {
+    NORMAL: 'Меъёр',
+    REVIEW: 'Санҷиш лозим',
+  },
+};
+
+const integrityReasonLabels: LocaleMap = {
+  ru: {
+    LICENSE_STATE_MISMATCH: 'Несоответствие состояния лицензии',
+    REVOKED_LICENSE_IN_USE: 'Отозванная лицензия в использовании',
+    DEVICE_REVOKED_IN_USE: 'Заблокированная установка сообщает доступ',
+  },
+  tj: {
+    LICENSE_STATE_MISMATCH: 'Номутобиқати ҳолати литсензия',
+    REVOKED_LICENSE_IN_USE: 'Литсензияи бозпас гирифташуда дар истифода',
+    DEVICE_REVOKED_IN_USE: 'Насби манъшуда дастрасӣ мегуяд',
+  },
+};
+
+const accessBucketLabels: LocaleMap = {
+  ru: {
+    LICENSED: 'Активна',
+    TRIAL: 'Пробный период',
+    TRIAL_EXPIRED: 'Истёк',
+    NONE: 'Нет',
+    REVOKED: 'Заблокирована',
+  },
+  tj: {
+    LICENSED: 'Фаъол',
+    TRIAL: 'Давраи озмоишӣ',
+    TRIAL_EXPIRED: 'Мӯҳлаташ гузашт',
+    NONE: 'Нест',
+    REVOKED: 'Манъ',
+  },
+};
+
+const effectiveStatusLabels: LocaleMap = {
+  ru: {
+    ACTIVE: 'Активна',
+    TRIAL: 'Пробный период',
+    EXPIRED: 'Истёк',
+    SUSPENDED: 'Приостановлена',
+    NONE: 'Нет',
+  },
+  tj: {
+    ACTIVE: 'Фаъол',
+    TRIAL: 'Давраи озмоишӣ',
+    EXPIRED: 'Мӯҳлаташ гузашт',
+    SUSPENDED: 'Мутаваққиф',
+    NONE: 'Нест',
   },
 };
 
@@ -243,6 +301,22 @@ export function labelReceiptStatus(status: string): string {
 
 export function labelTrialStatus(status: string): string {
   return pick(trialStatusLabels, status, unknownStatus());
+}
+
+export function labelIntegrityStatus(status: string): string {
+  return pick(integrityStatusLabels, status, unknownStatus());
+}
+
+export function labelIntegrityReason(code: string): string {
+  return pick(integrityReasonLabels, code, unknownStatus());
+}
+
+export function labelAccessBucket(bucket: string): string {
+  return pick(accessBucketLabels, bucket, unknownStatus());
+}
+
+export function labelEffectiveStatus(status: string): string {
+  return pick(effectiveStatusLabels, status, unknownStatus());
 }
 
 export function labelBillingPeriod(period: string): string {

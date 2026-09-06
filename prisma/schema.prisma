@@ -245,11 +245,20 @@ model DeviceInstallation {
   deviceManufacturer String?
   deviceModel        String?
   androidOsVersion   String?
+  /// Android SDK_INT (API level). Not a hardware fingerprint.
+  sdkLevel           Int?
   platform           Platform  @default(ANDROID)
   appVersion         String?
   appVersionName     String?
   appVersionCode     Int?
   appLocale          String?
+  /// Explicit app language tag when distinct from locale; optional.
+  appLanguage        String?
+  themeMode          String?
+  packageName        String?
+  /// Client-reported access/license UX state (ACTIVE/TRIAL/EXPIRED/…). Never authoritative.
+  clientReportedAccessState String?
+  clientReportedAccessAt    DateTime? @db.Timestamptz(3)
   registrationIp     String?
   lastSeenIp         String?
   lastSeenAt         DateTime  @default(now()) @db.Timestamptz(3)
@@ -268,6 +277,8 @@ model DeviceInstallation {
 
   @@index([userId])
   @@index([userId, revokedAt])
+  @@index([lastSeenAt])
+  @@index([clientReportedAccessState])
 }
 
 model TrialGrant {

@@ -22,10 +22,33 @@ export function fetchLicenses(page = 1, search = '') {
   return apiRequest<Paginated<Record<string, unknown>>>(`/api/v1/admin/licenses?${q}`);
 }
 
-export function fetchDevices(page = 1, search = '') {
+export function fetchDevices(
+  page = 1,
+  search = '',
+  filters?: { integrityStatus?: string; accessBucket?: string },
+) {
   const q = new URLSearchParams({ page: String(page), limit: '20' });
   if (search) q.set('search', search);
+  if (filters?.integrityStatus) q.set('integrityStatus', filters.integrityStatus);
+  if (filters?.accessBucket) q.set('accessBucket', filters.accessBucket);
   return apiRequest<Paginated<Record<string, unknown>>>(`/api/v1/admin/devices?${q}`);
+}
+
+export function fetchDeviceStats() {
+  return apiRequest<{
+    total: number;
+    active30d: number;
+    trial: number;
+    licensed: number;
+    trialExpired: number;
+    revoked: number;
+    review: number;
+    countedBy: 'installationId';
+  }>('/api/v1/admin/devices/stats');
+}
+
+export function fetchDevice(id: string) {
+  return apiRequest<Record<string, unknown>>(`/api/v1/admin/devices/${id}`);
 }
 
 export function fetchAudit(page = 1) {

@@ -1,6 +1,12 @@
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
+/**
+ * Optional telemetry on entitlements GET.
+ * Prefer body-based sync for large payloads; query kept for backward compatibility.
+ * Cadence (client): first launch, version change, license change, throttled while in use —
+ * not every minute.
+ */
 export class DeviceTelemetryQueryDto {
   @IsOptional()
   @IsString()
@@ -22,6 +28,11 @@ export class DeviceTelemetryQueryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(16)
+  appLanguage?: string;
+
+  @IsOptional()
+  @IsString()
   deviceManufacturer?: string;
 
   @IsOptional()
@@ -31,4 +42,31 @@ export class DeviceTelemetryQueryDto {
   @IsOptional()
   @IsString()
   androidOsVersion?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  sdkLevel?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  themeMode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  packageName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  localLicenseState?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  localAccessState?: string;
 }

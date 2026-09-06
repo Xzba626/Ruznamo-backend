@@ -155,11 +155,34 @@ describe('AuthService', () => {
         },
       },
     });
-    prisma.deviceInstallation.update.mockResolvedValue({
-      id: 'dev_1',
-      installationId,
-      revokedAt: null,
-    });
+    prisma.$transaction.mockImplementation(async (callback: (tx: {
+      user: { update: jest.Mock; findUniqueOrThrow: jest.Mock };
+      deviceInstallation: { update: jest.Mock };
+    }) => Promise<unknown>) =>
+      callback({
+        user: {
+          update: jest.fn(),
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'usr_1',
+            displayName: null,
+            category: UserCategory.PERSONAL,
+            status: UserStatus.ACTIVE,
+            createdAt: new Date(),
+            trialGrant: {
+              status: TrialGrantStatus.ACTIVE,
+              expiresAt: new Date(Date.now() + 3600000),
+            },
+          }),
+        },
+        deviceInstallation: {
+          update: jest.fn().mockResolvedValue({
+            id: 'dev_1',
+            installationId,
+            revokedAt: null,
+          }),
+        },
+      }),
+    );
     prisma.refreshToken.create.mockResolvedValue({ id: 'rt_2' });
 
     const result = await service.registerDevice(
@@ -172,7 +195,7 @@ describe('AuthService', () => {
     );
 
     expect(result.user.id).toBe('usr_1');
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.trialGrant.create).not.toHaveBeenCalled();
     expect(auditService.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'mobile.login' }),
     );

@@ -4,11 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditActorType } from '@prisma/client';
+import { AuditActorType, UserCategory } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { MobileJwtPayload } from '../auth/mobile-jwt.payload';
 import { EntitlementService } from '../entitlements/entitlement.service';
 import { buildDeviceMetadataUpdate } from './device-metadata.util';
+import { resolveUserCategory } from './resolve-user-category.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDeviceMetadataDto } from './dto/register-device-metadata.dto';
 
@@ -46,18 +47,27 @@ export class DevicesService {
       }
 
       const metadata = buildDeviceMetadataUpdate(dto);
-      const device = await this.prisma.deviceInstallation.update({
-        where: { id: existing.id },
-        data: {
-          ...metadata,
-          deviceName: dto.deviceName ?? metadata.deviceName,
-          deviceManufacturer: dto.deviceManufacturer ?? metadata.deviceManufacturer,
-          deviceModel: dto.deviceModel ?? metadata.deviceModel,
-          androidOsVersion: dto.androidOsVersion ?? metadata.androidOsVersion,
-          platform: dto.platform,
-          lastSeenAt: new Date(),
-          lastSeenIp: meta.ipAddress,
-        },
+      const profilePatch = this.buildProfilePatch(dto);
+      const device = await this.prisma.$transaction(async (tx) => {
+        if (Object.keys(profilePatch).length > 0) {
+          await tx.user.update({
+            where: { id: user.sub },
+            data: profilePatch,
+          });
+        }
+        return tx.deviceInstallation.update({
+          where: { id: existing.id },
+          data: {
+            ...metadata,
+            deviceName: dto.deviceName ?? metadata.deviceName,
+            deviceManufacturer: dto.deviceManufacturer ?? metadata.deviceManufacturer,
+            deviceModel: dto.deviceModel ?? metadata.deviceModel,
+            androidOsVersion: dto.androidOsVersion ?? metadata.androidOsVersion,
+            platform: dto.platform,
+            lastSeenAt: new Date(),
+            lastSeenIp: meta.ipAddress,
+          },
+        });
       });
 
       return this.toDeviceResponse(device);
@@ -66,20 +76,29 @@ export class DevicesService {
     await this.entitlementService.assertDeviceRegistrationAllowed(user.sub);
 
     const metadata = buildDeviceMetadataUpdate(dto);
-    const device = await this.prisma.deviceInstallation.create({
-      data: {
-        userId: user.sub,
-        installationId: dto.installationId,
-        platform: dto.platform,
-        ...metadata,
-        deviceName: dto.deviceName ?? metadata.deviceName,
-        deviceManufacturer: dto.deviceManufacturer,
-        deviceModel: dto.deviceModel,
-        androidOsVersion: dto.androidOsVersion,
-        registrationIp: meta.ipAddress,
-        lastSeenIp: meta.ipAddress,
-        lastSeenAt: new Date(),
-      },
+    const profilePatch = this.buildProfilePatch(dto);
+    const device = await this.prisma.$transaction(async (tx) => {
+      if (Object.keys(profilePatch).length > 0) {
+        await tx.user.update({
+          where: { id: user.sub },
+          data: profilePatch,
+        });
+      }
+      return tx.deviceInstallation.create({
+        data: {
+          userId: user.sub,
+          installationId: dto.installationId,
+          platform: dto.platform,
+          ...metadata,
+          deviceName: dto.deviceName ?? metadata.deviceName,
+          deviceManufacturer: dto.deviceManufacturer,
+          deviceModel: dto.deviceModel,
+          androidOsVersion: dto.androidOsVersion,
+          registrationIp: meta.ipAddress,
+          lastSeenIp: meta.ipAddress,
+          lastSeenAt: new Date(),
+        },
+      });
     });
 
     await this.auditService.log({
@@ -124,8 +143,6 @@ export class DevicesService {
     }
 
     const revokedAt = new Date();
-    // Soft-revoke license slots + kill sessions for THIS installation.
-    // Do NOT set DeviceInstallation.revokedAt (that is reserved for explicit global block).
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.licenseActivation.updateMany({
         where: { deviceId: device.id, revokedAt: null },
@@ -150,6 +167,22 @@ export class DevicesService {
     });
 
     return this.toDeviceResponse(updated);
+  }
+
+  private buildProfilePatch(dto: RegisterDeviceMetadataDto): {
+    displayName?: string;
+    category?: UserCategory;
+  } {
+    const patch: { displayName?: string; category?: UserCategory } = {};
+    const name = dto.displayName?.trim();
+    if (name) {
+      patch.displayName = name.slice(0, 80);
+    }
+    const category = resolveUserCategory(dto.category, dto.roleId);
+    if (category) {
+      patch.category = category;
+    }
+    return patch;
   }
 
   private toDeviceResponse(device: {
