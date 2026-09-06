@@ -697,7 +697,8 @@ model AdminUser {
   approvedOrders        Order[]                  @relation("OrderApprovedBy")
   reviewedReceipts      Receipt[]                @relation("ReceiptReviewedBy")
   issuedLicenses        License[]                @relation("LicenseIssuedByAdmin")
-  appReleases           AppRelease[]
+  appReleasesCreated    AppRelease[]             @relation("AppReleaseCreatedBy")
+  appReleasesArtifactDeleted AppRelease[]        @relation("AppReleaseArtifactDeletedBy")
 
   @@index([isActive])
 }
@@ -856,6 +857,7 @@ model AppRelease {
   versionCode              Int
   packageName              String
   signingCertificateSha256 String
+  /// Historical Blob pathname. Remains after artifact deletion for audit only — not a live download path.
   objectKey                String
   fileSize                 BigInt
   sha256                   String
@@ -867,8 +869,12 @@ model AppRelease {
   createdAt                DateTime         @default(now()) @db.Timestamptz(3)
   publishedAt              DateTime?        @db.Timestamptz(3)
   archivedAt               DateTime?        @db.Timestamptz(3)
+  /// When set, physical APK was removed from Private Blob; release history/analytics remain.
+  artifactDeletedAt        DateTime?        @db.Timestamptz(3)
+  artifactDeletedByAdminId String?
 
-  createdBy AdminUser? @relation(fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  createdBy         AdminUser? @relation("AppReleaseCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  artifactDeletedBy AdminUser? @relation("AppReleaseArtifactDeletedBy", fields: [artifactDeletedByAdminId], references: [id], onDelete: SetNull)
 
   @@unique([platform, versionCode])
   @@index([platform, status])

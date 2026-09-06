@@ -61,9 +61,11 @@ export class AdminReleasesController {
 
   @Post(':id/publish')
   @RequirePermissions('releases:manage')
-  @ApiOperation({ summary: 'Publish validated draft release' })
-  publish(@Param('id') id: string) {
-    return this.releasesService.publish(id);
+  @ApiOperation({
+    summary: 'Publish draft: atomically archive previous PUBLISHED (invariant: max one PUBLISHED)',
+  })
+  publish(@CurrentAdmin() admin: AdminJwtPayload, @Param('id') id: string) {
+    return this.releasesService.publish(id, admin.sub);
   }
 
   @Post(':id/archive')
@@ -82,9 +84,11 @@ export class AdminReleasesController {
 
   @Post(':id/purge-file')
   @RequirePermissions('releases:manage')
-  @ApiOperation({ summary: 'Delete ARCHIVED APK binary but keep release history' })
-  purgeFile(@Param('id') id: string) {
-    return this.releasesService.purgeFile(id);
+  @ApiOperation({
+    summary: 'Delete ARCHIVED APK from Blob only; keep release history and device stats',
+  })
+  purgeFile(@CurrentAdmin() admin: AdminJwtPayload, @Param('id') id: string) {
+    return this.releasesService.purgeFile(id, admin.sub);
   }
 
   @Get(':id/download-url')

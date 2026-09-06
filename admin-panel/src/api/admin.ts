@@ -373,7 +373,14 @@ export function fetchReleasesOverview() {
       signingCertificateSha256?: string;
       packageName?: string;
       sha256?: string;
+      artifactAvailable?: boolean;
+      artifactDeletedAt?: string | null;
+      canDeleteArtifact?: boolean;
+      filePurged?: boolean;
+      historicalObjectKey?: string;
     }>;
+    publishedCount?: number;
+    publishedInvariantOk?: boolean;
   }>('/api/v1/admin/releases');
 }
 
@@ -457,4 +464,11 @@ export function updateReleaseDraft(
 
 export function publishRelease(id: string) {
   return apiRequest(`/api/v1/admin/releases/${id}/publish`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export function purgeReleaseApk(id: string) {
+  return apiRequest(`/api/v1/admin/releases/${id}/purge-file`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 }

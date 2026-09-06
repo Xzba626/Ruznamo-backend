@@ -35,6 +35,16 @@ export class AppUpdateService {
       };
     }
 
+    // PUBLISHED must always have a live APK; fail closed if invariant broken.
+    if (latest.artifactDeletedAt) {
+      return {
+        updateAvailable: false,
+        currentVersionCode: currentCode,
+        latest: null,
+        signedManifest: null,
+      };
+    }
+
     // Fail closed: never hand Android unsigned authoritative metadata.
     const signedManifest = this.manifestSigner.signRelease(latest);
 
@@ -78,10 +88,16 @@ export class AppUpdateService {
     if (!release) {
       throw new NotFoundException({ code: 'RELEASE_NOT_FOUND', message: 'Release not found' });
     }
-    if (release.status !== AppReleaseStatus.PUBLISHED && release.status !== AppReleaseStatus.ARCHIVED) {
+    if (release.status !== AppReleaseStatus.PUBLISHED) {
       throw new BadRequestException({
         code: 'RELEASE_NOT_DOWNLOADABLE',
-        message: 'Release is not available for download',
+        message: 'Only the current published release can be downloaded by clients',
+      });
+    }
+    if (release.artifactDeletedAt) {
+      throw new BadRequestException({
+        code: 'APK_ARTIFACT_DELETED',
+        message: 'APK binary was deleted from storage; release history remains',
       });
     }
     if (!this.storage.isConfigured()) {

@@ -4,6 +4,7 @@ import {
   fetchReleasesOverview,
   finalizeReleaseUpload,
   publishRelease,
+  purgeReleaseApk,
   requestReleaseUploadAuthorization,
   updateReleaseDraft,
   uploadApkToBlob,
@@ -72,6 +73,7 @@ export function UpdatesPage() {
   const [changelogTg, setChangelogTg] = useState('');
   const [mandatory, setMandatory] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [purgingId, setPurgingId] = useState<string | null>(null);
   const [changelogTab, setChangelogTab] = useState<'ru' | 'tj'>('ru');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -245,6 +247,22 @@ export function UpdatesPage() {
       setUploadError(getErrorMessage(err, strings.errors.generic));
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handlePurgeApk = async (id: string, versionLabel: string) => {
+    if (!window.confirm(strings.updates.purgeFileConfirm(versionLabel))) {
+      return;
+    }
+    setPurgingId(id);
+    setUploadError('');
+    try {
+      await purgeReleaseApk(id);
+      loadOverview({ soft: true });
+    } catch (err) {
+      setUploadError(getErrorMessage(err, strings.errors.generic));
+    } finally {
+      setPurgingId(null);
     }
   };
 
@@ -601,6 +619,9 @@ export function UpdatesPage() {
 
       <section className="section">
         <h2>{strings.updates.history}</h2>
+        {overview?.publishedInvariantOk === false && (
+          <div className="alert error">{strings.updates.publishedInvariantWarn}</div>
+        )}
         {(overview?.history ?? []).length === 0 ? (
           <div className="empty-state card">
             <p>{strings.updates.historyEmpty}</p>
@@ -618,11 +639,23 @@ export function UpdatesPage() {
                 </tr>
               </thead>
               <tbody>
-                {(overview?.history ?? []).map((row) => (
+                {(overview?.history ?? []).map((row) => {
+                  const artifactGone = row.artifactAvailable === false || row.filePurged === true;
+                  return (
                   <tr key={row.id}>
                     <td>
                       {row.versionLabel}
                       <div className="muted">{formatBytes(row.fileSize)}</div>
+                      {row.sha256 ? (
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {strings.updates.sha256}: {row.sha256.slice(0, 12)}…
+                        </div>
+                      ) : null}
+                      {artifactGone ? (
+                        <div className="card-meta warn" style={{ fontSize: 12 }}>
+                          {strings.updates.artifactDeleted}
+                        </div>
+                      ) : null}
                     </td>
                     <td>{statusLabel(row.status)}</td>
                     <td>
@@ -635,18 +668,41 @@ export function UpdatesPage() {
                     </td>
                     <td>
                       {row.status === 'DRAFT' && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={!publishReady || publishing}
+                            onClick={() => void handlePublish(row.id)}
+                          >
+                            {strings.updates.publish}
+                          </button>{' '}
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => void handleDeleteDraft(row.id)}
+                          >
+                            {strings.updates.deleteDraft}
+                          </button>
+                        </>
+                      )}
+                      {row.canDeleteArtifact && !artifactGone && (
                         <button
                           type="button"
                           className="btn-secondary"
-                          disabled={!publishReady || publishing}
-                          onClick={() => void handlePublish(row.id)}
+                          disabled={purgingId === row.id}
+                          onClick={() => void handlePurgeApk(row.id, row.versionLabel)}
                         >
-                          {strings.updates.publish}
+                          {purgingId === row.id ? '…' : strings.updates.purgeFile}
                         </button>
+                      )}
+                      {row.status === 'ARCHIVED' && artifactGone && (
+                        <span className="muted">{strings.updates.artifactDeleted}</span>
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

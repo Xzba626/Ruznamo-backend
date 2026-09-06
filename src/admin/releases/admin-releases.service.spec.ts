@@ -1,4 +1,8 @@
-import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { AdminReleasesService } from './admin-releases.service';
 
 describe('AdminReleasesService Blob upload path', () => {
@@ -6,11 +10,15 @@ describe('AdminReleasesService Blob upload path', () => {
     appRelease: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
       upsert: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
       delete: jest.fn(),
     },
+    $transaction: jest.fn(),
+    $executeRaw: jest.fn(),
     deviceInstallation: { count: jest.fn().mockResolvedValue(0) },
     appVersion: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
   };
@@ -42,12 +50,14 @@ describe('AdminReleasesService Blob upload path', () => {
     assertCanSign: jest.fn(),
     signRelease: jest.fn(),
   };
+  const auditService = { log: jest.fn() };
 
   const service = new AdminReleasesService(
     prisma as never,
     storage as never,
     inspector as never,
     manifestSigner as never,
+    auditService as never,
   );
 
   beforeEach(() => {
@@ -204,6 +214,165 @@ describe('AdminReleasesService Blob upload path', () => {
     const result = await service.deleteDraft('rel_draft_1');
     expect(result).toEqual({ deleted: true, id: 'rel_draft_1' });
     expect(storage.delete).toHaveBeenCalledWith('releases/android/abc/Ruznamo.apk');
+  });
+
+  it('publishes draft atomically and keeps exactly one PUBLISHED', async () => {
+    storage.isSigningPolicyConfigured.mockReturnValue(true);
+    storage.isConfigured.mockReturnValue(true);
+    storage.head.mockResolvedValue({ exists: true, size: 100 });
+    manifestSigner.assertCanSign.mockReset();
+    manifestSigner.assertCanSign.mockImplementation(() => undefined);
+    process.env.ANDROID_PACKAGE_NAME = 'com.Tajroot.Ruznamo';
+    process.env.ANDROID_RELEASE_SIGNING_CERT_SHA256 = 'aa'.repeat(32);
+
+    const draft = {
+      id: 'rel_new',
+      platform: 'ANDROID',
+      versionName: '1.0.18',
+      versionCode: 19,
+      packageName: 'com.Tajroot.Ruznamo',
+      signingCertificateSha256: 'aa'.repeat(32),
+      objectKey: 'releases/android/new/Ruznamo.apk',
+      fileSize: BigInt(100),
+      sha256: 'bb'.repeat(32),
+      status: 'DRAFT',
+      mandatory: false,
+      changelogRu: 'ru',
+      changelogTg: 'tj',
+      createdAt: new Date(),
+      publishedAt: null,
+      archivedAt: null,
+      artifactDeletedAt: null,
+    };
+    prisma.appRelease.findUnique.mockResolvedValue(draft);
+    prisma.appRelease.findFirst.mockResolvedValue({
+      id: 'rel_old',
+      versionCode: 18,
+      status: 'PUBLISHED',
+    });
+    prisma.$transaction.mockImplementation(async (callback: (tx: {
+      $executeRaw: jest.Mock;
+      appRelease: {
+        updateMany: jest.Mock;
+        update: jest.Mock;
+        count: jest.Mock;
+      };
+    }) => Promise<unknown>) =>
+      callback({
+        $executeRaw: jest.fn(),
+        appRelease: {
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          update: jest.fn().mockResolvedValue({
+            ...draft,
+            status: 'PUBLISHED',
+            publishedAt: new Date(),
+          }),
+          count: jest.fn().mockResolvedValue(1),
+        },
+      }),
+    );
+    prisma.appVersion.findFirst.mockResolvedValue(null);
+    prisma.appVersion.create.mockResolvedValue({});
+
+    const result = await service.publish('rel_new', 'admin-1');
+    expect(result.status).toBe('PUBLISHED');
+    expect(result.versionCode).toBe(19);
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'release.published' }),
+    );
+  });
+
+  it('aborts publish when post-commit PUBLISHED count would not be 1', async () => {
+    storage.isSigningPolicyConfigured.mockReturnValue(true);
+    storage.head.mockResolvedValue({ exists: true, size: 100 });
+    manifestSigner.assertCanSign.mockImplementation(() => undefined);
+    process.env.ANDROID_PACKAGE_NAME = 'com.Tajroot.Ruznamo';
+    process.env.ANDROID_RELEASE_SIGNING_CERT_SHA256 = 'aa'.repeat(32);
+
+    prisma.appRelease.findUnique.mockResolvedValue({
+      id: 'rel_new',
+      platform: 'ANDROID',
+      versionName: '1.0.18',
+      versionCode: 19,
+      packageName: 'com.Tajroot.Ruznamo',
+      signingCertificateSha256: 'aa'.repeat(32),
+      objectKey: 'releases/android/new/Ruznamo.apk',
+      status: 'DRAFT',
+      changelogRu: 'ru',
+      changelogTg: 'tj',
+      artifactDeletedAt: null,
+    });
+    prisma.appRelease.findFirst.mockResolvedValue({ id: 'rel_old', versionCode: 18 });
+    prisma.$transaction.mockImplementation(async (callback: (tx: {
+      $executeRaw: jest.Mock;
+      appRelease: { updateMany: jest.Mock; update: jest.Mock; count: jest.Mock };
+    }) => Promise<unknown>) =>
+      callback({
+        $executeRaw: jest.fn(),
+        appRelease: {
+          updateMany: jest.fn(),
+          update: jest.fn().mockResolvedValue({ id: 'rel_new', status: 'PUBLISHED' }),
+          count: jest.fn().mockResolvedValue(2),
+        },
+      }),
+    );
+
+    await expect(service.publish('rel_new', 'admin-1')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects deleting APK of current PUBLISHED release', async () => {
+    prisma.appRelease.findUnique.mockResolvedValue({
+      id: 'rel_pub',
+      status: 'PUBLISHED',
+      objectKey: 'releases/android/x/Ruznamo.apk',
+    });
+    await expect(service.purgeFile('rel_pub', 'admin-1')).rejects.toBeInstanceOf(BadRequestException);
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes ARCHIVED APK blob but keeps release history metadata', async () => {
+    storage.isConfigured.mockReturnValue(true);
+    storage.delete.mockResolvedValue(undefined);
+    const archived = {
+      id: 'rel_arch',
+      platform: 'ANDROID',
+      versionName: '1.0.17',
+      versionCode: 18,
+      packageName: 'com.Tajroot.Ruznamo',
+      signingCertificateSha256: 'aa'.repeat(32),
+      objectKey: 'releases/android/old/Ruznamo.apk',
+      fileSize: BigInt(50),
+      sha256: 'cc'.repeat(32),
+      status: 'ARCHIVED',
+      mandatory: false,
+      changelogRu: 'ru',
+      changelogTg: 'tj',
+      createdAt: new Date(),
+      publishedAt: new Date(),
+      archivedAt: new Date(),
+      artifactDeletedAt: null,
+    };
+    prisma.appRelease.findUnique.mockResolvedValue(archived);
+    prisma.appRelease.update.mockResolvedValue({
+      ...archived,
+      artifactDeletedAt: new Date(),
+      artifactDeletedByAdminId: 'admin-1',
+    });
+
+    const result = await service.purgeFile('rel_arch', 'admin-1');
+    expect(storage.delete).toHaveBeenCalledWith('releases/android/old/Ruznamo.apk');
+    expect(result.status).toBe('ARCHIVED');
+    expect(result.artifactAvailable).toBe(false);
+    expect(result.filePurged).toBe(true);
+    expect(result.historicalObjectKey).toBe('releases/android/old/Ruznamo.apk');
+    expect(prisma.appRelease.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'ARCHIVED',
+          artifactDeletedAt: expect.any(Date),
+        }),
+      }),
+    );
   });
 
   it('rejects malformed finalize without uploadId', async () => {

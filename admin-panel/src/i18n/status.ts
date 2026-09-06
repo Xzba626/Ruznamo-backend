@@ -249,13 +249,13 @@ const releaseStatusLabels: LocaleMap = {
     DRAFT: 'Черновик',
     PUBLISHED: 'Опубликован',
     ARCHIVED: 'В архиве',
-    PURGED: 'Удалён',
+    PURGED: 'APK удалён',
   },
   tj: {
     DRAFT: 'Лоиҳа',
     PUBLISHED: 'Нашр шуд',
     ARCHIVED: 'Дар бойгонӣ',
-    PURGED: 'Нест шуд',
+    PURGED: 'APK нест',
   },
 };
 
